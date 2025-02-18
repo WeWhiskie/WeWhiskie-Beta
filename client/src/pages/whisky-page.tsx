@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { StarRating } from "@/components/star-rating";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Whisky } from "@shared/schema";
 
 export default function WhiskyPage() {
   const { id } = useParams();
-  const { data: whisky, isLoading } = useQuery({
+  const { data: whisky, isLoading } = useQuery<Whisky>({
     queryKey: ["/api/whiskies", id],
     queryFn: async () => {
       const res = await fetch(`/api/whiskies/${id}`);
@@ -16,7 +17,7 @@ export default function WhiskyPage() {
     enabled: !!id,
   });
 
-  if (isLoading) {
+  if (isLoading || !whisky) {
     return (
       <div className="space-y-8">
         <Skeleton className="h-96 w-full" />
@@ -44,7 +45,7 @@ export default function WhiskyPage() {
             <h1 className="text-4xl font-bold">{whisky.name}</h1>
             <p className="text-xl text-muted-foreground">{whisky.distillery}</p>
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <Card>
               <CardContent className="p-4">
@@ -52,26 +53,32 @@ export default function WhiskyPage() {
                 <p className="text-muted-foreground">{whisky.type}</p>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="font-semibold mb-1">Region</h3>
-                <p className="text-muted-foreground">{whisky.region}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="font-semibold mb-1">Age</h3>
-                <p className="text-muted-foreground">
-                  {whisky.age ? `${whisky.age} Years` : "No Age Statement"}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="font-semibold mb-1">ABV</h3>
-                <p className="text-muted-foreground">{whisky.abv}%</p>
-              </CardContent>
-            </Card>
+            {whisky.region && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold mb-1">Region</h3>
+                  <p className="text-muted-foreground">{whisky.region}</p>
+                </CardContent>
+              </Card>
+            )}
+            {whisky.age && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold mb-1">Age</h3>
+                  <p className="text-muted-foreground">
+                    {whisky.age} Years
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+            {whisky.abv && (
+              <Card>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold mb-1">ABV</h3>
+                  <p className="text-muted-foreground">{whisky.abv}%</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {whisky.description && (
@@ -85,7 +92,7 @@ export default function WhiskyPage() {
             <div>
               <h2 className="text-xl font-semibold mb-2">Tasting Notes</h2>
               <div className="flex flex-wrap gap-2">
-                {whisky.tastingNotes.split(",").map((note) => (
+                {whisky.tastingNotes.split(",").map((note: string) => (
                   <span
                     key={note}
                     className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm"
