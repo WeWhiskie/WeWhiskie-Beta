@@ -37,6 +37,9 @@ export interface IStorage {
   getTastingSessions(): Promise<(TastingSession & { host: User })[]>;
   getUserSessions(userId: number): Promise<TastingSession[]>;
   joinSession(sessionId: number, userId: number): Promise<void>;
+  getTastingSession(id: number): Promise<TastingSession | undefined>;
+  updateTastingSessionStatus(id: number, status: 'scheduled' | 'live' | 'ended'): Promise<TastingSession>;
+  getSessionParticipants(sessionId: number): Promise<User[]>;
 
   // Shipping address methods
   addShippingAddress(address: Omit<ShippingAddress, "id">): Promise<ShippingAddress>;
@@ -239,6 +242,38 @@ export class DatabaseStorage implements IStorage {
       userId,
       status: 'registered',
     });
+  }
+
+  async getTastingSession(id: number): Promise<TastingSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(tastingSessions)
+      .where(eq(tastingSessions.id, id));
+    return session;
+  }
+
+  async updateTastingSessionStatus(
+    id: number,
+    status: 'scheduled' | 'live' | 'ended'
+  ): Promise<TastingSession> {
+    const [session] = await db
+      .update(tastingSessions)
+      .set({ status })
+      .where(eq(tastingSessions.id, id))
+      .returning();
+    return session;
+  }
+
+  async getSessionParticipants(sessionId: number): Promise<User[]> {
+    const result = await db
+      .select({
+        user: users,
+      })
+      .from(sessionParticipants)
+      .innerJoin(users, eq(sessionParticipants.userId, users.id))
+      .where(eq(sessionParticipants.sessionId, sessionId));
+
+    return result.map(row => row.user);
   }
 
   // Shipping address methods

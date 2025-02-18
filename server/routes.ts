@@ -2,7 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { insertReviewSchema } from "@shared/schema";
+import { insertReviewSchema, insertTastingSessionSchema } from "@shared/schema";
+import { LiveStreamingServer } from './websocket';
+import { type InsertTastingSession, type InsertReview } from '@shared/schema';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -93,12 +95,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const parsedReview = insertReviewSchema.parse({
       ...req.body,
       userId: req.user.id,
-    });
+    }) as InsertReview;
 
     const review = await storage.createReview(parsedReview);
     res.status(201).json(review);
   });
 
+  // Tasting Session routes
+  app.get("/api/sessions/:id", async (req, res) => {
+    const session = await storage.getTastingSession(parseInt(req.params.id));
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+    res.json(session);
+  });
+
+  app.post("/api/sessions", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const parsedSession = insertTastingSessionSchema.parse({
+      ...req.body,
+      hostId: req.user.id,
+    }) as InsertTastingSession;
+
+    const session = await storage.createTastingSession(parsedSession);
+    res.status(201).json(session);
+  });
+
+  app.post("/api/sessions/:id/start", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const sessionId = parseInt(req.params.id);
+    const session = await storage.getTastingSession(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    if (session.hostId !== req.user.id) {
+      return res.status(403).json({ message: "Only the host can start the session" });
+    }
+
+    const updatedSession = await storage.updateTastingSessionStatus(sessionId, 'live');
+    res.json(updatedSession);
+  });
+
+  app.post("/api/sessions/:id/end", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const sessionId = parseInt(req.params.id);
+    const session = await storage.getTastingSession(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ message: "Session not found" });
+    }
+
+    if (session.hostId !== req.user.id) {
+      return res.status(403).json({ message: "Only the host can end the session" });
+    }
+
+    const updatedSession = await storage.updateTastingSessionStatus(sessionId, 'ended');
+    res.json(updatedSession);
+  });
+
   const httpServer = createServer(app);
+
+  // Initialize WebSocket server
+  new LiveStreamingServer(httpServer);
+
   return httpServer;
 }
