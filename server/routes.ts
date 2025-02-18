@@ -13,10 +13,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/whiskies/:id", async (req, res) => {
-    const whisky = await storage.getWhisky(parseInt(req.params.id));
+    const id = parseInt(req.params.id);
+    console.log(`Fetching whisky with id: ${id}`);
+
+    const whisky = await storage.getWhisky(id);
     if (!whisky) {
+      console.log(`Whisky with id ${id} not found`);
       return res.status(404).json({ message: "Whisky not found" });
     }
+
+    console.log(`Found whisky:`, whisky);
     res.json(whisky);
   });
 
