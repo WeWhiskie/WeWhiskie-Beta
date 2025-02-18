@@ -35,7 +35,7 @@ export default function HomePage() {
       {/* Hero Section */}
       <div className="text-center space-y-4">
         <h1 className="text-4xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent">
-          Whiskie
+          WeWhisky
         </h1>
         <p className="text-xl text-muted-foreground">
           Better Together - Share your love of whisky with enthusiasts worldwide
