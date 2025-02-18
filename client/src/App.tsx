@@ -10,6 +10,7 @@ import AuthPage from "./pages/auth-page";
 import ProfilePage from "./pages/profile-page";
 import WhiskyPage from "./pages/whisky-page";
 import LiveSessionPage from "./pages/live-session-page";
+import SessionsPage from "./pages/sessions-page";
 import Navbar from "./components/navbar";
 
 function Router() {
@@ -22,6 +23,7 @@ function Router() {
           <Route path="/whisky/:id" component={WhiskyPage} />
           <Route path="/auth" component={AuthPage} />
           <Route path="/profile/:id" component={ProfilePage} />
+          <Route path="/sessions" component={SessionsPage} />
           <ProtectedRoute path="/sessions/:id" component={LiveSessionPage} />
           <Route component={NotFound} />
         </Switch>
