@@ -12,6 +12,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(whiskies);
   });
 
+  app.get("/api/whiskies/:id", async (req, res) => {
+    const whisky = await storage.getWhisky(parseInt(req.params.id));
+    if (!whisky) {
+      return res.status(404).json({ message: "Whisky not found" });
+    }
+    res.json(whisky);
+  });
+
   app.get("/api/reviews", async (_req, res) => {
     const reviews = await storage.getReviews();
     res.json(reviews);

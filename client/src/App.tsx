@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import ProfilePage from "@/pages/profile-page";
+import WhiskyPage from "@/pages/whisky-page";
 import Navbar from "@/components/navbar";
 
 function Router() {
@@ -18,6 +19,7 @@ function Router() {
         <Switch>
           <ProtectedRoute path="/" component={HomePage} />
           <ProtectedRoute path="/profile/:id" component={ProfilePage} />
+          <ProtectedRoute path="/whisky/:id" component={WhiskyPage} />
           <Route path="/auth" component={AuthPage} />
           <Route component={NotFound} />
         </Switch>

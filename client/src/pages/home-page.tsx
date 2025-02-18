@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Link } from "wouter";
 
 export default function HomePage() {
   const [showForm, setShowForm] = useState(false);
@@ -52,22 +53,34 @@ export default function HomePage() {
         <h2 className="text-2xl font-bold mb-4">Featured Whiskies</h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {whiskies.map((whisky) => (
-            <Card key={whisky.id} className="overflow-hidden">
-              <div className="aspect-square relative">
-                <img
-                  src={whisky.imageUrl}
-                  alt={whisky.name}
-                  className="object-cover w-full h-full"
-                />
-              </div>
-              <CardContent className="p-4">
-                <h3 className="font-semibold">{whisky.name}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {whisky.distillery}
-                </p>
-                <p className="text-sm text-muted-foreground">{whisky.type}</p>
-              </CardContent>
-            </Card>
+            <Link key={whisky.id} href={`/whisky/${whisky.id}`}>
+              <Card className="overflow-hidden cursor-pointer transition-transform hover:scale-105">
+                <div className="aspect-square relative">
+                  <img
+                    src={whisky.imageUrl}
+                    alt={whisky.name}
+                    className="object-cover w-full h-full"
+                  />
+                </div>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold">{whisky.name}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {whisky.distillery}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{whisky.type}</p>
+                  {whisky.age && (
+                    <p className="text-sm text-muted-foreground">
+                      {whisky.age} Years Old
+                    </p>
+                  )}
+                  {whisky.region && (
+                    <p className="text-sm text-muted-foreground">
+                      {whisky.region}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       </div>
