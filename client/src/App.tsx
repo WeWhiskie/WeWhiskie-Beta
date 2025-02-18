@@ -17,9 +17,8 @@ function Router() {
       <Navbar />
       <main className="container mx-auto px-4 py-8">
         <Switch>
-          <ProtectedRoute path="/" component={HomePage} />
-          <ProtectedRoute path="/profile/:id" component={ProfilePage} />
-          <ProtectedRoute path="/whisky/:id" component={WhiskyPage} />
+          <Route path="/" component={HomePage} />
+          <Route path="/whisky/:id" component={WhiskyPage} />
           <Route path="/auth" component={AuthPage} />
           <Route component={NotFound} />
         </Switch>
