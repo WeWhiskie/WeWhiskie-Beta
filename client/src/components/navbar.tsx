@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { Video } from "lucide-react";
 
 export default function Navbar() {
   const { user, logoutMutation } = useAuth();
@@ -10,11 +11,17 @@ export default function Navbar() {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link href="/">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent cursor-pointer">
-            Whisky Reviews
+            Whiskie
           </h1>
         </Link>
 
         <div className="flex items-center gap-4">
+          <Link href="/sessions">
+            <Button variant="ghost" className="flex items-center gap-2">
+              <Video className="h-4 w-4" />
+              Live Sessions
+            </Button>
+          </Link>
           {user ? (
             <>
               <Link href={`/profile/${user.id}`}>

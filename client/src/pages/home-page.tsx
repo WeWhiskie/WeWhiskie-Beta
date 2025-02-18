@@ -4,11 +4,12 @@ import { ReviewForm } from "@/components/review-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { Plus, Search, Star } from "lucide-react";
+import { Plus, Search, Star, Video, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
-import type { Whisky } from "@shared/schema";
+import type { Whisky, TastingSession } from "@shared/schema";
+import { formatDistanceToNow } from "date-fns";
 
 export default function HomePage() {
   const [showForm, setShowForm] = useState(false);
@@ -19,6 +20,15 @@ export default function HomePage() {
   const { data: whiskies = [] } = useQuery<Whisky[]>({
     queryKey: ["/api/whiskies"],
   });
+
+  const { data: sessions = [] } = useQuery<TastingSession[]>({
+    queryKey: ["/api/sessions"],
+  });
+
+  const upcomingSessions = sessions.filter(
+    (session) => session.status === "scheduled"
+  );
+  const liveSessions = sessions.filter((session) => session.status === "live");
 
   return (
     <div className="space-y-8">
@@ -31,6 +41,54 @@ export default function HomePage() {
           Better Together - Share your love of whisky with enthusiasts worldwide
         </p>
       </div>
+
+      {/* Live Sessions Section */}
+      {(liveSessions.length > 0 || upcomingSessions.length > 0) && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Video className="h-6 w-6" />
+              Live & Upcoming Sessions
+            </h2>
+            <Link href="/sessions">
+              <Button>View All Sessions</Button>
+            </Link>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...liveSessions, ...upcomingSessions].slice(0, 3).map((session) => (
+              <Link key={session.id} href={`/sessions/${session.id}`}>
+                <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <Badge variant={session.status === "live" ? "destructive" : "secondary"}>
+                        {session.status === "live" ? "Live Now" : "Upcoming"}
+                      </Badge>
+                      {session.price > 0 && (
+                        <Badge variant="outline">${session.price}</Badge>
+                      )}
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">{session.title}</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {session.description}
+                    </p>
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-1">
+                        <Users className="h-4 w-4" />
+                        <span>{session.maxParticipants || "∞"}</span>
+                      </div>
+                      <span className="text-muted-foreground">
+                        {formatDistanceToNow(new Date(session.scheduledFor), {
+                          addSuffix: true,
+                        })}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search and Actions */}
       <div className="flex gap-4">
@@ -52,7 +110,10 @@ export default function HomePage() {
 
       {/* Whiskies Grid */}
       <div>
-        <h2 className="text-2xl font-bold mb-4">Featured Whiskies</h2>
+        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+          <Star className="h-6 w-6" />
+          Featured Whiskies
+        </h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {whiskies.map((whisky) => (
             <Link key={whisky.id} href={`/whisky/${whisky.id}`}>
@@ -111,7 +172,10 @@ export default function HomePage() {
 
       {/* Reviews Section */}
       <div>
-        <h2 className="text-2xl font-bold mb-4">Recent Reviews</h2>
+        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+          <Star className="h-6 w-6" />
+          Recent Reviews
+        </h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {reviews.map((review) => (
             <ReviewCard key={review.id} review={review} />
