@@ -4,12 +4,12 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
-import NotFound from "@/pages/not-found";
-import HomePage from "@/pages/home-page";
-import AuthPage from "@/pages/auth-page";
-import ProfilePage from "@/pages/profile-page";
-import WhiskyPage from "@/pages/whisky-page";
-import Navbar from "@/components/navbar";
+import NotFound from "./pages/not-found";
+import HomePage from "./pages/home-page";
+import AuthPage from "./pages/auth-page";
+import ProfilePage from "./pages/profile-page";
+import WhiskyPage from "./pages/whisky-page";
+import Navbar from "./components/navbar";
 
 function Router() {
   return (
@@ -20,6 +20,7 @@ function Router() {
           <Route path="/" component={HomePage} />
           <Route path="/whisky/:id" component={WhiskyPage} />
           <Route path="/auth" component={AuthPage} />
+          <Route path="/profile/:id" component={ProfilePage} />
           <Route component={NotFound} />
         </Switch>
       </main>
