@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PreciseRating } from "@/components/precise-rating";
 import type { Whisky } from "@shared/schema";
 import { Star, Droplet, Award, Info, Factory, Wheat } from "lucide-react";
 
@@ -48,6 +49,18 @@ export default function WhiskyPage() {
             </div>
           )}
         </div>
+
+        {/* Add Rating Section */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Rate this Whisky</h3>
+          <PreciseRating
+            maxStars={10}
+            onChange={(rating) => {
+              console.log("New rating:", rating);
+              // TODO: Implement rating submission
+            }}
+          />
+        </Card>
 
         <div className="space-y-6">
           <div>
