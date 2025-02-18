@@ -35,93 +35,65 @@ export default function WhiskyPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* Hero Section */}
-      <div className="grid md:grid-cols-2 gap-8 mb-12">
-        <div className="aspect-square relative rounded-lg overflow-hidden shadow-xl">
-          <img
-            src={whisky.imageUrl}
-            alt={whisky.name}
-            className="object-cover w-full h-full"
-          />
-          {whisky.price && (
-            <div className="absolute top-4 right-4 bg-black/80 text-white px-4 py-2 rounded-full text-lg font-medium">
-              ${whisky.price}
-            </div>
-          )}
+      {/* Hero Section with Background Image */}
+      <div className="relative w-full h-[600px] mb-12 overflow-hidden rounded-xl">
+        {/* Black and white distillery background */}
+        <div 
+          className="absolute inset-0 bg-center bg-cover grayscale"
+          style={{ 
+            backgroundImage: `url(https://images.unsplash.com/photo-1630344745900-b5385f94f360)`,
+          }}
+        >
+          {/* Dark overlay for better contrast */}
+          <div className="absolute inset-0 bg-black/50" />
         </div>
 
-        {/* Add Rating Section */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Rate this Whisky</h3>
-          <PreciseRating
-            maxStars={10}
-            onChange={(rating) => {
-              console.log("New rating:", rating);
-              // TODO: Implement rating submission
-            }}
-          />
-        </Card>
-
-        <div className="space-y-6">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant="secondary">{whisky.type}</Badge>
-              {whisky.limited === 1 && (
-                <Badge variant="destructive">Limited Edition</Badge>
-              )}
+        {/* Content overlay with bottle image and details */}
+        <div className="relative h-full container mx-auto px-4 flex items-center">
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            {/* Bottle Image */}
+            <div className="relative z-10 transform -translate-y-8">
+              <img
+                src={whisky.imageUrl}
+                alt={whisky.name}
+                className="object-contain h-[500px] drop-shadow-2xl"
+              />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent">
-              {whisky.name}
-            </h1>
-            <p className="text-xl text-muted-foreground">{whisky.distillery}</p>
-          </div>
 
-          {/* Key Details Grid */}
-          <div className="grid grid-cols-2 gap-4">
-            {whisky.region && (
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-1 flex items-center gap-2">
-                    <Info className="h-4 w-4" />
-                    Region
-                  </h3>
-                  <p className="text-muted-foreground">{whisky.region}</p>
-                </CardContent>
-              </Card>
-            )}
-            {whisky.age && (
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-1 flex items-center gap-2">
-                    <Award className="h-4 w-4" />
-                    Age
-                  </h3>
-                  <p className="text-muted-foreground">{whisky.age} Years</p>
-                </CardContent>
-              </Card>
-            )}
-            {whisky.abv && (
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-1 flex items-center gap-2">
-                    <Droplet className="h-4 w-4" />
-                    ABV
-                  </h3>
-                  <p className="text-muted-foreground">{whisky.abv}%</p>
-                </CardContent>
-              </Card>
-            )}
-            {whisky.caskType && (
-              <Card>
-                <CardContent className="p-4">
-                  <h3 className="font-semibold mb-1 flex items-center gap-2">
-                    <Wheat className="h-4 w-4" />
-                    Cask Type
-                  </h3>
-                  <p className="text-muted-foreground">{whisky.caskType}</p>
-                </CardContent>
-              </Card>
-            )}
+            {/* Whisky Details */}
+            <div className="text-white space-y-6">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="secondary">{whisky.type}</Badge>
+                  {whisky.limited === 1 && (
+                    <Badge variant="destructive">Limited Edition</Badge>
+                  )}
+                </div>
+                <h1 className="text-5xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent">
+                  {whisky.name}
+                </h1>
+                <p className="text-2xl text-white/80">{whisky.distillery}</p>
+              </div>
+
+              {/* Price Tag */}
+              {whisky.price && (
+                <div className="inline-block bg-black/80 text-white px-6 py-3 rounded-full text-xl font-medium">
+                  ${whisky.price}
+                </div>
+              )}
+
+              {/* Rating Section */}
+              <div className="bg-black/30 backdrop-blur-sm rounded-xl p-6 space-y-4">
+                <h3 className="text-xl font-semibold">Rate this Whisky</h3>
+                <PreciseRating
+                  maxStars={10}
+                  onChange={(rating) => {
+                    console.log("New rating:", rating);
+                    // TODO: Implement rating submission
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -252,7 +224,6 @@ export default function WhiskyPage() {
                     </div>
                   </div>
                 ))}
-                {/* Placeholder awards */}
                 {!(whisky.awards || []).length && (
                   <p className="text-muted-foreground">No awards information available.</p>
                 )}
