@@ -1,8 +1,12 @@
+import { db } from "./db";
 import { InsertUser, User, Whisky, Review, insertWhiskySchema } from "@shared/schema";
+import { users, whiskies, reviews } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -13,109 +17,81 @@ export interface IStorage {
   // Whisky methods
   getWhiskies(): Promise<Whisky[]>;
   getWhisky(id: number): Promise<Whisky | undefined>;
-  
+
   // Review methods
   getReviews(): Promise<(Review & { user: User; whisky: Whisky })[]>;
   getUserReviews(userId: number): Promise<(Review & { whisky: Whisky })[]>;
   createReview(review: Omit<Review, "id" | "createdAt">): Promise<Review>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private whiskies: Map<number, Whisky>;
-  private reviews: Map<number, Review>;
-  private currentId: { users: number; whiskies: number; reviews: number };
+export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.whiskies = new Map();
-    this.reviews = new Map();
-    this.currentId = { users: 1, whiskies: 1, reviews: 1 };
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
-    });
-
-    // Seed some whiskies
-    const mockWhiskies = [
-      {
-        name: "Macallan 18",
-        distillery: "The Macallan",
-        type: "Scotch",
-        imageUrl: "https://images.unsplash.com/photo-1530894671637-69f12947b43a",
-      },
-      {
-        name: "Buffalo Trace",
-        distillery: "Buffalo Trace",
-        type: "Bourbon",
-        imageUrl: "https://images.unsplash.com/photo-1611072965169-e1534f6f300c",
-      },
-    ];
-
-    mockWhiskies.forEach((whisky) => {
-      const validated = insertWhiskySchema.parse(whisky);
-      const id = this.currentId.whiskies++;
-      this.whiskies.set(id, { ...validated, id });
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true,
     });
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId.users++;
-    const user = { ...insertUser, id, bio: null, avatarUrl: null };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async getWhiskies(): Promise<Whisky[]> {
-    return Array.from(this.whiskies.values());
+    return await db.select().from(whiskies);
   }
 
   async getWhisky(id: number): Promise<Whisky | undefined> {
-    return this.whiskies.get(id);
+    const [whisky] = await db.select().from(whiskies).where(eq(whiskies.id, id));
+    return whisky;
   }
 
   async getReviews(): Promise<(Review & { user: User; whisky: Whisky })[]> {
-    return Array.from(this.reviews.values())
-      .map((review) => {
-        const user = this.users.get(review.userId);
-        const whisky = this.whiskies.get(review.whiskyId);
-        if (!user || !whisky) return null;
-        return { ...review, user, whisky };
+    return await db
+      .select({
+        id: reviews.id,
+        rating: reviews.rating,
+        content: reviews.content,
+        createdAt: reviews.createdAt,
+        user: users,
+        whisky: whiskies,
       })
-      .filter((r): r is Review & { user: User; whisky: Whisky } => r !== null);
+      .from(reviews)
+      .innerJoin(users, eq(reviews.userId, users.id))
+      .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id));
   }
 
   async getUserReviews(userId: number): Promise<(Review & { whisky: Whisky })[]> {
-    return Array.from(this.reviews.values())
-      .filter((review) => review.userId === userId)
-      .map((review) => {
-        const whisky = this.whiskies.get(review.whiskyId);
-        if (!whisky) return null;
-        return { ...review, whisky };
+    return await db
+      .select({
+        id: reviews.id,
+        rating: reviews.rating,
+        content: reviews.content,
+        createdAt: reviews.createdAt,
+        userId: reviews.userId,
+        whisky: whiskies,
       })
-      .filter((r): r is Review & { whisky: Whisky } => r !== null);
+      .from(reviews)
+      .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id))
+      .where(eq(reviews.userId, userId));
   }
 
   async createReview(review: Omit<Review, "id" | "createdAt">): Promise<Review> {
-    const id = this.currentId.reviews++;
-    const newReview = {
-      ...review,
-      id,
-      createdAt: new Date(),
-    };
-    this.reviews.set(id, newReview);
+    const [newReview] = await db.insert(reviews).values(review).returning();
     return newReview;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
