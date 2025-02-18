@@ -4,9 +4,11 @@ import { ReviewForm } from "@/components/review-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Star } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
+import { Badge } from "@/components/ui/badge";
+import type { Whisky } from "@shared/schema";
 
 export default function HomePage() {
   const [showForm, setShowForm] = useState(false);
@@ -14,7 +16,7 @@ export default function HomePage() {
     queryKey: ["/api/reviews"],
   });
 
-  const { data: whiskies = [] } = useQuery({
+  const { data: whiskies = [] } = useQuery<Whisky[]>({
     queryKey: ["/api/whiskies"],
   });
 
@@ -51,33 +53,55 @@ export default function HomePage() {
       {/* Whiskies Grid */}
       <div>
         <h2 className="text-2xl font-bold mb-4">Featured Whiskies</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {whiskies.map((whisky) => (
             <Link key={whisky.id} href={`/whisky/${whisky.id}`}>
-              <Card className="overflow-hidden cursor-pointer transition-transform hover:scale-105">
-                <div className="aspect-square relative">
+              <Card className="overflow-hidden cursor-pointer transition-transform hover:scale-105 hover:shadow-lg">
+                <div className="aspect-[4/3] relative">
                   <img
                     src={whisky.imageUrl}
                     alt={whisky.name}
                     className="object-cover w-full h-full"
                   />
+                  {whisky.price && (
+                    <div className="absolute top-4 right-4 bg-black/80 text-white px-3 py-1 rounded-full text-sm font-medium">
+                      ${whisky.price}
+                    </div>
+                  )}
+                  {whisky.limited === 1 && (
+                    <Badge className="absolute top-4 left-4" variant="destructive">
+                      Limited Edition
+                    </Badge>
+                  )}
                 </div>
                 <CardContent className="p-4">
-                  <h3 className="font-semibold">{whisky.name}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {whisky.distillery}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{whisky.type}</p>
-                  {whisky.age && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-lg">{whisky.name}</h3>
+                      {whisky.abv && (
+                        <span className="text-sm text-muted-foreground">
+                          {whisky.abv}% ABV
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">
-                      {whisky.age} Years Old
+                      {whisky.distillery}
                     </p>
-                  )}
-                  {whisky.region && (
-                    <p className="text-sm text-muted-foreground">
-                      {whisky.region}
-                    </p>
-                  )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="secondary">{whisky.type}</Badge>
+                      {whisky.region && (
+                        <Badge variant="outline">{whisky.region}</Badge>
+                      )}
+                      {whisky.age && (
+                        <Badge variant="outline">{whisky.age} Years</Badge>
+                      )}
+                    </div>
+                    {whisky.tastingNotes && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {whisky.tastingNotes}
+                      </p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </Link>
