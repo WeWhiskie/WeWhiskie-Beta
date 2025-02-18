@@ -7,6 +7,65 @@ import { insertReviewSchema } from "@shared/schema";
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
+  // Get user profile
+  app.get("/api/users/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    const user = await storage.getUser(id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Add isFollowing flag if there's a logged in user
+    if (req.isAuthenticated()) {
+      const followers = await storage.getFollowers(id);
+      const isFollowing = followers.some(follower => follower.id === req.user?.id);
+      return res.json({ ...user, _isFollowing: isFollowing });
+    }
+
+    res.json(user);
+  });
+
+  // Follow a user
+  app.post("/api/users/:id/follow", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const targetUserId = parseInt(req.params.id);
+    const currentUserId = req.user!.id;
+
+    if (targetUserId === currentUserId) {
+      return res.status(400).json({ message: "Cannot follow yourself" });
+    }
+
+    await storage.followUser(currentUserId, targetUserId);
+    res.sendStatus(200);
+  });
+
+  // Unfollow a user
+  app.delete("/api/users/:id/follow", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const targetUserId = parseInt(req.params.id);
+    const currentUserId = req.user!.id;
+
+    if (targetUserId === currentUserId) {
+      return res.status(400).json({ message: "Cannot unfollow yourself" });
+    }
+
+    await storage.unfollowUser(currentUserId, targetUserId);
+    res.sendStatus(200);
+  });
+
+  // Get user's reviews
+  app.get("/api/users/:userId/reviews", async (req, res) => {
+    const reviews = await storage.getUserReviews(parseInt(req.params.userId));
+    res.json(reviews);
+  });
+
   app.get("/api/whiskies", async (_req, res) => {
     const whiskies = await storage.getWhiskies();
     res.json(whiskies);
@@ -14,25 +73,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/whiskies/:id", async (req, res) => {
     const id = parseInt(req.params.id);
-    console.log(`Fetching whisky with id: ${id}`);
-
     const whisky = await storage.getWhisky(id);
     if (!whisky) {
-      console.log(`Whisky with id ${id} not found`);
       return res.status(404).json({ message: "Whisky not found" });
     }
-
-    console.log(`Found whisky:`, whisky);
     res.json(whisky);
   });
 
   app.get("/api/reviews", async (_req, res) => {
     const reviews = await storage.getReviews();
-    res.json(reviews);
-  });
-
-  app.get("/api/users/:userId/reviews", async (req, res) => {
-    const reviews = await storage.getUserReviews(parseInt(req.params.userId));
     res.json(reviews);
   });
 
