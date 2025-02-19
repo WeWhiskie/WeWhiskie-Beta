@@ -12,7 +12,8 @@ import {
   Users,
   Settings,
   Maximize2,
-  Signal
+  Signal,
+  BarChart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface VideoStreamProps {
   stream: MediaStream | null;
@@ -30,17 +37,15 @@ interface VideoStreamProps {
   isHost?: boolean;
   participantCount?: number;
   peerConnection?: RTCPeerConnection | null;
-  onToggleAudio?: () => void;
-  onToggleVideo?: () => void;
   onQualityChange?: (quality: string) => void;
   className?: string;
 }
 
 const QUALITY_OPTIONS = [
-  { value: '1080p', label: '1080p HD' },
-  { value: '720p', label: '720p HD' },
-  { value: '480p', label: '480p' },
-  { value: '360p', label: '360p' },
+  { value: '1080p', label: '1080p HD', bitrate: '5 Mbps' },
+  { value: '720p', label: '720p HD', bitrate: '2.5 Mbps' },
+  { value: '480p', label: '480p', bitrate: '1 Mbps' },
+  { value: '360p', label: '360p', bitrate: '0.5 Mbps' },
 ];
 
 type StreamStats = {
@@ -55,8 +60,6 @@ export function VideoStream({
   isHost,
   participantCount = 0,
   peerConnection,
-  onToggleAudio,
-  onToggleVideo,
   onQualityChange,
   className
 }: VideoStreamProps) {
@@ -67,6 +70,7 @@ export function VideoStream({
   const [currentQuality, setCurrentQuality] = useState('1080p');
   const [connectionQuality, setConnectionQuality] = useState<number>(100);
   const [showControls, setShowControls] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [stats, setStats] = useState<{
     bitrate: number;
     packetsLost: number;
@@ -131,6 +135,14 @@ export function VideoStream({
 
             const quality = calculateConnectionQuality(avgBitrate, totalPacketsLost, roundTripTime);
             setConnectionQuality(quality);
+
+            // Automatically adjust quality based on connection
+            if (isHost && onQualityChange) {
+              const recommendedQuality = getRecommendedQuality(quality, avgBitrate);
+              if (recommendedQuality !== currentQuality) {
+                handleQualityChange(recommendedQuality);
+              }
+            }
           }
         } catch (error) {
           console.error('Error getting WebRTC stats:', error);
@@ -138,7 +150,7 @@ export function VideoStream({
       }, 2000);
     }
     return () => clearInterval(interval);
-  }, [peerConnection]);
+  }, [peerConnection, isHost, onQualityChange]);
 
   const calculateConnectionQuality = (bitrate: number, packetsLost: number, rtt: number): number => {
     const expectedBitrate = 5000000; // 5 Mbps for HD video
@@ -152,6 +164,13 @@ export function VideoStream({
     return Math.round((bitrateScore * 0.3) + (packetLossScore * 0.4) + (rttScore * 0.3));
   };
 
+  const getRecommendedQuality = (quality: number, currentBitrate: number): string => {
+    if (quality < 50 || currentBitrate < 1000000) return '360p';
+    if (quality < 70 || currentBitrate < 2000000) return '480p';
+    if (quality < 85 || currentBitrate < 4000000) return '720p';
+    return '1080p';
+  };
+
   const handleToggleAudio = () => {
     if (stream) {
       const audioTracks = stream.getAudioTracks();
@@ -159,7 +178,6 @@ export function VideoStream({
         track.enabled = !track.enabled;
       });
       setIsAudioEnabled(!isAudioEnabled);
-      onToggleAudio?.();
     }
   };
 
@@ -170,7 +188,6 @@ export function VideoStream({
         track.enabled = !track.enabled;
       });
       setIsVideoEnabled(!isVideoEnabled);
-      onToggleVideo?.();
     }
   };
 
@@ -194,105 +211,131 @@ export function VideoStream({
   }
 
   return (
-    <Card 
-      className={cn(
-        "relative group overflow-hidden",
-        showControls ? "cursor-default" : "cursor-pointer",
-        className
-      )}
-      onMouseEnter={() => setShowControls(true)}
-      onMouseLeave={() => setShowControls(false)}
-    >
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        className="w-full aspect-video object-cover"
-        onClick={handleToggleFullscreen}
-      />
+    <TooltipProvider>
+      <Card 
+        className={cn(
+          "relative group overflow-hidden",
+          showControls ? "cursor-default" : "cursor-pointer",
+          className
+        )}
+        onMouseEnter={() => setShowControls(true)}
+        onMouseLeave={() => setShowControls(false)}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className="w-full aspect-video object-cover"
+          onClick={handleToggleFullscreen}
+        />
 
-      <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
-        <Signal className={cn(
-          "h-4 w-4",
-          connectionQuality > 75 ? "text-green-500" :
-          connectionQuality > 50 ? "text-yellow-500" : "text-red-500"
-        )} />
-        <span className="text-sm">
-          {currentQuality} ({Math.round(stats.bitrate / 1000)} kbps)
-        </span>
-      </div>
-
-      <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
-        <Users className="h-4 w-4" />
-        <span className="text-sm">{participantCount}</span>
-      </div>
-
-      {isHost && showControls && (
-        <div className="absolute top-16 left-4 px-3 py-2 bg-black/60 rounded-lg text-xs text-white space-y-1">
-          <div>Packets Lost: {stats.packetsLost}</div>
-          <div>RTT: {Math.round(stats.roundTripTime)}ms</div>
+        <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
+          <Tooltip>
+            <TooltipTrigger>
+              <Signal className={cn(
+                "h-4 w-4",
+                connectionQuality > 75 ? "text-green-500" :
+                connectionQuality > 50 ? "text-yellow-500" : "text-red-500"
+              )} />
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Connection Quality: {connectionQuality}%</p>
+              <p>Bitrate: {(stats.bitrate / 1000000).toFixed(2)} Mbps</p>
+            </TooltipContent>
+          </Tooltip>
+          <span className="text-sm">
+            {currentQuality}
+          </span>
         </div>
-      )}
 
-      <div className={cn(
-        "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300",
-        showControls ? "opacity-100" : "opacity-0"
-      )}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {isHost && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleToggleAudio}
-                  className="text-white hover:bg-white/20"
-                >
-                  {isAudioEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleToggleVideo}
-                  className="text-white hover:bg-white/20"
-                >
-                  {isVideoEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
-                </Button>
-                <Select
-                  value={currentQuality}
-                  onValueChange={handleQualityChange}
-                >
-                  <SelectTrigger className="w-[90px] h-9 bg-black/60 border-0 text-white">
-                    <SelectValue placeholder="Quality" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUALITY_OPTIONS.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </>
-            )}
+        <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
+          <Users className="h-4 w-4" />
+          <span className="text-sm">{participantCount}</span>
+        </div>
+
+        {isHost && showStats && (
+          <div className="absolute top-16 left-4 px-3 py-2 bg-black/60 rounded-lg text-xs text-white space-y-1">
+            <div>Packets Lost: {stats.packetsLost}</div>
+            <div>RTT: {Math.round(stats.roundTripTime)}ms</div>
+            <div>Bitrate: {(stats.bitrate / 1000000).toFixed(2)} Mbps</div>
           </div>
+        )}
 
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
-              <Heart className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
-              <MessageCircle className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
-              <Share2 className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={handleToggleFullscreen}>
-              <Maximize2 className="h-5 w-5" />
-            </Button>
+        <div className={cn(
+          "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300",
+          showControls ? "opacity-100" : "opacity-0"
+        )}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {isHost && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleToggleAudio}
+                    className="text-white hover:bg-white/20"
+                  >
+                    {isAudioEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleToggleVideo}
+                    className="text-white hover:bg-white/20"
+                  >
+                    {isVideoEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
+                  </Button>
+                  <Select
+                    value={currentQuality}
+                    onValueChange={handleQualityChange}
+                  >
+                    <SelectTrigger className="w-[90px] h-9 bg-black/60 border-0 text-white">
+                      <SelectValue placeholder="Quality" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {QUALITY_OPTIONS.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          <Tooltip>
+                            <TooltipTrigger className="flex items-center gap-2">
+                              {option.label}
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Target Bitrate: {option.bitrate}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowStats(!showStats)}
+                    className="text-white hover:bg-white/20"
+                  >
+                    <BarChart className="h-5 w-5" />
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
+                <Heart className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
+                <MessageCircle className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
+                <Share2 className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={handleToggleFullscreen}>
+                <Maximize2 className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </TooltipProvider>
   );
 }

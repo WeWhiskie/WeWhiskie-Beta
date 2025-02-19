@@ -11,7 +11,10 @@ const configuration: RTCConfiguration = {
   ],
   iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle',
-  rtcpMuxPolicy: 'require'
+  rtcpMuxPolicy: 'require',
+  sdpSemantics: 'unified-plan',
+  // Enable ICE restart for better reconnection handling
+  iceRestart: true,
 };
 
 type WebRTCPayload = {
@@ -19,10 +22,11 @@ type WebRTCPayload = {
   sdp?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidate;
   message?: string;
+  quality?: string;
 };
 
 type WebRTCMessage = {
-  type: 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'request-offer' | 'user-joined' | 'user-left' | 'broadcast-ready';
+  type: 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'request-offer' | 'user-joined' | 'user-left' | 'broadcast-ready' | 'quality-change';
   payload: WebRTCPayload;
 };
 
@@ -37,6 +41,7 @@ export function useWebRTC(isHost: boolean) {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectTimeout = useRef<NodeJS.Timeout>();
+  const currentQuality = useRef('1080p');
 
   const initializeMediaStream = async () => {
     try {
@@ -44,7 +49,7 @@ export function useWebRTC(isHost: boolean) {
       setIsConnecting(true);
       setError(null);
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
+      const constraints: MediaStreamConstraints = {
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
@@ -55,8 +60,19 @@ export function useWebRTC(isHost: boolean) {
           noiseSuppression: true,
           autoGainControl: true,
         }
-      });
+      };
 
+      // Adjust constraints based on current quality setting
+      if (currentQuality.current !== '1080p') {
+        const quality = parseInt(currentQuality.current);
+        constraints.video = {
+          ...constraints.video,
+          width: { ideal: quality * 16/9 },
+          height: { ideal: quality }
+        };
+      }
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       console.log('Media stream obtained:', mediaStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
       setStream(mediaStream);
       return mediaStream;
@@ -222,7 +238,12 @@ export function useWebRTC(isHost: boolean) {
       case 'ice-candidate':
         await handleIceCandidate(payload);
         break;
-
+      case 'quality-change':
+        if (isHost && payload.quality) {
+          currentQuality.current = payload.quality;
+          await initializeMediaStream();
+        }
+        break;
       case 'user-joined':
       case 'user-left':
         console.log(`User ${type}:`, payload.userId);
@@ -322,6 +343,13 @@ export function useWebRTC(isHost: boolean) {
     }
   };
 
+  const changeQuality = (quality: string) => {
+    if (quality !== currentQuality.current) {
+      currentQuality.current = quality;
+      sendMessage('quality-change', { quality });
+    }
+  };
+
   useEffect(() => {
     return () => {
       cleanup();
@@ -336,6 +364,7 @@ export function useWebRTC(isHost: boolean) {
     connectionState,
     connectToSocket,
     sendMessage,
+    changeQuality,
     peerConnection: peerConnections.current.values().next().value,
     cleanup
   };
