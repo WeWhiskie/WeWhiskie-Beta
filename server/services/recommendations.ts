@@ -5,6 +5,14 @@ import type { ConciergePersonality } from "./ai-concierge";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// Add specific error types
+class WhiskyAIError extends Error {
+  constructor(message: string, public readonly code: string) {
+    super(message);
+    this.name = 'WhiskyAIError';
+  }
+}
+
 interface WhiskyRecommendation {
   whisky: Whisky;
   reason: string;
@@ -21,6 +29,48 @@ interface ConciergeResponse {
   recommendations?: WhiskyRecommendation[];
   answer?: string;
   suggestedTopics?: string[];
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 1000; // 1 second
+
+async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      response_format: { type: "json_object" }
+    });
+    return JSON.parse(response.choices[0].message.content || "{}");
+  } catch (error: any) {
+    if (error.status === 429) { // Rate limit error
+      if (retryCount < MAX_RETRIES) {
+        const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+        console.log(`Rate limit hit, retrying in ${delay}ms...`);
+        await sleep(delay);
+        return makeOpenAIRequest(prompt, retryCount + 1);
+      }
+      throw new WhiskyAIError(
+        "We're experiencing high demand. Please try again in a few minutes.",
+        "RATE_LIMIT_EXCEEDED"
+      );
+    }
+
+    if (error.status === 401) {
+      throw new WhiskyAIError(
+        "AI service configuration error. Please contact support.",
+        "INVALID_API_KEY"
+      );
+    }
+
+    throw new WhiskyAIError(
+      "Unable to process request at this time. Please try again later.",
+      "AI_SERVICE_ERROR"
+    );
+  }
 }
 
 export async function getWhiskyRecommendations(
@@ -72,19 +122,17 @@ export async function getWhiskyRecommendations(
       ]
     }`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
-    });
-
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const result = await makeOpenAIRequest(prompt);
 
     const recommendations: WhiskyRecommendation[] = await Promise.all(
       (result.recommendations || []).map(async (rec: any) => {
         const whisky = whiskies.find(w => w.id === rec.whiskyId);
-        if (!whisky) throw new Error(`Whisky with id ${rec.whiskyId} not found`);
+        if (!whisky) {
+          throw new WhiskyAIError(
+            `Whisky recommendation not found`,
+            "INVALID_RECOMMENDATION"
+          );
+        }
         return {
           whisky,
           reason: rec.reason,
@@ -97,7 +145,97 @@ export async function getWhiskyRecommendations(
     return recommendations;
   } catch (error) {
     console.error('Error generating recommendations:', error);
-    throw new Error('Failed to generate whisky recommendations');
+    if (error instanceof WhiskyAIError) {
+      throw error;
+    }
+    throw new WhiskyAIError(
+      "Failed to generate whisky recommendations",
+      "RECOMMENDATION_ERROR"
+    );
+  }
+}
+
+export async function generateConciergeName(preferences?: {
+  style?: "funny" | "professional" | "casual";
+  theme?: string;
+}): Promise<string> {
+  try {
+    const prompt = `Generate a creative and ${preferences?.style || 'friendly'} name for a whisky concierge/expert. 
+    ${preferences?.theme ? `Incorporate the theme: ${preferences.theme}` : ''}
+    The name should be memorable, unique, and reflect expertise in whisky.
+
+    Format as JSON: { "name": "generated name" }`;
+
+    const result = await makeOpenAIRequest(prompt);
+    return result.name || "Whisky Pete";
+  } catch (error) {
+    console.error('Error generating concierge name:', error);
+    if (error instanceof WhiskyAIError) {
+      throw error;
+    }
+    return "Whisky Pete"; // Fallback name
+  }
+}
+
+export async function generateConciergePersonality(
+  name: string,
+  style: "funny" | "professional" | "casual" = "casual"
+): Promise<ConciergePersonality> {
+  try {
+    const prompt = `Create a detailed personality profile for a whisky expert named "${name}". 
+    Style: ${style}
+
+    Include:
+    1. A unique accent and origin story
+    2. Distinct personality traits
+    3. Background in whisky industry
+    4. Areas of expertise
+    5. A signature catchphrase
+    6. Description of their voice
+    7. A vivid description for their avatar
+
+    Make it whisky-themed and memorable. For example, they might be a retired master distiller, 
+    a wandering spirit guide, or a historical whisky figure.
+
+    Format as JSON:
+    {
+      "name": string,
+      "accent": string (e.g., "Highland Scots", "Smooth Irish"),
+      "background": string (their origin story),
+      "personality": string (key traits),
+      "avatarDescription": string (appearance details),
+      "voiceDescription": string (how they sound),
+      "specialties": string[] (3-5 areas of expertise),
+      "catchphrase": string (their signature saying)
+    }`;
+
+    const result = await makeOpenAIRequest(prompt);
+
+    if (!result.name || !result.accent || !result.background) {
+      throw new WhiskyAIError(
+        "Invalid personality generation response",
+        "INVALID_PERSONALITY"
+      );
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error generating concierge personality:', error);
+    if (error instanceof WhiskyAIError) {
+      throw error;
+    }
+
+    // Return a default personality if generation fails
+    return {
+      name,
+      accent: "Classic Scottish",
+      background: "A traditional whisky expert with years of experience",
+      personality: "Knowledgeable and friendly",
+      avatarDescription: "A distinguished figure in traditional Scottish attire",
+      voiceDescription: "Warm and welcoming with a gentle brogue",
+      specialties: ["Single Malts", "Whisky History", "Tasting Techniques"],
+      catchphrase: "Slàinte mhath! (To your good health!)"
+    };
   }
 }
 
@@ -156,98 +294,15 @@ export async function getWhiskyConciergeResponse(
       "suggestedTopics": string[] (optional)
     }`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
-    });
-
-    return JSON.parse(response.choices[0].message.content || "{}");
+    return await makeOpenAIRequest(prompt);
   } catch (error) {
     console.error('Error with whisky concierge:', error);
-    throw new Error('Failed to process whisky concierge request');
-  }
-}
-
-export async function generateConciergeName(preferences?: {
-  style?: "funny" | "professional" | "casual";
-  theme?: string;
-}): Promise<string> {
-  try {
-    const prompt = `Generate a creative and ${preferences?.style || 'friendly'} name for a whisky concierge/expert. 
-    ${preferences?.theme ? `Incorporate the theme: ${preferences.theme}` : ''}
-    The name should be memorable, unique, and reflect expertise in whisky.
-
-    Format as JSON: { "name": "generated name" }`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4", 
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.9,
-      response_format: { type: "json_object" }
-    });
-
-    const result = JSON.parse(response.choices[0].message.content || "{}");
-    return result.name || "Whisky Pete"; 
-  } catch (error) {
-    console.error('Error generating concierge name:', error);
-    return "Whisky Pete"; 
-  }
-}
-
-export async function generateConciergePersonality(
-  name: string,
-  style: "funny" | "professional" | "casual" = "casual"
-): Promise<ConciergePersonality> {
-  try {
-    const prompt = `Create a detailed personality profile for a whisky expert named "${name}". 
-    Style: ${style}
-
-    Include:
-    1. A unique accent and origin story
-    2. Distinct personality traits
-    3. Background in whisky industry
-    4. Areas of expertise
-    5. A signature catchphrase
-    6. Description of their voice
-    7. A vivid description for their avatar
-
-    Make it whisky-themed and memorable. For example, they might be a retired master distiller, 
-    a wandering spirit guide, or a historical whisky figure.
-
-    Format as JSON:
-    {
-      "name": string,
-      "accent": string (e.g., "Highland Scots", "Smooth Irish"),
-      "background": string (their origin story),
-      "personality": string (key traits),
-      "avatarDescription": string (appearance details),
-      "voiceDescription": string (how they sound),
-      "specialties": string[] (3-5 areas of expertise),
-      "catchphrase": string (their signature saying)
-    }`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", 
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.9,
-      response_format: { type: "json_object" }
-    });
-
-    return JSON.parse(response.choices[0].message.content || "{}");
-  } catch (error) {
-    console.error('Error generating concierge personality:', error);
-    
-    return {
-      name,
-      accent: "Classic Scottish",
-      background: "A traditional whisky expert with years of experience",
-      personality: "Knowledgeable and friendly",
-      avatarDescription: "A distinguished figure in traditional Scottish attire",
-      voiceDescription: "Warm and welcoming with a gentle brogue",
-      specialties: ["Single Malts", "Whisky History", "Tasting Techniques"],
-      catchphrase: "Slàinte mhath! (To your good health!)"
-    };
+    if (error instanceof WhiskyAIError) {
+      throw error;
+    }
+    throw new WhiskyAIError(
+      "Failed to process whisky concierge request",
+      "UNKNOWN_ERROR"
+    );
   }
 }

@@ -136,6 +136,12 @@ export default function WhiskyConcierge() {
 
       if (!response.ok) {
         const error = await response.json();
+        // Handle specific error types
+        if (error.code === 'RATE_LIMIT_EXCEEDED') {
+          throw new Error("Our AI is a bit overwhelmed right now. Please try again in a few minutes.");
+        } else if (error.code === 'INVALID_API_KEY') {
+          throw new Error("There's a temporary issue with our AI service. We're working on it!");
+        }
         throw new Error(error.message || "Failed to get response from concierge");
       }
 
@@ -159,8 +165,8 @@ export default function WhiskyConcierge() {
       console.error('Concierge query error:', error);
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to get response from the whisky concierge",
+        title: "Concierge Unavailable",
+        description: error.message,
       });
     },
   });
