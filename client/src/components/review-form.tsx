@@ -19,12 +19,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { StarRating } from "./star-rating";
 import { PreciseRating } from "./precise-rating";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Image, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { SharePopup } from "./share-popup";
 import { useState } from "react";
 
@@ -55,7 +54,7 @@ export function ReviewForm() {
       insertReviewSchema.omit({ userId: true }).extend({
         whiskyId: insertReviewSchema.shape.whiskyId,
         mediaFile: insertReviewSchema.shape.videoUrl.optional(),
-      }),
+      })
     ),
     defaultValues: {
       content: "",
@@ -91,7 +90,7 @@ export function ReviewForm() {
       });
 
       // Prepare sharing data
-      const shareUrl = `${window.location.origin}/share/${reviewData.id}`;
+      const shareUrl = `${window.location.origin}/review/${reviewData.id}`;
       setLastReviewData({
         title: `${whiskyName} Review`,
         text: `Check out my ${reviewData.rating}⭐️ review of ${whiskyName} on WeWhiskie!`,
