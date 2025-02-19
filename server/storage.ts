@@ -11,7 +11,17 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 
+// Add new imports
+import { 
+  invites, Invite, InsertInvite,
+  masterclassEvents, MasterclassEvent,
+  masterclassParticipants, MasterclassParticipant,
+} from "@shared/schema";
+
 const PostgresSessionStore = connectPg(session);
+
+// Helper function for JSON operations
+const jsonb = (obj: unknown) => sql`${JSON.stringify(obj)}::jsonb`;
 
 export interface IStorage {
   // User methods
@@ -118,6 +128,24 @@ export interface IStorage {
   getAchievements(): Promise<Achievement[]>;
   getUserAchievements(userId: number): Promise<Achievement[]>;
   unlockAchievement(userId: number, achievementId: number): Promise<void>;
+
+  // Invite methods
+  createInvite(invite: InsertInvite): Promise<Invite>;
+  getInviteByCode(code: string): Promise<Invite | undefined>;
+  acceptInvite(code: string, userId: number): Promise<void>;
+  getUserInvites(userId: number): Promise<Invite[]>;
+
+  // Engagement tracking methods
+  updateUserEngagement(userId: number, action: string, weight: number): Promise<void>;
+  getTopEngagedUsers(limit: number): Promise<User[]>;
+
+  // Masterclass methods
+  createMasterclassEvent(event: Omit<MasterclassEvent, "id" | "createdAt">): Promise<MasterclassEvent>;
+  getMasterclassEvents(): Promise<MasterclassEvent[]>;
+  joinMasterclass(eventId: number, userId: number): Promise<void>;
+  getEventParticipants(eventId: number): Promise<User[]>;
+  getUserMasterclasses(userId: number): Promise<MasterclassEvent[]>;
+  getTopMasterCooperUsers(limit: number): Promise<User[]>;
 }
 
 type ReviewWithRelations = {
@@ -148,17 +176,17 @@ export class DatabaseStorage implements IStorage {
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    const [user] = await db.select().from(users).where(eq(users.id, id)) as [User | undefined];
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db.select().from(users).where(eq(users.username, username)) as [User | undefined];
     return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+    const [user] = await db.insert(users).values(insertUser).returning() as [User];
     return user;
   }
 
@@ -167,7 +195,7 @@ export class DatabaseStorage implements IStorage {
       .update(users)
       .set(updates)
       .where(eq(users.id, id))
-      .returning();
+      .returning() as [User];
     return user;
   }
 
@@ -216,7 +244,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(follows)
       .innerJoin(users, eq(follows.followerId, users.id))
-      .where(eq(follows.followingId, userId));
+      .where(eq(follows.followingId, userId)) as { users: User }[];
     return result.map(row => row.users);
   }
 
@@ -225,17 +253,17 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(follows)
       .innerJoin(users, eq(follows.followingId, users.id))
-      .where(eq(follows.followerId, userId));
+      .where(eq(follows.followerId, userId)) as { users: User }[];
     return result.map(row => row.users);
   }
 
   // Whisky methods
   async getWhiskies(): Promise<Whisky[]> {
-    return await db.select().from(whiskies);
+    return await db.select().from(whiskies) as Whisky[];
   }
 
   async getWhisky(id: number): Promise<Whisky | undefined> {
-    const [whisky] = await db.select().from(whiskies).where(eq(whiskies.id, id));
+    const [whisky] = await db.select().from(whiskies).where(eq(whiskies.id, id)) as [Whisky | undefined];
     return whisky;
   }
 
@@ -250,7 +278,7 @@ export class DatabaseStorage implements IStorage {
       .from(reviews)
       .innerJoin(users, eq(reviews.userId, users.id))
       .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id))
-      .orderBy(sql`${reviews.createdAt} DESC`) as ReviewWithRelations[];
+      .orderBy(sql`${reviews.createdAt} DESC`) as { review: Review, user: User, whisky: Whisky }[];
 
     return result.map(({ review, user, whisky }) => ({
       ...review,
@@ -268,7 +296,7 @@ export class DatabaseStorage implements IStorage {
       .from(reviews)
       .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id))
       .where(eq(reviews.userId, userId))
-      .orderBy(sql`${reviews.createdAt} DESC`) as ReviewWithWhisky[];
+      .orderBy(sql`${reviews.createdAt} DESC`) as { review: Review, whisky: Whisky }[];
 
     return result.map(({ review, whisky }) => ({
       ...review,
@@ -277,7 +305,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createReview(review: Omit<Review, "id" | "createdAt">): Promise<Review> {
-    const [newReview] = await db.insert(reviews).values(review).returning();
+    const [newReview] = await db.insert(reviews).values(review).returning() as [Review];
     return newReview;
   }
 
@@ -291,7 +319,7 @@ export class DatabaseStorage implements IStorage {
       .from(reviews)
       .innerJoin(users, eq(reviews.userId, users.id))
       .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id))
-      .where(eq(reviews.id, id));
+      .where(eq(reviews.id, id)) as [{ review: Review, user: User, whisky: Whisky } | undefined];
 
     if (!result) return undefined;
 
@@ -305,7 +333,7 @@ export class DatabaseStorage implements IStorage {
 
   // Tasting session methods
   async createTastingSession(session: Omit<TastingSession, "id" | "createdAt">): Promise<TastingSession> {
-    const [newSession] = await db.insert(tastingSessions).values(session).returning();
+    const [newSession] = await db.insert(tastingSessions).values(session).returning() as [TastingSession];
     return newSession;
   }
 
@@ -316,7 +344,7 @@ export class DatabaseStorage implements IStorage {
         host: users,
       })
       .from(tastingSessions)
-      .innerJoin(users, eq(tastingSessions.hostId, users.id)) as TastingSessionWithHost[];
+      .innerJoin(users, eq(tastingSessions.hostId, users.id)) as { session: TastingSession, host: User }[];
 
     return result.map(({ session, host }) => ({
       ...session,
@@ -328,7 +356,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(tastingSessions)
-      .where(eq(tastingSessions.hostId, userId));
+      .where(eq(tastingSessions.hostId, userId)) as TastingSession[];
   }
 
   async joinSession(sessionId: number, userId: number): Promise<void> {
@@ -343,7 +371,7 @@ export class DatabaseStorage implements IStorage {
     const [session] = await db
       .select()
       .from(tastingSessions)
-      .where(eq(tastingSessions.id, id));
+      .where(eq(tastingSessions.id, id)) as [TastingSession | undefined];
     return session;
   }
 
@@ -355,7 +383,7 @@ export class DatabaseStorage implements IStorage {
       .update(tastingSessions)
       .set({ status })
       .where(eq(tastingSessions.id, id))
-      .returning();
+      .returning() as [TastingSession];
     return session;
   }
 
@@ -366,7 +394,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(sessionParticipants)
       .innerJoin(users, eq(sessionParticipants.userId, users.id))
-      .where(eq(sessionParticipants.sessionId, sessionId));
+      .where(eq(sessionParticipants.sessionId, sessionId)) as { user: User }[];
 
     return result.map(row => row.user);
   }
@@ -379,7 +407,7 @@ export class DatabaseStorage implements IStorage {
         .set({ isDefault: false })
         .where(eq(shippingAddresses.userId, address.userId));
     }
-    const [newAddress] = await db.insert(shippingAddresses).values(address).returning();
+    const [newAddress] = await db.insert(shippingAddresses).values(address).returning() as [ShippingAddress];
     return newAddress;
   }
 
@@ -387,7 +415,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(shippingAddresses)
-      .where(eq(shippingAddresses.userId, userId));
+      .where(eq(shippingAddresses.userId, userId)) as ShippingAddress[];
   }
 
   async setDefaultAddress(userId: number, addressId: number): Promise<void> {
@@ -401,7 +429,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(shippingAddresses.id, addressId));
   }
   async trackShare(shareData: Omit<ShareTrack, "id">): Promise<ShareTrack> {
-    const [share] = await db.insert(shares).values(shareData).returning();
+    const [share] = await db.insert(shares).values(shareData).returning() as [ShareTrack];
     return share;
   }
   // Like methods
@@ -436,7 +464,7 @@ export class DatabaseStorage implements IStorage {
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(likes)
-      .where(eq(likes.reviewId, reviewId));
+      .where(eq(likes.reviewId, reviewId)) as [{ count: number } | undefined];
     return result?.count || 0;
   }
 
@@ -449,18 +477,18 @@ export class DatabaseStorage implements IStorage {
           eq(likes.userId, userId),
           eq(likes.reviewId, reviewId)
         )
-      );
+      ) as [Like | undefined];
     return !!like;
   }
 
   // Group methods
   async createTastingGroup(group: InsertTastingGroup): Promise<TastingGroup> {
-    const [newGroup] = await db.insert(tastingGroups).values(group).returning();
+    const [newGroup] = await db.insert(tastingGroups).values(group).returning() as [TastingGroup];
     return newGroup;
   }
 
   async getTastingGroup(id: number): Promise<TastingGroup | undefined> {
-    const [group] = await db.select().from(tastingGroups).where(eq(tastingGroups.id, id));
+    const [group] = await db.select().from(tastingGroups).where(eq(tastingGroups.id, id)) as [TastingGroup | undefined];
     return group;
   }
 
@@ -471,7 +499,7 @@ export class DatabaseStorage implements IStorage {
         creator: users,
       })
       .from(tastingGroups)
-      .innerJoin(users, eq(tastingGroups.createdBy, users.id));
+      .innerJoin(users, eq(tastingGroups.createdBy, users.id)) as { group: TastingGroup, creator: User }[];
 
     return result.map(({ group, creator }) => ({
       ...group,
@@ -486,7 +514,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(groupMembers)
       .innerJoin(tastingGroups, eq(groupMembers.groupId, tastingGroups.id))
-      .where(eq(groupMembers.userId, userId));
+      .where(eq(groupMembers.userId, userId)) as { group: TastingGroup }[];
 
     return result.map(({ group }) => group);
   }
@@ -527,7 +555,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(groupMembers)
       .innerJoin(users, eq(groupMembers.userId, users.id))
-      .where(eq(groupMembers.groupId, groupId));
+      .where(eq(groupMembers.groupId, groupId)) as { member: GroupMember, user: User }[];
 
     return result.map(({ member, user }) => ({
       ...member,
@@ -544,7 +572,7 @@ export class DatabaseStorage implements IStorage {
           eq(groupMembers.groupId, groupId),
           eq(groupMembers.userId, userId)
         )
-      );
+      ) as [GroupMember | undefined];
     return !!member;
   }
 
@@ -553,7 +581,7 @@ export class DatabaseStorage implements IStorage {
     const [newAchievement] = await db
       .insert(groupAchievements)
       .values(achievement)
-      .returning();
+      .returning() as [GroupAchievement];
     return newAchievement;
   }
 
@@ -562,7 +590,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(groupAchievements)
       .where(eq(groupAchievements.groupId, groupId))
-      .orderBy(groupAchievements.createdAt);
+      .orderBy(groupAchievements.createdAt) as GroupAchievement[];
   }
 
   async updateAchievementStatus(groupId: number, achievementId: number): Promise<void> {
@@ -579,7 +607,7 @@ export class DatabaseStorage implements IStorage {
 
   // Stream configuration implementations
   async createStreamConfig(config: InsertStreamConfig): Promise<StreamConfiguration> {
-    const [newConfig] = await db.insert(streamConfigurations).values(config).returning();
+    const [newConfig] = await db.insert(streamConfigurations).values(config).returning() as [StreamConfiguration];
     return newConfig;
   }
 
@@ -587,7 +615,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(streamConfigurations)
-      .where(eq(streamConfigurations.sessionId, sessionId));
+      .where(eq(streamConfigurations.sessionId, sessionId)) as StreamConfiguration[];
   }
 
   async updateStreamConfig(id: number, updates: Partial<StreamConfiguration>): Promise<StreamConfiguration> {
@@ -595,13 +623,13 @@ export class DatabaseStorage implements IStorage {
       .update(streamConfigurations)
       .set(updates)
       .where(eq(streamConfigurations.id, id))
-      .returning();
+      .returning() as [StreamConfiguration];
     return updated;
   }
 
   // Stream statistics implementations
   async recordStreamStats(stats: InsertStreamStats): Promise<StreamStats> {
-    const [newStats] = await db.insert(streamStats).values(stats).returning();
+    const [newStats] = await db.insert(streamStats).values(stats).returning() as [StreamStats];
     return newStats;
   }
 
@@ -610,7 +638,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(streamStats)
       .where(eq(streamStats.sessionId, sessionId))
-      .orderBy(sql`${streamStats.timestamp} DESC`);
+      .orderBy(sql`${streamStats.timestamp} DESC`) as StreamStats[];
   }
 
   async getLatestStreamStats(sessionId: number): Promise<StreamStats | undefined> {
@@ -619,13 +647,13 @@ export class DatabaseStorage implements IStorage {
       .from(streamStats)
       .where(eq(streamStats.sessionId, sessionId))
       .orderBy(sql`${streamStats.timestamp} DESC`)
-      .limit(1);
+      .limit(1) as [StreamStats | undefined];
     return latest;
   }
 
   // Viewer analytics implementations
   async recordViewerAnalytics(analytics: InsertViewerAnalytics): Promise<ViewerAnalytics> {
-    const [newAnalytics] = await db.insert(viewerAnalytics).values(analytics).returning();
+    const [newAnalytics] = await db.insert(viewerAnalytics).values(analytics).returning() as [ViewerAnalytics];
     return newAnalytics;
   }
 
@@ -634,20 +662,20 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(viewerAnalytics)
       .where(eq(viewerAnalytics.sessionId, sessionId))
-      .orderBy(sql`${viewerAnalytics.timestamp} DESC`);
+      .orderBy(sql`${viewerAnalytics.timestamp} DESC`) as ViewerAnalytics[];
   }
 
   async getViewerCount(sessionId: number): Promise<number> {
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(viewerAnalytics)
-      .where(eq(viewerAnalytics.sessionId, sessionId));
+      .where(eq(viewerAnalytics.sessionId, sessionId)) as [{ count: number } | undefined];
     return result?.count || 0;
   }
 
   // CDN configuration implementations
   async createCdnConfig(config: InsertCdnConfig): Promise<CdnConfig> {
-    const [newConfig] = await db.insert(cdnConfigs).values(config).returning();
+    const [newConfig] = await db.insert(cdnConfigs).values(config).returning() as [CdnConfig];
     return newConfig;
   }
 
@@ -655,7 +683,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(cdnConfigs)
-      .where(eq(cdnConfigs.sessionId, sessionId));
+      .where(eq(cdnConfigs.sessionId, sessionId)) as CdnConfig[];
   }
 
   async getActiveCdnConfig(sessionId: number): Promise<CdnConfig | undefined> {
@@ -667,7 +695,7 @@ export class DatabaseStorage implements IStorage {
           eq(cdnConfigs.sessionId, sessionId),
           eq(cdnConfigs.active, true)
         )
-      );
+      ) as [CdnConfig | undefined];
     return config;
   }
 
@@ -676,7 +704,7 @@ export class DatabaseStorage implements IStorage {
       .update(cdnConfigs)
       .set(updates)
       .where(eq(cdnConfigs.id, id))
-      .returning();
+      .returning() as [CdnConfig];
     return updated;
   }
 
@@ -686,7 +714,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(activityFeed)
       .where(sql`${activityFeed.visibility} = ANY(ARRAY[${sql.join(options.visibility, sql`, `)}])`)
-      .orderBy(sql`${activityFeed.createdAt} DESC`);
+      .orderBy(sql`${activityFeed.createdAt} DESC`) as ActivityFeed[];
 
     // Fetch related user data for each activity
     const activitiesWithData = await Promise.all(
@@ -694,7 +722,7 @@ export class DatabaseStorage implements IStorage {
         const [user] = await db
           .select()
           .from(users)
-          .where(eq(users.id, activity.userId));
+          .where(eq(users.id, activity.userId)) as [User | undefined];
 
         let metadata: any = activity.metadata || {};
 
@@ -708,7 +736,7 @@ export class DatabaseStorage implements IStorage {
           const [whisky] = await db
             .select()
             .from(whiskies)
-            .where(eq(whiskies.id, activity.entityId));
+            .where(eq(whiskies.id, activity.entityId)) as [Whisky | undefined];
           if (whisky) {
             metadata.whiskyName = whisky.name;
           }
@@ -716,7 +744,7 @@ export class DatabaseStorage implements IStorage {
           const [targetUser] = await db
             .select()
             .from(users)
-            .where(eq(users.id, activity.entityId));
+            .where(eq(users.id, activity.entityId)) as [User | undefined];
           if (targetUser) {
             metadata.targetUsername = targetUser.username;
           }
@@ -737,7 +765,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(activityFeed)
       .where(eq(activityFeed.userId, userId))
-      .orderBy(sql`${activityFeed.createdAt} DESC`);
+      .orderBy(sql`${activityFeed.createdAt} DESC`) as ActivityFeed[];
 
     return activities;
   }
@@ -746,7 +774,7 @@ export class DatabaseStorage implements IStorage {
     const [newActivity] = await db
       .insert(activityFeed)
       .values(activity)
-      .returning();
+      .returning() as [ActivityFeed];
     return newActivity;
   }
 
@@ -764,7 +792,7 @@ export class DatabaseStorage implements IStorage {
         END`
       })
       .where(eq(users.id, userId))
-      .returning();
+      .returning() as [User];
     return user;
   }
 
@@ -775,7 +803,7 @@ export class DatabaseStorage implements IStorage {
         points: users.experiencePoints,
       })
       .from(users)
-      .where(eq(users.id, userId));
+      .where(eq(users.id, userId)) as [{ level: number | null; points: number | null } | undefined];
 
     // Ensure we return valid numbers even if the database has nulls
     return {
@@ -796,7 +824,7 @@ export class DatabaseStorage implements IStorage {
         lastCheckIn: sql`CURRENT_TIMESTAMP`,
       })
       .where(eq(users.id, userId))
-      .returning();
+      .returning() as [User];
 
     const currentStreak = user?.dailyStreak ?? 1;
     const reward = Math.min(Math.floor(currentStreak / 7) * 10, 50);
@@ -828,7 +856,7 @@ export class DatabaseStorage implements IStorage {
       },
     ];
 
-    return await db.insert(dailyTasks).values(tasks).returning();
+    return await db.insert(dailyTasks).values(tasks).returning() as DailyTask[];
   }
 
   async getDailyTasks(userId: number): Promise<DailyTask[]> {
@@ -840,7 +868,7 @@ export class DatabaseStorage implements IStorage {
           eq(dailyTasks.userId, userId),
           sql`DATE(${dailyTasks.date}) = CURRENT_DATE`
         )
-      );
+      ) as DailyTask[];
   }
 
   async updateTaskProgress(taskId: number, progress: number): Promise<DailyTask> {
@@ -850,8 +878,8 @@ export class DatabaseStorage implements IStorage {
         progress,
         completed: sql`CASE WHEN ${progress} >= ${dailyTasks.required} THEN true ELSE false END`
       })
-      .where(eq(dailyTasks.id, taskId))
-      .returning();
+            .where(eq(dailyTasks.id, taskId))
+      .returning() as [DailyTask];
     return task;
   }
 
@@ -891,7 +919,7 @@ export class DatabaseStorage implements IStorage {
       },
     ];
 
-    return await db.insert(weeklyTasks).values(tasks).returning();
+    return await db.insert(weeklyTasks).values(tasks).returning() as WeeklyTask[];
   }
 
   async getWeeklyTasks(userId: number): Promise<WeeklyTask[]> {
@@ -903,11 +931,11 @@ export class DatabaseStorage implements IStorage {
           eq(weeklyTasks.userId, userId),
           sql`${weeklyTasks.weekEnd} >= CURRENT_DATE`
         )
-      );
+      ) as WeeklyTask[];
   }
 
   async getAchievements(): Promise<Achievement[]> {
-    return await db.select().from(achievements);
+    return await db.select().from(achievements) as Achievement[];
   }
 
   async getUserAchievements(userId: number): Promise<Achievement[]> {
@@ -918,28 +946,176 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(achievements)
-      .where(sql`${achievements.id} = ANY(${achievementIds})`);
+      .where(sql`${achievements.id} = ANY(${achievementIds})`) as Achievement[];
   }
 
   async unlockAchievement(userId: number, achievementId: number): Promise<void> {
     const [achievement] = await db
       .select()
       .from(achievements)
-      .where(eq(achievements.id, achievementId));
+      .where(eq(achievements.id, achievementId)) as [Achievement | undefined];
 
     if (!achievement) return;
 
     await db
       .update(users)
       .set({
-        achievementBadges: sql`COALESCE(${users.achievementBadges}, '[]'::jsonb) || ${sql.json({
+        achievementBadges: sql`COALESCE(${users.achievementBadges}, '[]'::jsonb) || ${jsonb({
           id: achievement.id,
           name: achievement.name,
           unlockedAt: new Date().toISOString(),
-        })}::jsonb`,
+        })}`,
         experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + ${achievement.reward}`,
       })
       .where(eq(users.id, userId));
+  }
+
+  // Invite methods implementation
+  async createInvite(invite: InsertInvite): Promise<Invite> {
+    const [newInvite] = await db.insert(invites).values(invite).returning() as [Invite];
+    await db
+      .update(users)
+      .set({ 
+        inviteCount: sql`COALESCE(${users.inviteCount}, 0) + 1`,
+        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + 50` // Bonus points for sending invite
+      })
+      .where(eq(users.id, invite.inviterUserId));
+    return newInvite;
+  }
+
+  async getInviteByCode(code: string): Promise<Invite | undefined> {
+    const [invite] = await db
+      .select()
+      .from(invites)
+      .where(eq(invites.inviteCode, code)) as [Invite | undefined];
+    return invite;
+  }
+
+  async acceptInvite(code: string, userId: number): Promise<void> {
+    const [invite] = await db
+      .select()
+      .from(invites)
+      .where(eq(invites.inviteCode, code)) as [Invite | undefined];
+
+    if (!invite) throw new Error("Invalid invite code");
+
+    await db
+      .update(invites)
+      .set({ 
+        status: "accepted",
+        acceptedAt: sql`CURRENT_TIMESTAMP`
+      })
+      .where(eq(invites.inviteCode, code));
+
+    // Award points to both inviter and invitee
+    await db
+      .update(users)
+      .set({ 
+        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + 100`,
+        engagementScore: sql`COALESCE(${users.engagementScore}, 0) + 50`
+      })
+      .where(eq(users.id, invite.inviterUserId));
+
+    await db
+      .update(users)
+      .set({ 
+        invitedBy: invite.inviterUserId,
+        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + 25`
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async getUserInvites(userId: number): Promise<Invite[]> {
+    return await db
+      .select()
+      .from(invites)
+      .where(eq(invites.inviterUserId, userId)) as Invite[];
+  }
+
+  // Engagement tracking implementation
+  async updateUserEngagement(userId: number, action: string, weight: number): Promise<void> {
+    await db
+      .update(users)
+      .set({ 
+        engagementScore: sql`COALESCE(${users.engagementScore}, 0) + ${weight}`,
+        lastActive: sql`CURRENT_TIMESTAMP`
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async getTopEngagedUsers(limit: number): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .orderBy(sql`COALESCE(${users.engagementScore}, 0) DESC`)
+      .limit(limit) as User[];
+  }
+
+  // Masterclass methods implementation
+  async createMasterclassEvent(event: Omit<MasterclassEvent, "id" | "createdAt">): Promise<MasterclassEvent> {
+    const [newEvent] = await db.insert(masterclassEvents).values(event).returning() as [MasterclassEvent];
+    return newEvent;
+  }
+
+  async getMasterclassEvents(): Promise<MasterclassEvent[]> {
+    return await db
+      .select()
+      .from(masterclassEvents)
+      .orderBy(sql`${masterclassEvents.scheduledFor} DESC`) as MasterclassEvent[];
+  }
+
+  async joinMasterclass(eventId: number, userId: number): Promise<void> {
+    await db.insert(masterclassParticipants).values({
+      eventId,
+      userId,
+      status: 'registered'
+    });
+
+    // Update user's masterclass participation
+    await db
+      .update(users)
+      .set({
+        masterclassParticipation: sql`COALESCE(${users.masterclassParticipation}, '[]'::jsonb) || ${jsonb({
+          eventId,
+          status: 'registered',
+          joinedAt: new Date().toISOString()
+        })}`,
+        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + 100` // Bonus for joining masterclass
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async getEventParticipants(eventId: number): Promise<User[]> {
+    const result = await db
+      .select({
+        user: users,
+      })
+      .from(masterclassParticipants)
+      .innerJoin(users, eq(masterclassParticipants.userId, users.id))
+      .where(eq(masterclassParticipants.eventId, eventId)) as { user: User }[];
+
+    return result.map(row => row.user);
+  }
+
+  async getUserMasterclasses(userId: number): Promise<MasterclassEvent[]> {
+    const result = await db
+      .select({
+        event: masterclassEvents,
+      })
+      .from(masterclassParticipants)
+      .innerJoin(masterclassEvents, eq(masterclassParticipants.eventId, masterclassEvents.id))
+      .where(eq(masterclassParticipants.userId, userId)) as { event: MasterclassEvent }[];
+
+    return result.map(row => row.event);
+  }
+
+  async getTopMasterCooperUsers(limit: number): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(eq(users.level, 5)) // Master Cooper level
+      .orderBy(sql`COALESCE(${users.engagementScore}, 0) DESC`)
+      .limit(limit) as User[];
   }
 }
 

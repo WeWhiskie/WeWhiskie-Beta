@@ -2,14 +2,18 @@ import { pgTable, text, serial, integer, timestamp, doublePrecision, boolean, js
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// ============= Table Definitions =============
-
-// Users and Authentication
+// Users and Authentication - Add new fields for invite system
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   email: text("email").notNull().unique(),
+  inviteCode: text("invite_code").notNull().unique(),
+  invitedBy: integer("invited_by").references(() => users.id),
+  inviteCount: integer("invite_count").default(0),
+  lastActive: timestamp("last_active"),
+  engagementScore: integer("engagement_score").default(0),
+  masterclassParticipation: jsonb("masterclass_participation").default([]),
   bio: text("bio"),
   avatarUrl: text("avatar_url"),
   location: text("location"),
@@ -28,6 +32,43 @@ export const users = pgTable("users", {
   socialLinks: jsonb("social_links"),
   expertiseAreas: text("expertise_areas").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Add new table for invite tracking
+export const invites = pgTable("invites", {
+  id: serial("id").primaryKey(),
+  inviterUserId: integer("inviter_user_id")
+    .notNull()
+    .references(() => users.id),
+  invitedEmail: text("invited_email").notNull(),
+  inviteCode: text("invite_code").notNull(),
+  status: text("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  acceptedAt: timestamp("accepted_at"),
+});
+
+// Add new table for masterclass events
+export const masterclassEvents = pgTable("masterclass_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  maxParticipants: integer("max_participants").default(10),
+  status: text("status").default("scheduled"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Add new table for masterclass participants
+export const masterclassParticipants = pgTable("masterclass_participants", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id")
+    .notNull()
+    .references(() => masterclassEvents.id),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  status: text("status").default("registered"),
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
 });
 
 // User Daily Tasks
@@ -324,6 +365,7 @@ export const cdnConfigs = pgTable("cdn_configs", {
 export const insertUserSchema = createInsertSchema(users).extend({
   email: z.string().email(),
   password: z.string().min(8),
+  inviteCode: z.string().min(6),
   expertiseAreas: z.array(z.string()).optional(),
   socialLinks: z.record(z.string().url()).optional(),
   level: z.number().min(1).default(1),
@@ -333,6 +375,11 @@ export const insertUserSchema = createInsertSchema(users).extend({
     id: z.number(),
     name: z.string(),
     unlockedAt: z.string(),
+  })).default([]),
+  masterclassParticipation: z.array(z.object({
+    eventId: z.number(),
+    status: z.string(),
+    joinedAt: z.string(),
   })).default([]),
 });
 
@@ -408,6 +455,10 @@ export const insertDailyTaskSchema = createInsertSchema(dailyTasks);
 export const insertWeeklyTaskSchema = createInsertSchema(weeklyTasks);
 export const insertAchievementSchema = createInsertSchema(achievements);
 
+// Add new insert schemas for new tables
+export const insertInviteSchema = createInsertSchema(invites);
+export const insertMasterclassEventSchema = createInsertSchema(masterclassEvents);
+export const insertMasterclassParticipantSchema = createInsertSchema(masterclassParticipants);
 
 // ============= Type Exports =============
 
@@ -441,3 +492,11 @@ export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type DailyTask = typeof dailyTasks.$inferSelect;
 export type WeeklyTask = typeof weeklyTasks.$inferSelect;
 export type Achievement = typeof achievements.$inferSelect;
+
+// Add new type exports
+export type Invite = typeof invites.$inferSelect;
+export type InsertInvite = z.infer<typeof insertInviteSchema>;
+export type MasterclassEvent = typeof masterclassEvents.$inferSelect;
+export type InsertMasterclassEvent = z.infer<typeof insertMasterclassEventSchema>;
+export type MasterclassParticipant = typeof masterclassParticipants.$inferSelect;
+export type InsertMasterclassParticipant = z.infer<typeof insertMasterclassParticipantSchema>;
