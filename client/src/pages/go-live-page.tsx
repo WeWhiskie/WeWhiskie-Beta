@@ -64,8 +64,11 @@ export default function GoLivePage() {
   });
 
   const handleStartStream = async () => {
+    if (!user) return;
+
     try {
       setIsInitializing(true);
+      console.log("Initializing stream...");
 
       // Request camera/mic permissions first
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -81,9 +84,12 @@ export default function GoLivePage() {
         }
       });
 
+      console.log("Got media stream:", stream.getTracks().map(t => t.kind));
+
       // Stop the test stream after permissions are granted
       stream.getTracks().forEach(track => track.stop());
 
+      console.log("Creating session...");
       // Create the live session
       await createSessionMutation.mutateAsync();
     } catch (error) {

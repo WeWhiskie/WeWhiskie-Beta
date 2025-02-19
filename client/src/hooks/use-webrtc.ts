@@ -73,10 +73,11 @@ export function useWebRTC(isHost: boolean) {
 
       setStream(mediaStream);
       console.log('Media stream initialized successfully');
+      return mediaStream;
     } catch (err) {
       console.error('Media stream error:', err);
       setError(err instanceof Error ? err : new Error('Failed to get media stream'));
-      throw err; // Re-throw to handle in the component
+      throw err;
     } finally {
       setIsConnecting(false);
     }
@@ -89,39 +90,52 @@ export function useWebRTC(isHost: boolean) {
         console.log('Stopping track:', track.kind);
         track.stop();
       });
+      setStream(null);
     }
     peerConnections.current.forEach(pc => pc.close());
     peerConnections.current.clear();
-    socketRef.current?.close();
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current?.close();
+    }
+    socketRef.current = null;
+    setConnectionState('closed');
   };
 
   const connectToSocket = (sessionId: number, userId: number) => {
     console.log('Connecting to WebSocket...', { sessionId, userId });
+
+    // Close existing connection if any
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.close();
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    socketRef.current = socket;
 
-    socket.onopen = () => {
+    socket.onopen = async () => {
       console.log('WebSocket connected');
       reconnectAttempts.current = 0;
+
       socket.send(JSON.stringify({
         type: 'join-session',
         payload: { sessionId, userId }
       }));
 
       if (isHost) {
-        // Initialize media stream for host when socket is ready
-        initializeMediaStream()
-          .then(() => {
-            console.log('Host media stream initialized');
+        console.log('Initializing host media stream...');
+        try {
+          const mediaStream = await initializeMediaStream();
+          if (mediaStream) {
             socket.send(JSON.stringify({
               type: 'broadcast-ready',
               payload: { userId }
             }));
-          })
-          .catch(err => {
-            console.error('Failed to initialize host media stream:', err);
-            setError(err instanceof Error ? err : new Error('Failed to initialize media stream'));
-          });
+          }
+        } catch (err) {
+          console.error('Failed to initialize host media stream:', err);
+          setError(err instanceof Error ? err : new Error('Failed to initialize media stream'));
+        }
       }
     };
 
@@ -143,12 +157,15 @@ export function useWebRTC(isHost: boolean) {
 
     socket.onclose = (event) => {
       console.log('WebSocket closed:', event.code, event.reason);
-      attemptReconnect(sessionId, userId);
+      if (event.code !== 1000) { // Not a normal closure
+        attemptReconnect(sessionId, userId);
+      }
     };
 
-    socketRef.current = socket;
     return () => {
-      socket.close();
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      }
       socketRef.current = null;
     };
   };
@@ -327,11 +344,6 @@ export function useWebRTC(isHost: boolean) {
 
   useEffect(() => {
     console.log('useWebRTC effect triggered, isHost:', isHost);
-    if (isHost) {
-      // Moved to socket.onopen for better timing
-      // initializeMediaStream();
-    }
-
     return () => {
       cleanup();
     };
@@ -347,6 +359,6 @@ export function useWebRTC(isHost: boolean) {
     connectToSocket,
     sendMessage,
     peerConnection: activePeerConnection.current,
-    cleanup  // Export cleanup function
+    cleanup
   };
 }
