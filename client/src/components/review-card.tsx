@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StarRating } from "./star-rating";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Share2, Twitter, Facebook } from "lucide-react";
+import { Share2, Twitter, Facebook, Linkedin } from "lucide-react";
 import { Link } from "wouter";
 import {
   DropdownMenu,
@@ -11,6 +11,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { shareToSocial, generateShareText } from "@/lib/social-sharing";
+import { useToast } from "@/hooks/use-toast";
 
 interface ReviewCardProps {
   review: {
@@ -32,21 +34,37 @@ interface ReviewCardProps {
 }
 
 export function ReviewCard({ review }: ReviewCardProps) {
+  const { toast } = useToast();
   const shareUrl = `${window.location.origin}/reviews/${review.id}`;
-  const shareText = `Check out ${review.user.username}'s review of ${review.whisky.name} on WeWhiskie.`;
+  const shareTitle = `${review.user.username}'s review of ${review.whisky.name}`;
+  const shareText = generateShareText({
+    type: 'review',
+    title: review.whisky.name,
+    rating: review.rating,
+    distillery: review.whisky.distillery
+  });
 
-  const handleTwitterShare = () => {
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-      shareText
-    )}&url=${encodeURIComponent(shareUrl)}`;
-    window.open(twitterUrl, '_blank');
-  };
+  const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin') => {
+    try {
+      await shareToSocial(platform, {
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl,
+        hashtags: ['whisky', 'WeWhiskie', review.whisky.name.replace(/\s+/g, '')],
+        via: 'WeWhiskie'
+      });
 
-  const handleFacebookShare = () => {
-    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
-      shareUrl
-    )}&quote=${encodeURIComponent(shareText)}`;
-    window.open(facebookUrl, '_blank');
+      toast({
+        title: "Shared successfully!",
+        description: `Your review has been shared to ${platform}.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Share failed",
+        description: "Unable to share your review. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -100,14 +118,18 @@ export function ReviewCard({ review }: ReviewCardProps) {
               Share
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={handleTwitterShare}>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleShare('twitter')}>
               <Twitter className="h-4 w-4 mr-2" />
               Share on Twitter
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleFacebookShare}>
+            <DropdownMenuItem onClick={() => handleShare('facebook')}>
               <Facebook className="h-4 w-4 mr-2" />
               Share on Facebook
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleShare('linkedin')}>
+              <Linkedin className="h-4 w-4 mr-2" />
+              Share on LinkedIn
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -179,6 +179,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add share analytics endpoint
+  app.post("/api/share-analytics", async (req, res) => {
+    try {
+      const { platform, url, title } = req.body;
+
+      // Track the share event
+      await storage.trackShare({
+        platform,
+        url,
+        title,
+        userId: req.user?.id, // Optional: only if user is logged in
+        timestamp: new Date()
+      });
+
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Error tracking share:", error);
+      res.status(500).json({ message: "Failed to track share" });
+    }
+  });
+
   const httpServer = createServer(app);
   new LiveStreamingServer(httpServer);
   return httpServer;
