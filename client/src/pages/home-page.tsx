@@ -17,6 +17,7 @@ interface Review {
   content: string;
   rating: number;
   createdAt: string;
+  likes: number;
   user: {
     id: number;
     username: string;

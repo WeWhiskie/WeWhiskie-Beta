@@ -51,8 +51,7 @@ export function ReviewForm() {
 
   const form = useForm<FormData>({
     resolver: zodResolver(
-      insertReviewSchema.omit({ userId: true }).extend({
-        whiskyId: insertReviewSchema.shape.whiskyId,
+      insertReviewSchema.omit({ userId: true, likes: true }).extend({
         mediaFile: insertReviewSchema.shape.videoUrl.optional(),
       })
     ),
@@ -76,10 +75,24 @@ export function ReviewForm() {
       const response = await fetch('/api/reviews', {
         method: 'POST',
         body: formData,
+        credentials: 'include', // Important: Include credentials for authentication
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create review');
+      }
 
       const reviewData = await response.json();
       return { reviewData, whiskyName: whiskies?.find(w => w.id === data.whiskyId)?.name };
+    },
+    onError: (error: Error) => {
+      console.error('Review creation error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to post review. Please try again.",
+        variant: "destructive",
+      });
     },
     onSuccess: ({ reviewData, whiskyName }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
@@ -89,7 +102,6 @@ export function ReviewForm() {
         description: "Your review has been shared with the community.",
       });
 
-      // Prepare sharing data
       const shareUrl = `${window.location.origin}/review/${reviewData.id}`;
       setLastReviewData({
         title: `${whiskyName} Review`,
@@ -100,11 +112,20 @@ export function ReviewForm() {
     },
   });
 
+  const onSubmit = async (data: FormData) => {
+    console.log('Submitting form data:', data);
+    try {
+      await createReview.mutate(data);
+    } catch (error) {
+      console.error('Form submission error:', error);
+    }
+  };
+
   return (
     <>
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit((data) => createReview.mutate(data))}
+          onSubmit={form.handleSubmit(onSubmit)}
           className="space-y-6"
         >
           <FormField
@@ -113,7 +134,7 @@ export function ReviewForm() {
             render={({ field: { onChange, ...field } }) => (
               <FormItem>
                 <FormLabel>Select Whisky</FormLabel>
-                <Select onValueChange={(value) => onChange(Number(value))}>
+                <Select onValueChange={(value) => onChange(Number(value))} {...field}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a whisky" />
@@ -191,12 +212,24 @@ export function ReviewForm() {
             )}
           />
 
+          <div className="space-y-2">
+            {form.formState.errors.whiskyId && (
+              <p className="text-sm text-red-500">{form.formState.errors.whiskyId.message}</p>
+            )}
+            {form.formState.errors.rating && (
+              <p className="text-sm text-red-500">{form.formState.errors.rating.message}</p>
+            )}
+            {form.formState.errors.content && (
+              <p className="text-sm text-red-500">{form.formState.errors.content.message}</p>
+            )}
+          </div>
+
           <Button
             type="submit"
             className="w-full"
             disabled={createReview.isPending}
           >
-            Post Review
+            {createReview.isPending ? "Posting..." : "Post Review"}
           </Button>
         </form>
       </Form>
