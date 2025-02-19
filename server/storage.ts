@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { 
   InsertUser, User, Whisky, Review, TastingSession, ShippingAddress,
-  users, whiskies, reviews, follows, tastingSessions, shippingAddresses, sessionParticipants 
+  users, whiskies, reviews, follows, tastingSessions, shippingAddresses, sessionParticipants, shares, ShareTrack
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import session from "express-session";
@@ -47,6 +47,8 @@ export interface IStorage {
   setDefaultAddress(userId: number, addressId: number): Promise<void>;
 
   sessionStore: session.Store;
+  // Share tracking methods
+  trackShare(shareData: Omit<ShareTrack, "id">): Promise<ShareTrack>;
 }
 
 type ReviewWithRelations = {
@@ -304,6 +306,10 @@ export class DatabaseStorage implements IStorage {
       .update(shippingAddresses)
       .set({ isDefault: true })
       .where(eq(shippingAddresses.id, addressId));
+  }
+  async trackShare(shareData: Omit<ShareTrack, "id">): Promise<ShareTrack> {
+    const [share] = await db.insert(shares).values(shareData).returning();
+    return share;
   }
 }
 

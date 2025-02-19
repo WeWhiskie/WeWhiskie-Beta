@@ -119,6 +119,16 @@ export const shippingAddresses = pgTable("shipping_addresses", {
   isDefault: boolean("is_default").default(false),
 });
 
+// Additional table for tracking social shares
+export const shares = pgTable("shares", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  platform: text("platform").notNull(), // twitter, facebook, linkedin
+  url: text("url").notNull(),
+  title: text("title").notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).extend({
   email: z.string().email(),
@@ -158,3 +168,6 @@ export type Review = typeof reviews.$inferSelect;
 export type TastingSession = typeof tastingSessions.$inferSelect;
 export type ShippingAddress = typeof shippingAddresses.$inferSelect;
 export type SessionParticipant = typeof sessionParticipants.$inferSelect;
+export type ShareTrack = typeof shares.$inferSelect;
+export const insertShareSchema = createInsertSchema(shares);
+export type InsertShareTrack = z.infer<typeof insertShareSchema>;

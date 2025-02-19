@@ -16,11 +16,11 @@ const PLATFORM_URLS = {
 
 export async function shareToSocial(platform: SocialPlatform, options: ShareOptions) {
   const url = new URL(PLATFORM_URLS[platform]);
-  
+
   switch (platform) {
     case 'twitter':
-      url.searchParams.append('text', options.text);
-      url.searchParams.append('url', options.url);
+      url.searchParams.append('text', encodeURIComponent(options.text));
+      url.searchParams.append('url', encodeURIComponent(options.url));
       if (options.hashtags?.length) {
         url.searchParams.append('hashtags', options.hashtags.join(','));
       }
@@ -28,22 +28,26 @@ export async function shareToSocial(platform: SocialPlatform, options: ShareOpti
         url.searchParams.append('via', options.via);
       }
       break;
-      
+
     case 'facebook':
-      url.searchParams.append('u', options.url);
-      url.searchParams.append('quote', options.text);
+      url.searchParams.append('u', encodeURIComponent(options.url));
+      url.searchParams.append('quote', encodeURIComponent(options.text));
       break;
-      
+
     case 'linkedin':
-      url.searchParams.append('url', options.url);
-      url.searchParams.append('title', options.title);
-      url.searchParams.append('summary', options.text);
+      url.searchParams.append('url', encodeURIComponent(options.url));
+      url.searchParams.append('title', encodeURIComponent(options.title));
+      url.searchParams.append('summary', encodeURIComponent(options.text));
       break;
   }
-  
-  const windowFeatures = 'width=550,height=400,resizable=yes,scrollbars=yes';
-  window.open(url.toString(), `share_${platform}`, windowFeatures);
-  
+
+  const windowFeatures = 'width=550,height=400,resizable=yes,scrollbars=yes,top=100,left=100';
+  const shareWindow = window.open(url.toString(), `share_${platform}`, windowFeatures);
+
+  if (!shareWindow) {
+    throw new Error('Popup was blocked. Please allow popups for this site to share content.');
+  }
+
   try {
     // Track share event
     await fetch('/api/share-analytics', {
@@ -57,6 +61,7 @@ export async function shareToSocial(platform: SocialPlatform, options: ShareOpti
     });
   } catch (error) {
     console.error('Failed to track share:', error);
+    // Don't throw error here as sharing still succeeded
   }
 }
 
