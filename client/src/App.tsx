@@ -10,6 +10,7 @@ import AuthPage from "./pages/auth-page";
 import ProfilePage from "./pages/profile-page";
 import WhiskyPage from "./pages/whisky-page";
 import ReviewPage from "./pages/review-page";
+import SharePage from "./pages/share-page";
 import LiveSessionPage from "./pages/live-session-page";
 import SessionsPage from "./pages/sessions-page";
 import RecommendationsPage from "./pages/recommendations-page";
@@ -25,7 +26,9 @@ function Router() {
           <Route path="/whisky/:id" component={WhiskyPage} />
           <Route path="/auth" component={AuthPage} />
           <Route path="/profile/:id" component={ProfilePage} />
-          <Route path="/reviews/:id" component={ReviewPage} />
+          <Route path="/review" component={ReviewPage} />
+          <Route path="/review/:id" component={ReviewPage} />
+          <Route path="/share/:id" component={SharePage} />
           <Route path="/sessions" component={SessionsPage} />
           <ProtectedRoute path="/sessions/:id" component={LiveSessionPage} />
           <ProtectedRoute path="/recommendations" component={RecommendationsPage} />
