@@ -286,6 +286,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(review);
   });
 
+  // Stream configuration routes
+  app.post("/api/sessions/:sessionId/stream-config", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const sessionId = parseInt(req.params.sessionId);
+      const config = await storage.createStreamConfig({
+        ...req.body,
+        sessionId
+      });
+      res.status(201).json(config);
+    } catch (error) {
+      console.error("Error creating stream config:", error);
+      res.status(400).json({ message: "Invalid stream configuration" });
+    }
+  });
+
+  app.get("/api/sessions/:sessionId/stream-config", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    const configs = await storage.getStreamConfigs(sessionId);
+    res.json(configs);
+  });
+
+  // Stream statistics routes
+  app.post("/api/sessions/:sessionId/stream-stats", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const sessionId = parseInt(req.params.sessionId);
+      const stats = await storage.recordStreamStats({
+        ...req.body,
+        sessionId
+      });
+      res.status(201).json(stats);
+    } catch (error) {
+      console.error("Error recording stream stats:", error);
+      res.status(400).json({ message: "Invalid stream statistics" });
+    }
+  });
+
+  app.get("/api/sessions/:sessionId/stream-stats", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    const stats = await storage.getStreamStats(sessionId);
+    res.json(stats);
+  });
+
+  app.get("/api/sessions/:sessionId/stream-stats/latest", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    const stats = await storage.getLatestStreamStats(sessionId);
+    if (!stats) {
+      return res.status(404).json({ message: "No statistics found" });
+    }
+    res.json(stats);
+  });
+
+  // Viewer analytics routes
+  app.post("/api/sessions/:sessionId/viewer-analytics", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    try {
+      const analytics = await storage.recordViewerAnalytics({
+        ...req.body,
+        sessionId,
+        userId: req.user?.id
+      });
+      res.status(201).json(analytics);
+    } catch (error) {
+      console.error("Error recording viewer analytics:", error);
+      res.status(400).json({ message: "Invalid viewer analytics data" });
+    }
+  });
+
+  app.get("/api/sessions/:sessionId/viewer-analytics", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    const analytics = await storage.getViewerAnalytics(sessionId);
+    res.json(analytics);
+  });
+
+  app.get("/api/sessions/:sessionId/viewer-count", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    const count = await storage.getViewerCount(sessionId);
+    res.json({ count });
+  });
+
+  // CDN configuration routes
+  app.post("/api/sessions/:sessionId/cdn-config", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const sessionId = parseInt(req.params.sessionId);
+      const session = await storage.getTastingSession(sessionId);
+
+      if (!session) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+
+      if (session.hostId !== req.user.id) {
+        return res.status(403).json({ message: "Only the host can configure CDN settings" });
+      }
+
+      const config = await storage.createCdnConfig({
+        ...req.body,
+        sessionId
+      });
+      res.status(201).json(config);
+    } catch (error) {
+      console.error("Error creating CDN config:", error);
+      res.status(400).json({ message: "Invalid CDN configuration" });
+    }
+  });
+
+  app.get("/api/sessions/:sessionId/cdn-config", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    const configs = await storage.getCdnConfigs(sessionId);
+    res.json(configs);
+  });
+
+  app.get("/api/sessions/:sessionId/cdn-config/active", async (req, res) => {
+    const sessionId = parseInt(req.params.sessionId);
+    const config = await storage.getActiveCdnConfig(sessionId);
+    if (!config) {
+      return res.status(404).json({ message: "No active CDN configuration found" });
+    }
+    res.json(config);
+  });
+
+  // Return the HTTP server instance
   const httpServer = createServer(app);
   new LiveStreamingServer(httpServer);
   return httpServer;

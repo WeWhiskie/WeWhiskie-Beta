@@ -2,7 +2,8 @@ import { db } from "./db";
 import { 
   InsertUser, User, Whisky, Review, TastingSession, ShippingAddress,
   users, whiskies, reviews, follows, tastingSessions, shippingAddresses, sessionParticipants, shares, ShareTrack,
-  likes, Like, InsertTastingGroup, TastingGroup, GroupMember, InsertGroupAchievement, GroupAchievement, groupMembers, tastingGroups, groupAchievements
+  likes, Like, InsertTastingGroup, TastingGroup, GroupMember, InsertGroupAchievement, GroupAchievement, groupMembers, tastingGroups, groupAchievements,
+  InsertStreamConfig, StreamConfiguration, InsertStreamStats, StreamStats, InsertViewerAnalytics, ViewerAnalytics, InsertCdnConfig, CdnConfig, streamConfigurations, streamStats, viewerAnalytics, cdnConfigs
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import session from "express-session";
@@ -73,6 +74,27 @@ export interface IStorage {
   createGroupAchievement(achievement: InsertGroupAchievement): Promise<GroupAchievement>;
   getGroupAchievements(groupId: number): Promise<GroupAchievement[]>;
   updateAchievementStatus(groupId: number, achievementId: number): Promise<void>;
+
+  // Stream configuration methods
+  createStreamConfig(config: InsertStreamConfig): Promise<StreamConfiguration>;
+  getStreamConfigs(sessionId: number): Promise<StreamConfiguration[]>;
+  updateStreamConfig(id: number, updates: Partial<StreamConfiguration>): Promise<StreamConfiguration>;
+
+  // Stream statistics methods
+  recordStreamStats(stats: InsertStreamStats): Promise<StreamStats>;
+  getStreamStats(sessionId: number): Promise<StreamStats[]>;
+  getLatestStreamStats(sessionId: number): Promise<StreamStats | undefined>;
+
+  // Viewer analytics methods
+  recordViewerAnalytics(analytics: InsertViewerAnalytics): Promise<ViewerAnalytics>;
+  getViewerAnalytics(sessionId: number): Promise<ViewerAnalytics[]>;
+  getViewerCount(sessionId: number): Promise<number>;
+
+  // CDN configuration methods
+  createCdnConfig(config: InsertCdnConfig): Promise<CdnConfig>;
+  getCdnConfigs(sessionId: number): Promise<CdnConfig[]>;
+  getActiveCdnConfig(sessionId: number): Promise<CdnConfig | undefined>;
+  updateCdnConfig(id: number, updates: Partial<CdnConfig>): Promise<CdnConfig>;
 }
 
 type ReviewWithRelations = {
@@ -530,6 +552,109 @@ export class DatabaseStorage implements IStorage {
           eq(groupAchievements.groupId, groupId)
         )
       );
+  }
+
+  // Stream configuration implementations
+  async createStreamConfig(config: InsertStreamConfig): Promise<StreamConfiguration> {
+    const [newConfig] = await db.insert(streamConfigurations).values(config).returning();
+    return newConfig;
+  }
+
+  async getStreamConfigs(sessionId: number): Promise<StreamConfiguration[]> {
+    return await db
+      .select()
+      .from(streamConfigurations)
+      .where(eq(streamConfigurations.sessionId, sessionId));
+  }
+
+  async updateStreamConfig(id: number, updates: Partial<StreamConfiguration>): Promise<StreamConfiguration> {
+    const [updated] = await db
+      .update(streamConfigurations)
+      .set(updates)
+      .where(eq(streamConfigurations.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Stream statistics implementations
+  async recordStreamStats(stats: InsertStreamStats): Promise<StreamStats> {
+    const [newStats] = await db.insert(streamStats).values(stats).returning();
+    return newStats;
+  }
+
+  async getStreamStats(sessionId: number): Promise<StreamStats[]> {
+    return await db
+      .select()
+      .from(streamStats)
+      .where(eq(streamStats.sessionId, sessionId))
+      .orderBy(sql`${streamStats.timestamp} DESC`);
+  }
+
+  async getLatestStreamStats(sessionId: number): Promise<StreamStats | undefined> {
+    const [latest] = await db
+      .select()
+      .from(streamStats)
+      .where(eq(streamStats.sessionId, sessionId))
+      .orderBy(sql`${streamStats.timestamp} DESC`)
+      .limit(1);
+    return latest;
+  }
+
+  // Viewer analytics implementations
+  async recordViewerAnalytics(analytics: InsertViewerAnalytics): Promise<ViewerAnalytics> {
+    const [newAnalytics] = await db.insert(viewerAnalytics).values(analytics).returning();
+    return newAnalytics;
+  }
+
+  async getViewerAnalytics(sessionId: number): Promise<ViewerAnalytics[]> {
+    return await db
+      .select()
+      .from(viewerAnalytics)
+      .where(eq(viewerAnalytics.sessionId, sessionId))
+      .orderBy(sql`${viewerAnalytics.timestamp} DESC`);
+  }
+
+  async getViewerCount(sessionId: number): Promise<number> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(viewerAnalytics)
+      .where(eq(viewerAnalytics.sessionId, sessionId));
+    return result?.count || 0;
+  }
+
+  // CDN configuration implementations
+  async createCdnConfig(config: InsertCdnConfig): Promise<CdnConfig> {
+    const [newConfig] = await db.insert(cdnConfigs).values(config).returning();
+    return newConfig;
+  }
+
+  async getCdnConfigs(sessionId: number): Promise<CdnConfig[]> {
+    return await db
+      .select()
+      .from(cdnConfigs)
+      .where(eq(cdnConfigs.sessionId, sessionId));
+  }
+
+  async getActiveCdnConfig(sessionId: number): Promise<CdnConfig | undefined> {
+    const [config] = await db
+      .select()
+      .from(cdnConfigs)
+      .where(
+        and(
+          eq(cdnConfigs.sessionId, sessionId),
+          eq(cdnConfigs.active, true)
+        )
+      );
+    return config;
+  }
+
+  async updateCdnConfig(id: number, updates: Partial<CdnConfig>): Promise<CdnConfig> {
+    const [updated] = await db
+      .update(cdnConfigs)
+      .set(updates)
+      .where(eq(cdnConfigs.id, id))
+      .returning();
+    return updated;
   }
 }
 

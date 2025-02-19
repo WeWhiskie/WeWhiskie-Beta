@@ -254,3 +254,83 @@ export type GroupAchievement = typeof groupAchievements.$inferSelect;
 export type InsertTastingGroup = z.infer<typeof insertTastingGroupSchema>;
 export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
 export type InsertGroupAchievement = z.infer<typeof insertGroupAchievementSchema>;
+
+
+// Stream Configuration for different quality levels
+export const streamConfigurations = pgTable("stream_configurations", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => tastingSessions.id),
+  quality: text("quality").notNull(), // 1080p, 720p, 480p, 360p
+  bitrate: integer("bitrate").notNull(), // in kbps
+  framerate: integer("framerate").notNull(),
+  keyframeInterval: integer("keyframe_interval").notNull(),
+  audioQuality: integer("audio_quality").notNull(), // in kbps
+  enabled: boolean("enabled").default(true),
+});
+
+// Stream Statistics for monitoring
+export const streamStats = pgTable("stream_stats", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => tastingSessions.id),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  currentViewers: integer("current_viewers").default(0),
+  peakViewers: integer("peak_viewers").default(0),
+  bandwidth: integer("bandwidth").default(0), // in bytes
+  cpuUsage: doublePrecision("cpu_usage"),
+  memoryUsage: integer("memory_usage"), // in bytes
+  streamHealth: integer("stream_health").default(100), // 0-100
+  errors: jsonb("errors").default([]),
+});
+
+// Viewer Analytics
+export const viewerAnalytics = pgTable("viewer_analytics", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => tastingSessions.id),
+  userId: integer("user_id")
+    .references(() => users.id),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  watchDuration: integer("watch_duration").default(0), // in seconds
+  quality: text("quality").notNull(),
+  bufferingEvents: integer("buffering_events").default(0),
+  region: text("region"),
+  deviceType: text("device_type"),
+  browserInfo: text("browser_info"),
+  networkType: text("network_type"),
+});
+
+// CDN Configuration
+export const cdnConfigs = pgTable("cdn_configs", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => tastingSessions.id),
+  provider: text("provider").notNull(),
+  region: text("region").notNull(),
+  endpoint: text("endpoint").notNull(),
+  credentials: jsonb("credentials"),
+  settings: jsonb("settings"),
+  active: boolean("active").default(true),
+});
+
+// Add insert schemas
+export const insertStreamConfigSchema = createInsertSchema(streamConfigurations);
+export const insertStreamStatsSchema = createInsertSchema(streamStats);
+export const insertViewerAnalyticsSchema = createInsertSchema(viewerAnalytics);
+export const insertCdnConfigSchema = createInsertSchema(cdnConfigs);
+
+// Add types
+export type StreamConfiguration = typeof streamConfigurations.$inferSelect;
+export type StreamStats = typeof streamStats.$inferSelect;
+export type ViewerAnalytics = typeof viewerAnalytics.$inferSelect;
+export type CdnConfig = typeof cdnConfigs.$inferSelect;
+
+export type InsertStreamConfig = z.infer<typeof insertStreamConfigSchema>;
+export type InsertStreamStats = z.infer<typeof insertStreamStatsSchema>;
+export type InsertViewerAnalytics = z.infer<typeof insertViewerAnalyticsSchema>;
+export type InsertCdnConfig = z.infer<typeof insertCdnConfigSchema>;

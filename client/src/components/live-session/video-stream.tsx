@@ -9,40 +9,142 @@ import {
   MicOff,
   Camera, 
   CameraOff,
-  Users
+  Users,
+  Settings,
+  Maximize2,
+  Signal
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface VideoStreamProps {
   stream: MediaStream | null;
   isLoading?: boolean;
   isHost?: boolean;
   participantCount?: number;
+  peerConnection?: RTCPeerConnection | null;
   onToggleAudio?: () => void;
   onToggleVideo?: () => void;
+  onQualityChange?: (quality: string) => void;
   className?: string;
 }
+
+const QUALITY_OPTIONS = [
+  { value: '1080p', label: '1080p HD' },
+  { value: '720p', label: '720p HD' },
+  { value: '480p', label: '480p' },
+  { value: '360p', label: '360p' },
+];
 
 export function VideoStream({ 
   stream, 
   isLoading,
   isHost,
   participantCount = 0,
+  peerConnection,
   onToggleAudio,
   onToggleVideo,
+  onQualityChange,
   className
 }: VideoStreamProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentQuality, setCurrentQuality] = useState('1080p');
+  const [connectionQuality, setConnectionQuality] = useState<number>(100);
+  const [showControls, setShowControls] = useState(false);
+  const [stats, setStats] = useState<{
+    bitrate: number;
+    packetsLost: number;
+    roundTripTime: number;
+  }>({
+    bitrate: 0,
+    packetsLost: 0,
+    roundTripTime: 0,
+  });
 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (peerConnection) {
+      interval = setInterval(async () => {
+        try {
+          const stats = await peerConnection.getStats();
+          let totalBitrate = 0;
+          let totalPacketsLost = 0;
+          let roundTripTime = 0;
+          let statCount = 0;
+
+          stats.forEach(stat => {
+            if (stat.type === 'inbound-rtp' && stat.kind === 'video') {
+              const bytesReceived = stat.bytesReceived;
+              const timestamp = stat.timestamp;
+              if (prevStats.has(stat.id)) {
+                const prevStat = prevStats.get(stat.id);
+                const timeDiff = timestamp - prevStat.timestamp;
+                const bitrate = 8 * (bytesReceived - prevStat.bytesReceived) / timeDiff;
+                totalBitrate += bitrate;
+                totalPacketsLost += stat.packetsLost - prevStat.packetsLost;
+              }
+              prevStats.set(stat.id, { bytesReceived, timestamp, packetsLost: stat.packetsLost });
+              statCount++;
+            } else if (stat.type === 'candidate-pair' && stat.state === 'succeeded') {
+              roundTripTime = stat.currentRoundTripTime * 1000; // Convert to ms
+            }
+          });
+
+          if (statCount > 0) {
+            const avgBitrate = totalBitrate / statCount;
+            setStats({
+              bitrate: avgBitrate,
+              packetsLost: totalPacketsLost,
+              roundTripTime,
+            });
+
+            // Calculate connection quality based on multiple factors
+            const quality = calculateConnectionQuality(avgBitrate, totalPacketsLost, roundTripTime);
+            setConnectionQuality(quality);
+          }
+        } catch (error) {
+          console.error('Error getting WebRTC stats:', error);
+        }
+      }, 2000);
+    }
+    return () => clearInterval(interval);
+  }, [peerConnection]);
+
+  const prevStats = new Map<string, { bytesReceived: number; timestamp: number; packetsLost: number }>();
+
+  const calculateConnectionQuality = (bitrate: number, packetsLost: number, rtt: number): number => {
+    // Quality calculation based on multiple factors:
+    // 1. Bitrate: Higher is better (up to expected bitrate for quality level)
+    // 2. Packet Loss: Lower is better
+    // 3. Round Trip Time: Lower is better
+
+    const expectedBitrate = 5000000; // 5 Mbps for HD video
+    const maxPacketLoss = 100;
+    const maxRTT = 300; // 300ms
+
+    const bitrateScore = Math.min((bitrate / expectedBitrate) * 100, 100);
+    const packetLossScore = 100 - Math.min((packetsLost / maxPacketLoss) * 100, 100);
+    const rttScore = 100 - Math.min((rtt / maxRTT) * 100, 100);
+
+    // Weighted average (prioritize packet loss and RTT over bitrate)
+    return Math.round((bitrateScore * 0.3) + (packetLossScore * 0.4) + (rttScore * 0.3));
+  };
 
   const handleToggleAudio = () => {
     if (stream) {
@@ -76,12 +178,25 @@ export function VideoStream({
     }
   };
 
+  const handleQualityChange = (quality: string) => {
+    setCurrentQuality(quality);
+    onQualityChange?.(quality);
+  };
+
   if (isLoading) {
     return <Skeleton className="w-full aspect-video rounded-lg" />;
   }
 
   return (
-    <Card className={cn("relative group overflow-hidden", className)}>
+    <Card 
+      className={cn(
+        "relative group overflow-hidden",
+        showControls ? "cursor-default" : "cursor-pointer",
+        className
+      )}
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => setShowControls(false)}
+    >
       <video
         ref={videoRef}
         autoPlay
@@ -90,8 +205,37 @@ export function VideoStream({
         onClick={handleToggleFullscreen}
       />
 
+      {/* Stream Quality Indicator */}
+      <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
+        <Signal className={cn(
+          "h-4 w-4",
+          connectionQuality > 75 ? "text-green-500" :
+          connectionQuality > 50 ? "text-yellow-500" : "text-red-500"
+        )} />
+        <span className="text-sm">
+          {currentQuality} ({Math.round(stats.bitrate / 1000)} kbps)
+        </span>
+      </div>
+
+      {/* Participant count */}
+      <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
+        <Users className="h-4 w-4" />
+        <span className="text-sm">{participantCount}</span>
+      </div>
+
+      {/* Stream Stats (for host) */}
+      {isHost && showControls && (
+        <div className="absolute top-16 left-4 px-3 py-2 bg-black/60 rounded-lg text-xs text-white space-y-1">
+          <div>Packets Lost: {stats.packetsLost}</div>
+          <div>RTT: {Math.round(stats.roundTripTime)}ms</div>
+        </div>
+      )}
+
       {/* Overlay controls */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={cn(
+        "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300",
+        showControls ? "opacity-100" : "opacity-0"
+      )}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {isHost && (
@@ -112,6 +256,21 @@ export function VideoStream({
                 >
                   {isVideoEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
                 </Button>
+                <Select
+                  value={currentQuality}
+                  onValueChange={handleQualityChange}
+                >
+                  <SelectTrigger className="w-[90px] h-9 bg-black/60 border-0 text-white">
+                    <SelectValue placeholder="Quality" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUALITY_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </>
             )}
           </div>
@@ -126,14 +285,11 @@ export function VideoStream({
             <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
               <Share2 className="h-5 w-5" />
             </Button>
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/20" onClick={handleToggleFullscreen}>
+              <Maximize2 className="h-5 w-5" />
+            </Button>
           </div>
         </div>
-      </div>
-
-      {/* Participant count */}
-      <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
-        <Users className="h-4 w-4" />
-        <span className="text-sm">{participantCount}</span>
       </div>
     </Card>
   );

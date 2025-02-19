@@ -37,7 +37,8 @@ export default function LiveSessionPage() {
     isReconnecting,
     connectionState,
     connectToSocket,
-    sendMessage 
+    sendMessage,
+    peerConnection 
   } = useWebRTC(false);
 
   const { data: session, isLoading: isLoadingSession } = useQuery<TastingSession>({
@@ -128,6 +129,7 @@ export default function LiveSessionPage() {
               isLoading={isConnecting || isReconnecting}
               isHost={isHost}
               participantCount={participants.length}
+              peerConnection={peerConnection}
               className="rounded-lg overflow-hidden"
             />
             {streamError && (
@@ -165,7 +167,6 @@ export default function LiveSessionPage() {
           </Card>
         )}
       </div>
-
       <div className="h-[calc(100vh-8rem)]">
         <ChatBox 
           messages={messages} 
