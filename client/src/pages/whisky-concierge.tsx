@@ -1,13 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Book, Lightbulb, GraduationCap } from "lucide-react";
+import { MessageSquare, Book, Lightbulb, GraduationCap, Edit2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import type { Whisky } from "@shared/schema";
+
+// Fun whisky-themed concierge name suggestions
+const DEFAULT_NAMES = [
+  "Whisky Pete",
+  "Sir Malted",
+  "The Spirit Guide",
+  "Highland Hannah",
+  "Barrel Barry",
+  "Peat Master Penny",
+  "Captain Cask",
+  "Dr. Dram"
+];
 
 interface Message {
   role: "user" | "assistant";
@@ -40,9 +52,17 @@ interface ConciergeResponse {
 export default function WhiskyConcierge() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conciergeName, setConciergeName] = useState(() => {
+    return localStorage.getItem("conciergeName") || DEFAULT_NAMES[Math.floor(Math.random() * DEFAULT_NAMES.length)];
+  });
+  const [isEditingName, setIsEditingName] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    localStorage.setItem("conciergeName", conciergeName);
+  }, [conciergeName]);
 
   // Get user's collection
   const { data: collection } = useQuery<Whisky[]>({
@@ -78,16 +98,13 @@ export default function WhiskyConcierge() {
         ]);
       }
 
-      // Show recommendations if available
       if (data.recommendations?.length) {
-        // Update recommendations cache
         queryClient.setQueryData(
           ["/api/recommendations"],
           data.recommendations
         );
       }
 
-      // Show suggested topics if available
       if (data.suggestedTopics?.length) {
         toast({
           title: "Suggested Topics",
@@ -117,7 +134,6 @@ export default function WhiskyConcierge() {
     e.preventDefault();
     if (!query.trim()) return;
 
-    // Add user message
     setMessages((prev) => [
       ...prev,
       {
@@ -127,17 +143,62 @@ export default function WhiskyConcierge() {
       },
     ]);
 
-    // Get concierge response
     conciergeQuery.mutate(query);
     setQuery("");
+  };
+
+  const handleNameChange = (newName: string) => {
+    if (newName.trim()) {
+      setConciergeName(newName);
+      setIsEditingName(false);
+      toast({
+        title: "Name Updated",
+        description: `Your concierge will now be known as ${newName}`,
+      });
+    }
   };
 
   return (
     <div className="container mx-auto max-w-4xl py-8 space-y-8">
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold">Your Personal Whisky Concierge</h1>
+        <div className="flex items-center justify-center gap-2">
+          <h1 className="text-4xl font-bold">
+            {isEditingName ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const input = e.currentTarget.querySelector('input');
+                  if (input) handleNameChange(input.value);
+                }}
+                className="inline-flex items-center gap-2"
+              >
+                <Input
+                  autoFocus
+                  defaultValue={conciergeName}
+                  className="w-48 text-center"
+                  onBlur={(e) => handleNameChange(e.target.value)}
+                />
+                <Button type="submit" size="sm" variant="ghost">
+                  Save
+                </Button>
+              </form>
+            ) : (
+              <>
+                {conciergeName}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditingName(true)}
+                  className="ml-2"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </h1>
+        </div>
         <p className="text-muted-foreground text-lg">
-          Expert guidance and personalized recommendations for your whisky journey
+          Your Personal Whisky Guide
         </p>
       </div>
 
@@ -146,7 +207,7 @@ export default function WhiskyConcierge() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
-            Chat with Your Concierge
+            Chat with {conciergeName}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -184,7 +245,7 @@ export default function WhiskyConcierge() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask about whisky styles, recommendations, or tasting tips..."
+              placeholder={`Ask ${conciergeName} about whisky styles, recommendations, or tasting tips...`}
               disabled={conciergeQuery.isPending}
             />
             <Button type="submit" disabled={conciergeQuery.isPending}>
