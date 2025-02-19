@@ -30,13 +30,7 @@ interface Message {
 interface ConciergeResponse {
   answer?: string;
   recommendations?: Array<{
-    whisky: {
-      id: number;
-      name: string;
-      distillery: string;
-      type: string;
-      price?: number;
-    };
+    whisky: Whisky;
     reason: string;
     confidence: number;
     educationalContent?: {
@@ -162,25 +156,22 @@ export default function WhiskyConcierge() {
     <div className="container mx-auto max-w-4xl py-8 space-y-8">
       <div className="text-center space-y-4">
         <div className="flex items-center justify-center gap-2">
-          <h1 className="text-4xl font-bold">
+          <h1 className="text-4xl font-bold flex items-center gap-2">
             {isEditingName ? (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const input = e.currentTarget.querySelector('input');
-                  if (input) handleNameChange(input.value);
+                  const input = e.currentTarget.querySelector('input') as HTMLInputElement;
+                  handleNameChange(input.value);
                 }}
                 className="inline-flex items-center gap-2"
               >
                 <Input
                   autoFocus
                   defaultValue={conciergeName}
-                  className="w-48 text-center"
+                  className="w-48 text-center text-2xl"
                   onBlur={(e) => handleNameChange(e.target.value)}
                 />
-                <Button type="submit" size="sm" variant="ghost">
-                  Save
-                </Button>
               </form>
             ) : (
               <>
@@ -189,7 +180,6 @@ export default function WhiskyConcierge() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsEditingName(true)}
-                  className="ml-2"
                 >
                   <Edit2 className="h-4 w-4" />
                 </Button>
