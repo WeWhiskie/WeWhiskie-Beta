@@ -1,8 +1,9 @@
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ReviewCard } from "@/components/review-card";
 import type { Review } from "@shared/schema";
 
 export default function SharePage() {
@@ -13,7 +14,7 @@ export default function SharePage() {
     user: { id: number; username: string };
     whisky: { id: number; name: string; distillery: string; imageUrl: string };
   }>({
-    queryKey: ['/api/reviews', id],
+    queryKey: ['/api/reviews/share', id],
     enabled: !!id,
   });
 
@@ -40,22 +41,9 @@ export default function SharePage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Whisky Review</h1>
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">{review.whisky.name}</h2>
-        <div className="space-y-4">
-          <p className="text-muted-foreground">{review.content}</p>
-          <div>
-            <p className="text-sm text-muted-foreground">
-              Rating: {review.rating} / 5
-            </p>
-            <p className="text-sm text-muted-foreground">
-              By: {review.user.username}
-            </p>
-          </div>
-        </div>
-      </Card>
+    <div className="max-w-3xl mx-auto p-6">
+      <h1 className="text-3xl font-bold mb-6">Shared Whisky Review</h1>
+      <ReviewCard review={review} />
     </div>
   );
 }
