@@ -29,6 +29,13 @@ export default function LiveSessionPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<User[]>([]);
 
+  const { data: session, isLoading: isLoadingSession } = useQuery<TastingSession>({
+    queryKey: ["/api/sessions", sessionId],
+    enabled: !!sessionId,
+  });
+
+  const isHost = session?.hostId === user?.id;
+
   const { 
     stream, 
     error: streamError, 
@@ -38,14 +45,7 @@ export default function LiveSessionPage() {
     connectToSocket,
     sendMessage,
     peerConnection 
-  } = useWebRTC(user?.id === sessionId);
-
-  const { data: session, isLoading: isLoadingSession } = useQuery<TastingSession>({
-    queryKey: ["/api/sessions", sessionId],
-    enabled: !!sessionId,
-  });
-
-  const isHost = session?.hostId === user?.id;
+  } = useWebRTC(isHost);
 
   const endSessionMutation = useMutation({
     mutationFn: async () => {
@@ -72,17 +72,15 @@ export default function LiveSessionPage() {
     },
   });
 
-  // Initialize WebSocket connection
+  // Initialize WebSocket connection when session and user are available
   useEffect(() => {
-    if (!session || !user) return;
+    if (!session || !user || !sessionId) return;
 
     const cleanup = connectToSocket(sessionId, user.id);
-
-    return () => {
-      cleanup?.();
-    };
+    return cleanup;
   }, [session, user, sessionId, connectToSocket]);
 
+  // Handle received WebSocket messages for chat
   const handleSendMessage = useCallback((message: string) => {
     if (!user) return;
 
@@ -101,6 +99,7 @@ export default function LiveSessionPage() {
     });
   }, [user, sendMessage]);
 
+  // Loading state
   if (isLoadingSession) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
