@@ -4,7 +4,7 @@ import {
   users, whiskies, reviews, follows, tastingSessions, shippingAddresses, sessionParticipants, shares, ShareTrack,
   likes, Like, InsertTastingGroup, TastingGroup, GroupMember, InsertGroupAchievement, GroupAchievement, groupMembers, tastingGroups, groupAchievements,
   InsertStreamConfig, StreamConfiguration, InsertStreamStats, StreamStats, InsertViewerAnalytics, ViewerAnalytics, InsertCdnConfig, CdnConfig, streamConfigurations, streamStats, viewerAnalytics, cdnConfigs,
-  activityFeed, ActivityFeed, InsertActivity
+  activityFeed, ActivityFeed, InsertActivity, DailyTask, dailyTasks, WeeklyTask, weeklyTasks, Achievement, achievements
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import session from "express-session";
@@ -101,6 +101,23 @@ export interface IStorage {
   getActivities(options: { visibility: string[] }): Promise<ActivityFeed[]>;
   getUserActivities(userId: number): Promise<ActivityFeed[]>;
   createActivity(activity: InsertActivity): Promise<ActivityFeed>;
+
+  // User progression methods
+  updateUserProgress(userId: number, points: number): Promise<User>;
+  getUserLevel(userId: number): Promise<{ level: number; points: number }>;
+  updateUserStreak(userId: number): Promise<{ streak: number; reward: number }>;
+
+  // Tasks and achievements methods
+  createDailyTasks(userId: number): Promise<DailyTask[]>;
+  getDailyTasks(userId: number): Promise<DailyTask[]>;
+  updateTaskProgress(taskId: number, progress: number): Promise<DailyTask>;
+  createWeeklyTasks(userId: number): Promise<WeeklyTask[]>;
+  getWeeklyTasks(userId: number): Promise<WeeklyTask[]>;
+
+  // Achievement methods
+  getAchievements(): Promise<Achievement[]>;
+  getUserAchievements(userId: number): Promise<Achievement[]>;
+  unlockAchievement(userId: number, achievementId: number): Promise<void>;
 }
 
 type ReviewWithRelations = {
@@ -731,6 +748,192 @@ export class DatabaseStorage implements IStorage {
       .values(activity)
       .returning();
     return newActivity;
+  }
+
+  async updateUserProgress(userId: number, points: number): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        experiencePoints: sql`${users.experiencePoints} + ${points}`,
+        level: sql`CASE 
+          WHEN ${users.experiencePoints} + ${points} >= 1000 THEN 5
+          WHEN ${users.experiencePoints} + ${points} >= 500 THEN 4
+          WHEN ${users.experiencePoints} + ${points} >= 250 THEN 3
+          WHEN ${users.experiencePoints} + ${points} >= 100 THEN 2
+          ELSE 1
+        END`
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async getUserLevel(userId: number): Promise<{ level: number; points: number }> {
+    const [user] = await db
+      .select({
+        level: users.level,
+        points: users.experiencePoints,
+      })
+      .from(users)
+      .where(eq(users.id, userId));
+    return user;
+  }
+
+  async updateUserStreak(userId: number): Promise<{ streak: number; reward: number }> {
+    const [user] = await db
+      .update(users)
+      .set({ 
+        dailyStreak: sql`CASE 
+          WHEN ${users.lastCheckIn} >= CURRENT_DATE - INTERVAL '1 day' 
+          THEN ${users.dailyStreak} + 1 
+          ELSE 1 
+        END`,
+        lastCheckIn: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    const reward = Math.min(Math.floor(user.dailyStreak / 7) * 10, 50);
+    return { streak: user.dailyStreak, reward };
+  }
+
+  async createDailyTasks(userId: number): Promise<DailyTask[]> {
+    const tasks = [
+      {
+        userId,
+        taskType: 'review',
+        required: 1,
+        reward: 10,
+        date: new Date(),
+      },
+      {
+        userId,
+        taskType: 'tasting',
+        required: 1,
+        reward: 15,
+        date: new Date(),
+      },
+      {
+        userId,
+        taskType: 'comment',
+        required: 3,
+        reward: 5,
+        date: new Date(),
+      },
+    ];
+
+    return await db.insert(dailyTasks).values(tasks).returning();
+  }
+
+  async getDailyTasks(userId: number): Promise<DailyTask[]> {
+    return await db
+      .select()
+      .from(dailyTasks)
+      .where(
+        and(
+          eq(dailyTasks.userId, userId),
+          sql`DATE(${dailyTasks.date}) = CURRENT_DATE`
+        )
+      );
+  }
+
+  async updateTaskProgress(taskId: number, progress: number): Promise<DailyTask> {
+    const [task] = await db
+      .update(dailyTasks)
+      .set({ 
+        progress,
+        completed: sql`CASE WHEN ${progress} >= ${dailyTasks.required} THEN true ELSE false END`
+      })
+      .where(eq(dailyTasks.id, taskId))
+      .returning();
+    return task;
+  }
+
+  async createWeeklyTasks(userId: number): Promise<WeeklyTask[]> {
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const tasks = [
+      {
+        userId,
+        taskType: 'host_tasting',
+        required: 1,
+        reward: 50,
+        weekStart,
+        weekEnd,
+      },
+      {
+        userId,
+        taskType: 'reviews',
+        required: 5,
+        reward: 30,
+        weekStart,
+        weekEnd,
+      },
+      {
+        userId,
+        taskType: 'social_shares',
+        required: 3,
+        reward: 20,
+        weekStart,
+        weekEnd,
+      },
+    ];
+
+    return await db.insert(weeklyTasks).values(tasks).returning();
+  }
+
+  async getWeeklyTasks(userId: number): Promise<WeeklyTask[]> {
+    return await db
+      .select()
+      .from(weeklyTasks)
+      .where(
+        and(
+          eq(weeklyTasks.userId, userId),
+          sql`${weeklyTasks.weekEnd} >= CURRENT_DATE`
+        )
+      );
+  }
+
+  async getAchievements(): Promise<Achievement[]> {
+    return await db.select().from(achievements);
+  }
+
+  async getUserAchievements(userId: number): Promise<Achievement[]> {
+    const user = await this.getUser(userId);
+    if (!user?.achievementBadges) return [];
+
+    const achievementIds = (user.achievementBadges as any[]).map(badge => badge.id);
+    return await db
+      .select()
+      .from(achievements)
+      .where(sql`${achievements.id} = ANY(${achievementIds})`);
+  }
+
+  async unlockAchievement(userId: number, achievementId: number): Promise<void> {
+    const [achievement] = await db
+      .select()
+      .from(achievements)
+      .where(eq(achievements.id, achievementId));
+
+    if (!achievement) return;
+
+    await db
+      .update(users)
+      .set({
+        achievementBadges: sql`${users.achievementBadges} || ${sql.json({
+          id: achievement.id,
+          name: achievement.name,
+          unlockedAt: new Date().toISOString(),
+        })}`,
+        experiencePoints: sql`${users.experiencePoints} + ${achievement.reward}`,
+      })
+      .where(eq(users.id, userId));
   }
 }
 

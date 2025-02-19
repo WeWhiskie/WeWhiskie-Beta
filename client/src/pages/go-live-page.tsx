@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Video, Users, Loader2 } from "lucide-react";
+import { Video, Users, Loader2, Star } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect, useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -8,6 +8,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { TastingSession } from "@shared/schema";
+
+const REQUIRED_LEVEL_FOR_HOSTING = 3; // Require level 3 to host sessions
 
 export default function GoLivePage() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -25,9 +27,40 @@ export default function GoLivePage() {
     );
   }
 
-  // Redirect if not authenticated or not an expert
-  if (!user || !user.isExpert) {
+  // Redirect if not authenticated
+  if (!user) {
     return <Redirect to="/auth" />;
+  }
+
+  // Show level requirement message if user level is too low
+  if (user.level < REQUIRED_LEVEL_FOR_HOSTING) {
+    return (
+      <div className="container mx-auto py-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Level {REQUIRED_LEVEL_FOR_HOSTING} Required</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4">
+              <p className="text-muted-foreground">
+                Hosting live tasting sessions becomes available at level {REQUIRED_LEVEL_FOR_HOSTING}.
+                You're currently level {user.level}!
+              </p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Star className="w-4 h-4" />
+                <span>
+                  Keep participating in tastings and writing reviews to level up!
+                </span>
+              </div>
+              <Button variant="outline" onClick={() => setLocation("/sessions")}>
+                <Users className="w-4 h-4 mr-2" />
+                Join Other Sessions
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const createSessionMutation = useMutation({
@@ -58,7 +91,6 @@ export default function GoLivePage() {
         title: "Session Created",
         description: "Redirecting to live session...",
       });
-      // Redirect to the live session page after successful creation
       setLocation(`/sessions/${session.id}`);
       setIsInitializing(false);
     },
@@ -97,7 +129,6 @@ export default function GoLivePage() {
       stream.getTracks().forEach(track => track.stop());
 
       console.log("Creating session...");
-      // Create the live session
       await createSessionMutation.mutateAsync();
     } catch (error) {
       console.error("Stream error:", error);

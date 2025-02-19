@@ -6,13 +6,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface ProtectedRouteProps {
   path: string;
   component: () => React.JSX.Element;
-  expertOnly?: boolean;
+  requiredLevel?: number;
 }
 
 export function ProtectedRoute({
   path,
   component: Component,
-  expertOnly = false,
+  requiredLevel = 1,
 }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
 
@@ -34,13 +34,14 @@ export function ProtectedRoute({
     );
   }
 
-  if (expertOnly && !user.isExpert) {
+  if (user.level < requiredLevel) {
     return (
       <Route path={path}>
         <div className="container mx-auto py-8">
           <Alert variant="destructive">
             <AlertDescription>
-              This page is only accessible to expert users. Please contact support if you believe this is an error.
+              This feature requires level {requiredLevel} to access. You are currently level {user.level}.
+              Continue participating in tastings and writing reviews to level up!
             </AlertDescription>
           </Alert>
         </div>

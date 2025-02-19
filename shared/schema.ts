@@ -13,13 +13,62 @@ export const users = pgTable("users", {
   bio: text("bio"),
   avatarUrl: text("avatar_url"),
   location: text("location"),
-  isExpert: integer("is_expert").default(0),
+  level: integer("level").default(1),
+  experiencePoints: integer("experience_points").default(0),
+  dailyStreak: integer("daily_streak").default(0),
+  lastCheckIn: timestamp("last_check_in"),
+  totalReviews: integer("total_reviews").default(0),
+  totalTastings: integer("total_tastings").default(0),
+  contributionScore: integer("contribution_score").default(0),
+  unlockedFeatures: text("unlocked_features").array(),
+  achievementBadges: jsonb("achievement_badges").default([]),
   followerCount: integer("follower_count").default(0),
   followingCount: integer("following_count").default(0),
   isVerified: boolean("is_verified").default(false),
   socialLinks: jsonb("social_links"),
   expertiseAreas: text("expertise_areas").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// User Daily Tasks
+export const dailyTasks = pgTable("daily_tasks", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  taskType: text("task_type").notNull(),
+  progress: integer("progress").default(0),
+  required: integer("required").notNull(),
+  completed: boolean("completed").default(false),
+  reward: integer("reward").notNull(),
+  date: timestamp("date").defaultNow().notNull(),
+});
+
+// Weekly Challenges
+export const weeklyTasks = pgTable("weekly_tasks", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  taskType: text("task_type").notNull(),
+  progress: integer("progress").default(0),
+  required: integer("required").notNull(),
+  completed: boolean("completed").default(false),
+  reward: integer("reward").notNull(),
+  weekStart: timestamp("week_start").notNull(),
+  weekEnd: timestamp("week_end").notNull(),
+});
+
+// Achievement Definitions
+export const achievements = pgTable("achievements", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(),
+  requiredLevel: integer("required_level").default(1),
+  reward: integer("reward").notNull(),
+  badgeUrl: text("badge_url").notNull(),
+  criteria: jsonb("criteria").notNull(),
 });
 
 // User relationships (followers)
@@ -269,6 +318,14 @@ export const insertUserSchema = createInsertSchema(users).extend({
   password: z.string().min(8),
   expertiseAreas: z.array(z.string()).optional(),
   socialLinks: z.record(z.string().url()).optional(),
+  level: z.number().min(1).default(1),
+  experiencePoints: z.number().min(0).default(0),
+  unlockedFeatures: z.array(z.string()).default([]),
+  achievementBadges: z.array(z.object({
+    id: z.number(),
+    name: z.string(),
+    unlockedAt: z.string(),
+  })).default([]),
 });
 
 export const insertWhiskySchema = createInsertSchema(whiskies).extend({
@@ -329,6 +386,10 @@ export const insertStreamConfigSchema = createInsertSchema(streamConfigurations)
 export const insertStreamStatsSchema = createInsertSchema(streamStats);
 export const insertViewerAnalyticsSchema = createInsertSchema(viewerAnalytics);
 export const insertCdnConfigSchema = createInsertSchema(cdnConfigs);
+export const insertDailyTaskSchema = createInsertSchema(dailyTasks);
+export const insertWeeklyTaskSchema = createInsertSchema(weeklyTasks);
+export const insertAchievementSchema = createInsertSchema(achievements);
+
 
 // ============= Type Exports =============
 
@@ -360,3 +421,6 @@ export type InsertViewerAnalytics = z.infer<typeof insertViewerAnalyticsSchema>;
 export type InsertCdnConfig = z.infer<typeof insertCdnConfigSchema>;
 export type ActivityFeed = typeof activityFeed.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
+export type DailyTask = typeof dailyTasks.$inferSelect;
+export type WeeklyTask = typeof weeklyTasks.$inferSelect;
+export type Achievement = typeof achievements.$inferSelect;
