@@ -43,6 +43,12 @@ const QUALITY_OPTIONS = [
   { value: '360p', label: '360p' },
 ];
 
+type StreamStats = {
+  bytesReceived: number;
+  timestamp: number;
+  packetsLost: number;
+};
+
 export function VideoStream({ 
   stream, 
   isLoading,
@@ -71,6 +77,8 @@ export function VideoStream({
     roundTripTime: 0,
   });
 
+  const statsMapRef = useRef<Map<string, StreamStats>>(new Map());
+
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
@@ -92,17 +100,24 @@ export function VideoStream({
             if (stat.type === 'inbound-rtp' && stat.kind === 'video') {
               const bytesReceived = stat.bytesReceived;
               const timestamp = stat.timestamp;
-              if (prevStats.has(stat.id)) {
-                const prevStat = prevStats.get(stat.id);
-                const timeDiff = timestamp - prevStat.timestamp;
-                const bitrate = 8 * (bytesReceived - prevStat.bytesReceived) / timeDiff;
+              const packetsLost = stat.packetsLost || 0;
+              const previousStats = statsMapRef.current.get(stat.id);
+
+              if (previousStats) {
+                const timeDiff = timestamp - previousStats.timestamp;
+                const bitrate = 8 * (bytesReceived - previousStats.bytesReceived) / timeDiff;
                 totalBitrate += bitrate;
-                totalPacketsLost += stat.packetsLost - prevStat.packetsLost;
+                totalPacketsLost += packetsLost - previousStats.packetsLost;
               }
-              prevStats.set(stat.id, { bytesReceived, timestamp, packetsLost: stat.packetsLost });
+
+              statsMapRef.current.set(stat.id, {
+                bytesReceived,
+                timestamp,
+                packetsLost
+              });
               statCount++;
             } else if (stat.type === 'candidate-pair' && stat.state === 'succeeded') {
-              roundTripTime = stat.currentRoundTripTime * 1000; // Convert to ms
+              roundTripTime = stat.currentRoundTripTime ? stat.currentRoundTripTime * 1000 : 0;
             }
           });
 
@@ -114,7 +129,6 @@ export function VideoStream({
               roundTripTime,
             });
 
-            // Calculate connection quality based on multiple factors
             const quality = calculateConnectionQuality(avgBitrate, totalPacketsLost, roundTripTime);
             setConnectionQuality(quality);
           }
@@ -126,14 +140,7 @@ export function VideoStream({
     return () => clearInterval(interval);
   }, [peerConnection]);
 
-  const prevStats = new Map<string, { bytesReceived: number; timestamp: number; packetsLost: number }>();
-
   const calculateConnectionQuality = (bitrate: number, packetsLost: number, rtt: number): number => {
-    // Quality calculation based on multiple factors:
-    // 1. Bitrate: Higher is better (up to expected bitrate for quality level)
-    // 2. Packet Loss: Lower is better
-    // 3. Round Trip Time: Lower is better
-
     const expectedBitrate = 5000000; // 5 Mbps for HD video
     const maxPacketLoss = 100;
     const maxRTT = 300; // 300ms
@@ -142,7 +149,6 @@ export function VideoStream({
     const packetLossScore = 100 - Math.min((packetsLost / maxPacketLoss) * 100, 100);
     const rttScore = 100 - Math.min((rtt / maxRTT) * 100, 100);
 
-    // Weighted average (prioritize packet loss and RTT over bitrate)
     return Math.round((bitrateScore * 0.3) + (packetLossScore * 0.4) + (rttScore * 0.3));
   };
 
@@ -205,7 +211,6 @@ export function VideoStream({
         onClick={handleToggleFullscreen}
       />
 
-      {/* Stream Quality Indicator */}
       <div className="absolute top-4 left-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
         <Signal className={cn(
           "h-4 w-4",
@@ -217,13 +222,11 @@ export function VideoStream({
         </span>
       </div>
 
-      {/* Participant count */}
       <div className="absolute top-4 right-4 px-3 py-1 bg-black/60 rounded-full flex items-center gap-2 text-white">
         <Users className="h-4 w-4" />
         <span className="text-sm">{participantCount}</span>
       </div>
 
-      {/* Stream Stats (for host) */}
       {isHost && showControls && (
         <div className="absolute top-16 left-4 px-3 py-2 bg-black/60 rounded-lg text-xs text-white space-y-1">
           <div>Packets Lost: {stats.packetsLost}</div>
@@ -231,7 +234,6 @@ export function VideoStream({
         </div>
       )}
 
-      {/* Overlay controls */}
       <div className={cn(
         "absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300",
         showControls ? "opacity-100" : "opacity-0"

@@ -37,7 +37,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  const { server, liveStreamingServer } = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -61,5 +61,6 @@ app.use((req, res, next) => {
   const PORT = 5000;
   server.listen(PORT, "0.0.0.0", () => {
     log(`serving on port ${PORT}`);
+    log('WebSocket server initialized and ready for connections');
   });
 })();

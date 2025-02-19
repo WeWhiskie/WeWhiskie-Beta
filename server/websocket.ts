@@ -2,8 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { storage } from './storage';
 import { TastingSession } from '@shared/schema';
-import { performance } from 'perf_hooks';
-import { streamTranscoder } from './services/transcoder';
+import { log } from './vite';
 
 interface Client {
   ws: WebSocket;
@@ -16,7 +15,7 @@ interface Client {
 }
 
 type WebSocketMessage = {
-  type: 'join-session' | 'leave-session' | 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'heartbeat' | 'start-stream' | 'end-stream';
+  type: 'join-session' | 'leave-session' | 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'heartbeat' | 'broadcast-ready' | 'request-offer';
   payload: any;
 };
 
@@ -25,12 +24,13 @@ export class LiveStreamingServer {
   private clients: Map<WebSocket, Client> = new Map();
   private sessions: Map<number, Set<WebSocket>> = new Map();
   private readonly HEARTBEAT_INTERVAL = 30000; // 30 seconds
-  private readonly MAX_CONNECTIONS_PER_SESSION = 100000;
+  private readonly MAX_CONNECTIONS_PER_SESSION = 100;
   private readonly RATE_LIMIT_WINDOW = 1000; // 1 second
   private readonly MAX_MESSAGES_PER_WINDOW = 100;
   private messageCounters: Map<WebSocket, { count: number; timestamp: number }> = new Map();
 
   constructor(server: Server) {
+    log('Initializing WebSocket server...', 'websocket');
     this.wss = new WebSocketServer({ 
       server,
       path: '/ws',
@@ -44,7 +44,7 @@ export class LiveStreamingServer {
 
   private setupWebSocketServer() {
     this.wss.on('connection', async (ws: WebSocket, request) => {
-      console.log('New WebSocket connection attempt');
+      log('New WebSocket connection attempt', 'websocket');
 
       // Initialize client metrics
       this.clients.set(ws, {
@@ -58,6 +58,7 @@ export class LiveStreamingServer {
         try {
           // Rate limiting check
           if (this.isRateLimited(ws)) {
+            log('Rate limit exceeded for client', 'websocket');
             ws.send(JSON.stringify({ 
               type: 'error', 
               payload: 'Rate limit exceeded' 
@@ -65,7 +66,8 @@ export class LiveStreamingServer {
             return;
           }
 
-          const data: WebSocketMessage = JSON.parse(message);
+          const data: WebSocketMessage = JSON.parse(message.toString());
+          log(`Received message type: ${data.type}`, 'websocket');
           await this.handleMessage(ws, data);
 
           // Update bytes transferred
@@ -74,7 +76,7 @@ export class LiveStreamingServer {
             client.bytesTransferred += message.length;
           }
         } catch (error) {
-          console.error('Error handling message:', error);
+          log(`Error handling message: ${error}`, 'websocket');
           ws.send(JSON.stringify({ 
             type: 'error', 
             payload: 'Invalid message format' 
@@ -89,16 +91,19 @@ export class LiveStreamingServer {
         }
         this.clients.delete(ws);
         this.messageCounters.delete(ws);
+        log('Client disconnected', 'websocket');
       });
 
       ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
+        log(`WebSocket error: ${error}`, 'websocket');
         this.handleConnectionError(ws);
       });
 
       // Send initial heartbeat
       this.sendHeartbeat(ws);
     });
+
+    log('WebSocket server setup completed', 'websocket');
   }
 
   private isRateLimited(ws: WebSocket): boolean {
@@ -106,7 +111,6 @@ export class LiveStreamingServer {
     const counter = this.messageCounters.get(ws) || { count: 0, timestamp: now };
 
     if (now - counter.timestamp > this.RATE_LIMIT_WINDOW) {
-      // Reset counter for new window
       counter.count = 1;
       counter.timestamp = now;
     } else if (counter.count >= this.MAX_MESSAGES_PER_WINDOW) {
@@ -121,6 +125,7 @@ export class LiveStreamingServer {
 
   private async handleMessage(ws: WebSocket, message: WebSocketMessage) {
     const client = this.clients.get(ws);
+    log(`Handling message type: ${message.type}`, 'websocket');
 
     switch (message.type) {
       case 'join-session':
@@ -133,15 +138,24 @@ export class LiveStreamingServer {
         }
         break;
 
-      case 'start-stream':
+      case 'broadcast-ready':
         if (client?.isHost && client?.sessionId) {
-          await this.handleStartStream(client.sessionId, message.payload.streamUrl);
+          this.broadcastToSession(client.sessionId, {
+            type: 'broadcast-ready',
+            payload: { userId: client.userId }
+          });
         }
         break;
 
-      case 'end-stream':
-        if (client?.isHost && client?.sessionId) {
-          await this.handleEndStream(client.sessionId);
+      case 'request-offer':
+        if (client?.sessionId) {
+          const hostClient = this.findHostClient(client.sessionId);
+          if (hostClient) {
+            hostClient.ws.send(JSON.stringify({
+              type: 'request-offer',
+              payload: { userId: client.userId }
+            }));
+          }
         }
         break;
 
@@ -161,10 +175,20 @@ export class LiveStreamingServer {
     }
   }
 
+  private findHostClient(sessionId: number): Client | undefined {
+    for (const client of this.clients.values()) {
+      if (client.sessionId === sessionId && client.isHost) {
+        return client;
+      }
+    }
+    return undefined;
+  }
+
   private async handleJoinSession(ws: WebSocket, payload: { userId: number; sessionId: number }) {
     const { userId, sessionId } = payload;
-    const session = await this.validateSession(sessionId);
+    log(`User ${userId} attempting to join session ${sessionId}`, 'websocket');
 
+    const session = await this.validateSession(sessionId);
     if (!session) {
       ws.send(JSON.stringify({ type: 'error', payload: 'Session not found or not active' }));
       return;
@@ -193,8 +217,7 @@ export class LiveStreamingServer {
     }
     this.sessions.get(sessionId)?.add(ws);
 
-    // Record analytics
-    await this.recordJoinAnalytics(sessionId, userId);
+    log(`User ${userId} successfully joined session ${sessionId}`, 'websocket');
 
     // Notify others in the session
     this.broadcastToSession(sessionId, {
@@ -202,13 +225,10 @@ export class LiveStreamingServer {
       payload: { userId }
     }, ws);
 
-    // Request offer from host if needed
-    const host = Array.from(this.clients.entries()).find(
-      ([_, client]) => client.sessionId === sessionId && client.isHost
-    )?.[0];
-
-    if (host && !this.clients.get(ws)?.isHost) {
-      host.send(JSON.stringify({
+    // If this is a viewer and host is already connected, request an offer
+    const hostClient = this.findHostClient(sessionId);
+    if (hostClient && session.hostId !== userId) {
+      hostClient.ws.send(JSON.stringify({
         type: 'request-offer',
         payload: { userId }
       }));
@@ -219,13 +239,12 @@ export class LiveStreamingServer {
     const client = this.clients.get(ws);
     if (!client) return;
 
+    log(`User ${client.userId} leaving session ${sessionId}`, 'websocket');
+
     this.sessions.get(sessionId)?.delete(ws);
     if (this.sessions.get(sessionId)?.size === 0) {
       this.sessions.delete(sessionId);
     }
-
-    // Record analytics for the session
-    this.recordLeaveAnalytics(sessionId, client);
 
     this.broadcastToSession(sessionId, {
       type: 'user-left',
@@ -233,46 +252,11 @@ export class LiveStreamingServer {
     }, ws);
   }
 
-  private async handleStartStream(sessionId: number, streamUrl: string) {
-    try {
-      await streamTranscoder.startTranscoding(sessionId, streamUrl);
-
-      this.broadcastToSession(sessionId, {
-        type: 'stream-started',
-        payload: {
-          sessionId,
-          timestamp: new Date().toISOString()
-        }
-      });
-    } catch (error) {
-      console.error('Error starting stream:', error);
-      this.broadcastToSession(sessionId, {
-        type: 'error',
-        payload: 'Failed to start stream'
-      });
-    }
-  }
-
-  private async handleEndStream(sessionId: number) {
-    try {
-      await streamTranscoder.stopTranscoding(sessionId);
-
-      this.broadcastToSession(sessionId, {
-        type: 'stream-ended',
-        payload: {
-          sessionId,
-          timestamp: new Date().toISOString()
-        }
-      });
-    } catch (error) {
-      console.error('Error ending stream:', error);
-    }
-  }
-
   private handleWebRTCSignaling(ws: WebSocket, message: WebSocketMessage) {
     const client = this.clients.get(ws);
     if (!client?.sessionId) return;
 
+    log(`Handling WebRTC signaling: ${message.type}`, 'websocket');
     this.broadcastToSession(client.sessionId, message, ws);
   }
 
@@ -290,9 +274,17 @@ export class LiveStreamingServer {
   }
 
   private async validateSession(sessionId: number): Promise<TastingSession | undefined> {
-    const session = await storage.getTastingSession(sessionId);
-    if (!session || session.status !== 'live') return undefined;
-    return session;
+    try {
+      const session = await storage.getTastingSession(sessionId);
+      if (!session || session.status !== 'live') {
+        log(`Invalid session ${sessionId}: ${session ? 'not live' : 'not found'}`, 'websocket');
+        return undefined;
+      }
+      return session;
+    } catch (error) {
+      log(`Error validating session ${sessionId}: ${error}`, 'websocket');
+      return undefined;
+    }
   }
 
   private broadcastToSession(sessionId: number, message: any, exclude?: WebSocket) {
@@ -316,14 +308,9 @@ export class LiveStreamingServer {
   private startHeartbeatCheck() {
     setInterval(() => {
       this.clients.forEach((client, ws) => {
-        const now = Date.now();
-        if (client.lastPing && now - client.lastPing > this.HEARTBEAT_INTERVAL * 2) {
-          // Connection is stale
-          console.log('Terminating stale connection');
-          ws.terminate();
-          return;
+        if (ws.readyState === WebSocket.OPEN) {
+          this.sendHeartbeat(ws);
         }
-        this.sendHeartbeat(ws);
       });
     }, this.HEARTBEAT_INTERVAL);
   }

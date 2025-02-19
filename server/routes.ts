@@ -2,9 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { insertReviewSchema, insertTastingSessionSchema, type Review, type TastingSession } from "@shared/schema";
+import { insertReviewSchema, insertTastingSessionSchema } from "@shared/schema";
 import { LiveStreamingServer } from './websocket';
-import { getWhiskyRecommendations } from "./services/recommendations";
 import multer from "multer";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
@@ -36,8 +35,14 @@ const upload = multer({
   }
 });
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<{ server: Server; liveStreamingServer: LiveStreamingServer }> {
   setupAuth(app);
+
+  // Create HTTP server first
+  const server = createServer(app);
+
+  // Initialize WebSocket server
+  const liveStreamingServer = new LiveStreamingServer(server);
 
   // Get user profile
   app.get("/api/users/:id", async (req, res) => {
@@ -464,8 +469,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Return the HTTP server instance
-  const httpServer = createServer(app);
-  new LiveStreamingServer(httpServer);
-  return httpServer;
+  return { server, liveStreamingServer };
 }

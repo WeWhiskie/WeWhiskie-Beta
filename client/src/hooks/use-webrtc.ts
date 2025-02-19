@@ -6,15 +6,12 @@ const configuration: RTCConfiguration = {
       urls: [
         'stun:stun1.l.google.com:19302',
         'stun:stun2.l.google.com:19302',
-        'stun:stun3.l.google.com:19302',
-        'stun:stun4.l.google.com:19302'
       ]
     }
   ],
   iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle',
-  rtcpMuxPolicy: 'require',
-  sdpSemantics: 'unified-plan'
+  rtcpMuxPolicy: 'require'
 };
 
 type WebRTCPayload = {
@@ -25,7 +22,7 @@ type WebRTCPayload = {
 };
 
 type WebRTCMessage = {
-  type: 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'request-offer' | 'user-joined' | 'user-left' | 'broadcast-ready' | 'stream-started' | 'stream-ended';
+  type: 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'request-offer' | 'user-joined' | 'user-left' | 'broadcast-ready';
   payload: WebRTCPayload;
 };
 
@@ -40,20 +37,18 @@ export function useWebRTC(isHost: boolean) {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectTimeout = useRef<NodeJS.Timeout>();
-  const activePeerConnection = useRef<RTCPeerConnection | null>(null);
 
   const initializeMediaStream = async () => {
     try {
       console.log('Initializing media stream...');
       setIsConnecting(true);
-      setError(null); // Reset any previous errors
+      setError(null);
 
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           frameRate: { ideal: 30 },
-          facingMode: 'user',
         },
         audio: {
           echoCancellation: true,
@@ -63,12 +58,11 @@ export function useWebRTC(isHost: boolean) {
       });
 
       console.log('Media stream obtained:', mediaStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
-
       setStream(mediaStream);
       return mediaStream;
     } catch (err) {
+      console.error('Media stream error:', err);
       const error = err instanceof Error ? err : new Error('Failed to get media stream');
-      console.error('Media stream error:', error);
       setError(error);
       throw error;
     } finally {
@@ -79,13 +73,10 @@ export function useWebRTC(isHost: boolean) {
   const cleanup = () => {
     console.log('Cleaning up WebRTC resources...');
 
-    // Clear reconnect timeout if it exists
     if (reconnectTimeout.current) {
       clearTimeout(reconnectTimeout.current);
-      reconnectTimeout.current = undefined;
     }
 
-    // Stop all tracks in the stream
     if (stream) {
       stream.getTracks().forEach(track => {
         console.log('Stopping track:', track.kind);
@@ -94,7 +85,6 @@ export function useWebRTC(isHost: boolean) {
       setStream(null);
     }
 
-    // Close all peer connections
     peerConnections.current.forEach(pc => {
       if (pc.connectionState !== 'closed') {
         pc.close();
@@ -102,20 +92,17 @@ export function useWebRTC(isHost: boolean) {
     });
     peerConnections.current.clear();
 
-    // Close WebSocket connection
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current?.close(1000, 'Normal closure');
+      socketRef.current.close(1000, 'Normal closure');
     }
     socketRef.current = null;
     setConnectionState('closed');
-    setError(null);
     reconnectAttempts.current = 0;
   };
 
   const connectToSocket = (sessionId: number, userId: number) => {
     console.log('Connecting to WebSocket...', { sessionId, userId });
 
-    // Close existing connection if any
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.close();
     }
@@ -127,6 +114,7 @@ export function useWebRTC(isHost: boolean) {
     socket.onopen = async () => {
       console.log('WebSocket connected');
       reconnectAttempts.current = 0;
+      setConnectionState('connecting');
 
       socket.send(JSON.stringify({
         type: 'join-session',
@@ -134,10 +122,10 @@ export function useWebRTC(isHost: boolean) {
       }));
 
       if (isHost) {
-        console.log('Initializing host media stream...');
         try {
           const mediaStream = await initializeMediaStream();
           if (mediaStream) {
+            setConnectionState('connected');
             socket.send(JSON.stringify({
               type: 'broadcast-ready',
               payload: { userId }
@@ -145,7 +133,6 @@ export function useWebRTC(isHost: boolean) {
           }
         } catch (err) {
           console.error('Failed to initialize host media stream:', err);
-          setError(err instanceof Error ? err : new Error('Failed to initialize media stream'));
         }
       }
     };
@@ -153,7 +140,7 @@ export function useWebRTC(isHost: boolean) {
     socket.onmessage = async (event) => {
       try {
         const message: WebRTCMessage = JSON.parse(event.data);
-        console.log('WebSocket message received:', message.type);
+        console.log('WebSocket message received:', message);
         await handleSocketMessage(message);
       } catch (error) {
         console.error('Error handling WebSocket message:', error);
@@ -163,12 +150,14 @@ export function useWebRTC(isHost: boolean) {
     socket.onerror = (error) => {
       console.error('WebSocket error:', error);
       setError(new Error('WebSocket connection failed'));
+      setConnectionState('failed');
       attemptReconnect(sessionId, userId);
     };
 
     socket.onclose = (event) => {
       console.log('WebSocket closed:', event.code, event.reason);
-      if (event.code !== 1000) { // Not a normal closure
+      setConnectionState('disconnected');
+      if (event.code !== 1000) {
         attemptReconnect(sessionId, userId);
       }
     };
@@ -177,7 +166,6 @@ export function useWebRTC(isHost: boolean) {
       if (socket.readyState === WebSocket.OPEN) {
         socket.close();
       }
-      socketRef.current = null;
     };
   };
 
@@ -196,13 +184,22 @@ export function useWebRTC(isHost: boolean) {
     }, Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000));
   };
 
+  const sendMessage = (type: WebRTCMessage['type'], payload: WebRTCPayload) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type, payload }));
+    } else {
+      console.warn('WebSocket not connected, message not sent:', type);
+    }
+  };
+
   const handleSocketMessage = async (message: WebRTCMessage) => {
     const { type, payload } = message;
 
     switch (type) {
       case 'broadcast-ready':
-        if (isHost && stream) {
-          await initiateBroadcast(payload.userId);
+        if (!isHost && payload.userId) {
+          setConnectionState('connecting');
+          sendMessage('request-offer', { userId: payload.userId });
         }
         break;
 
@@ -230,25 +227,12 @@ export function useWebRTC(isHost: boolean) {
       case 'user-left':
         console.log(`User ${type}:`, payload.userId);
         break;
-      case 'stream-started':
-      case 'stream-ended':
-          console.log(`Stream ${type}:`, payload.userId);
-          break;
-    }
-  };
-
-  const sendMessage = (type: WebRTCMessage['type'], payload: WebRTCPayload) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type, payload }));
-    } else {
-      console.warn('WebSocket not connected, message not sent:', type);
     }
   };
 
   const createPeerConnection = (userId: number) => {
     console.log('Creating peer connection for user:', userId);
     const pc = new RTCPeerConnection(configuration);
-    activePeerConnection.current = pc;
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -262,7 +246,11 @@ export function useWebRTC(isHost: boolean) {
     pc.onconnectionstatechange = () => {
       console.log('Connection state changed:', pc.connectionState);
       setConnectionState(pc.connectionState);
-      if (pc.connectionState === 'failed') {
+
+      if (pc.connectionState === 'connected') {
+        setIsConnecting(false);
+        setIsReconnecting(false);
+      } else if (pc.connectionState === 'failed') {
         console.log('Connection failed, attempting to restart ICE');
         pc.restartIce();
       }
@@ -279,37 +267,18 @@ export function useWebRTC(isHost: boolean) {
     return pc;
   };
 
-  const initiateBroadcast = async (userId: number) => {
-    try {
-      const pc = createPeerConnection(userId);
-      if (stream) {
-        stream.getTracks().forEach(track => {
-          pc.addTransceiver(track, {
-            direction: 'sendonly',
-            streams: [stream]
-          });
-        });
-      }
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      sendMessage('offer', { userId, sdp: offer });
-    } catch (error) {
-      console.error('Error initiating broadcast:', error);
-    }
-  };
-
   const handleRequestOffer = async (userId: number) => {
     try {
       const pc = createPeerConnection(userId);
       if (stream) {
         stream.getTracks().forEach(track => {
-          pc.addTransceiver(track, {
-            direction: 'sendonly',
-            streams: [stream]
-          });
+          pc.addTrack(track, stream);
         });
       }
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      });
       await pc.setLocalDescription(offer);
       sendMessage('offer', { userId, sdp: offer });
     } catch (error) {
@@ -354,12 +323,10 @@ export function useWebRTC(isHost: boolean) {
   };
 
   useEffect(() => {
-    console.log('useWebRTC effect triggered, isHost:', isHost);
     return () => {
       cleanup();
     };
-  }, [isHost]);
-
+  }, []);
 
   return {
     stream,
@@ -369,7 +336,7 @@ export function useWebRTC(isHost: boolean) {
     connectionState,
     connectToSocket,
     sendMessage,
-    peerConnection: activePeerConnection.current,
+    peerConnection: peerConnections.current.values().next().value,
     cleanup
   };
 }

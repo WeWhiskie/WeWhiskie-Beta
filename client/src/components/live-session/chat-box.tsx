@@ -17,14 +17,15 @@ interface ChatMessage {
 interface ChatBoxProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
+  disabled?: boolean;
 }
 
-export function ChatBox({ messages, onSendMessage }: ChatBoxProps) {
+export function ChatBox({ messages, onSendMessage, disabled = false }: ChatBoxProps) {
   const [message, setMessage] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (message.trim()) {
+    if (message.trim() && !disabled) {
       onSendMessage(message);
       setMessage("");
     }
@@ -59,10 +60,11 @@ export function ChatBox({ messages, onSendMessage }: ChatBoxProps) {
           <Input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type a message..."
+            placeholder={disabled ? "Connecting..." : "Type a message..."}
             className="flex-1"
+            disabled={disabled}
           />
-          <Button type="submit" size="icon">
+          <Button type="submit" size="icon" disabled={disabled || !message.trim()}>
             <Send className="h-4 w-4" />
           </Button>
         </div>
