@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { Video, Share2, PenSquare, Radio, Wine } from "lucide-react";
+import { Video, PenSquare, Radio, Wine } from "lucide-react";
 
 export default function Navbar() {
   const { user, logoutMutation } = useAuth();
@@ -28,12 +28,6 @@ export default function Navbar() {
                 <Button variant="ghost" className="flex items-center gap-2">
                   <Wine className="h-4 w-4" />
                   Recommendations
-                </Button>
-              </Link>
-              <Link href="/share">
-                <Button variant="ghost" className="flex items-center gap-2">
-                  <Share2 className="h-4 w-4" />
-                  Share
                 </Button>
               </Link>
               <Link href="/review">

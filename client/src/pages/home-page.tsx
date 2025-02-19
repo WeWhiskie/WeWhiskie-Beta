@@ -4,7 +4,7 @@ import { ReviewForm } from "@/components/review-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { Plus, Search, Star, Video, Users, Share2, PenSquare, Radio } from "lucide-react";
+import { Plus, Search, Star, Video, Users, PenSquare, Radio } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -61,14 +61,8 @@ export default function HomePage() {
         </p>
         {user && (
           <div className="flex justify-center gap-4 pt-4">
-            <Link href="/share">
-              <Button size="lg" className="gap-2">
-                <Share2 className="h-5 w-5" />
-                Share Discovery
-              </Button>
-            </Link>
             <Link href="/review">
-              <Button size="lg" variant="outline" className="gap-2">
+              <Button size="lg" className="gap-2">
                 <PenSquare className="h-5 w-5" />
                 Write Review
               </Button>
@@ -86,11 +80,6 @@ export default function HomePage() {
       {/* Quick Actions Floating Buttons for Mobile */}
       {user && (
         <div className="fixed bottom-6 right-6 flex flex-col gap-4 md:hidden">
-          <Link href="/share">
-            <Button size="icon" className="h-12 w-12 rounded-full shadow-lg">
-              <Share2 className="h-6 w-6" />
-            </Button>
-          </Link>
           <Link href="/review">
             <Button size="icon" className="h-12 w-12 rounded-full shadow-lg">
               <PenSquare className="h-6 w-6" />
@@ -225,9 +214,7 @@ export default function HomePage() {
                       </p>
                     )}
                   </div>
-                  <Button variant="ghost" className="mt-4">
-                    <Share2 className="h-5 w-5 mr-2"/> Share
-                  </Button>
+                  {/* Removed Share button */}
                 </CardContent>
               </Card>
             </Link>

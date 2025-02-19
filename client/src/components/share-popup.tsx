@@ -7,19 +7,21 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { shareToSocial } from "@/lib/social-sharing";
 import { useToast } from "@/hooks/use-toast";
+import { Share2 } from "lucide-react";
 
 interface SharePopupProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   title: string;
   text: string;
   url: string;
+  triggerClassName?: string;
+  triggerText?: string;
 }
 
-export function SharePopup({ open, onOpenChange, title, text, url }: SharePopupProps) {
+export function SharePopup({ title, text, url, triggerClassName, triggerText = "Share" }: SharePopupProps) {
   const { toast } = useToast();
 
   const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin' | 'instagram' | 'tiktok') => {
@@ -33,24 +35,34 @@ export function SharePopup({ open, onOpenChange, title, text, url }: SharePopupP
 
       toast({
         title: "Shared successfully!",
-        description: `Your review has been shared to ${platform}.`,
+        description: `Your content has been shared to ${platform}.`,
       });
     } catch (error) {
       toast({
         title: "Share failed",
-        description: "Unable to share your review. Please try again.",
+        description: "Unable to share your content. Please try again.",
         variant: "destructive",
       });
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={triggerClassName}
+        >
+          <Share2 className="h-4 w-4 mr-2" />
+          {triggerText}
+        </Button>
+      </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share your review</DialogTitle>
+          <DialogTitle>Share content</DialogTitle>
           <DialogDescription>
-            Share your whisky experience with your social network
+            Share this content with your social network
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-6">

@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { shareToSocial } from "@/lib/social-sharing";
+import { SharePopup } from "./share-popup";
 
 interface ReviewCardProps {
   review: {
@@ -79,37 +80,6 @@ export function ReviewCard({ review }: ReviewCardProps) {
       });
     },
   });
-
-  const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin' | 'instagram' | 'tiktok') => {
-    try {
-      const shareUrl = `${window.location.origin}/review/${review.id}`;
-      await shareToSocial(platform, {
-        title: `${review.whisky.name} Review`,
-        text: `Check out this ${review.rating}⭐️ review of ${review.whisky.name} by ${review.user.username} on WeWhiskie!`,
-        url: shareUrl,
-        hashtags: ['WeWhiskie', 'WhiskyLover'],
-      });
-
-      toast({
-        title: "Shared successfully!",
-        description: `Your review has been shared to ${platform}.`,
-      });
-
-      // Track the share analytics
-      await apiRequest("POST", "/api/share-analytics", {
-        platform,
-        url: shareUrl,
-        title: `${review.whisky.name} Review`
-      });
-    } catch (error) {
-      console.error("Share error:", error);
-      toast({
-        title: "Share failed",
-        description: "Unable to share your review. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const createdAtDate = typeof review.createdAt === 'string'
     ? new Date(review.createdAt)
@@ -178,36 +148,11 @@ export function ReviewCard({ review }: ReviewCardProps) {
           {review.likes || 0}
         </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleShare('twitter')}>
-              <Twitter className="h-4 w-4 mr-2" />
-              Share on Twitter
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleShare('facebook')}>
-              <Facebook className="h-4 w-4 mr-2" />
-              Share on Facebook
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleShare('linkedin')}>
-              <Linkedin className="h-4 w-4 mr-2" />
-              Share on LinkedIn
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleShare('instagram')}>
-              <SiInstagram className="h-4 w-4 mr-2 text-pink-600" />
-              Share on Instagram
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleShare('tiktok')}>
-              <SiTiktok className="h-4 w-4 mr-2" />
-              Share on TikTok
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <SharePopup
+          title={`${review.whisky.name} Review`}
+          text={`Check out this ${review.rating}⭐️ review of ${review.whisky.name} by ${review.user.username} on WeWhiskie!`}
+          url={`${window.location.origin}/review/${review.id}`}
+        />
       </CardFooter>
     </Card>
   );
