@@ -208,6 +208,7 @@ export function ReviewForm() {
           title={lastReviewData.title}
           text={lastReviewData.text}
           url={lastReviewData.url}
+          hideButton
         />
       )}
     </>

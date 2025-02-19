@@ -19,9 +19,21 @@ interface SharePopupProps {
   url: string;
   triggerClassName?: string;
   triggerText?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideButton?: boolean;
 }
 
-export function SharePopup({ title, text, url, triggerClassName, triggerText = "Share" }: SharePopupProps) {
+export function SharePopup({ 
+  title, 
+  text, 
+  url, 
+  triggerClassName, 
+  triggerText = "Share",
+  open,
+  onOpenChange,
+  hideButton = false
+}: SharePopupProps) {
   const { toast } = useToast();
 
   const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin' | 'instagram' | 'tiktok') => {
@@ -47,17 +59,19 @@ export function SharePopup({ title, text, url, triggerClassName, triggerText = "
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={triggerClassName}
-        >
-          <Share2 className="h-4 w-4 mr-2" />
-          {triggerText}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {!hideButton && (
+        <DialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={triggerClassName}
+          >
+            <Share2 className="h-4 w-4 mr-2" />
+            {triggerText}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Share content</DialogTitle>
