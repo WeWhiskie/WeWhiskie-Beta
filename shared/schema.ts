@@ -88,6 +88,8 @@ export const tastingSessions = pgTable("tasting_sessions", {
   streamUrl: text("stream_url"),
   status: text("status").default("scheduled"), // scheduled, live, ended
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  groupId: integer("group_id")
+    .references(() => tastingGroups.id),
 });
 
 // Session participants
@@ -141,6 +143,47 @@ export const likes = pgTable("likes", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Tasting groups
+export const tastingGroups = pgTable("tasting_groups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdBy: integer("created_by")
+    .notNull()
+    .references(() => users.id),
+  imageUrl: text("image_url"),
+  isPrivate: boolean("is_private").default(false),
+  memberCount: integer("member_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Group membership
+export const groupMembers = pgTable("group_members", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id")
+    .notNull()
+    .references(() => tastingGroups.id),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  role: text("role").default("member"), // admin, moderator, member
+  joinedAt: timestamp("joined_at").defaultNow().notNull(),
+});
+
+// Group achievements
+export const groupAchievements = pgTable("group_achievements", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id")
+    .notNull()
+    .references(() => tastingGroups.id),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  badgeUrl: text("badge_url").notNull(),
+  criteria: jsonb("criteria").notNull(), // JSON object defining achievement criteria
+  unlockedAt: timestamp("unlocked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).extend({
   email: z.string().email(),
@@ -172,6 +215,21 @@ export const insertTastingSessionSchema = createInsertSchema(tastingSessions).ex
   price: z.number().min(0).optional(),
 });
 
+export const insertTastingGroupSchema = createInsertSchema(tastingGroups).extend({
+  name: z.string().min(3).max(100),
+  description: z.string().optional(),
+});
+
+export const insertGroupMemberSchema = createInsertSchema(groupMembers).extend({
+  role: z.enum(["admin", "moderator", "member"]),
+});
+
+export const insertGroupAchievementSchema = createInsertSchema(groupAchievements).extend({
+  name: z.string().min(3).max(50),
+  description: z.string().min(10),
+  criteria: z.record(z.unknown()),
+});
+
 // Type exports
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -189,3 +247,10 @@ export type InsertShareTrack = z.infer<typeof insertShareSchema>;
 export type Like = typeof likes.$inferSelect;
 export const insertLikeSchema = createInsertSchema(likes);
 export type InsertLike = z.infer<typeof insertLikeSchema>;
+
+export type TastingGroup = typeof tastingGroups.$inferSelect;
+export type GroupMember = typeof groupMembers.$inferSelect;
+export type GroupAchievement = typeof groupAchievements.$inferSelect;
+export type InsertTastingGroup = z.infer<typeof insertTastingGroupSchema>;
+export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
+export type InsertGroupAchievement = z.infer<typeof insertGroupAchievementSchema>;

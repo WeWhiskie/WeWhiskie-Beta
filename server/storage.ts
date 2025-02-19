@@ -2,7 +2,7 @@ import { db } from "./db";
 import { 
   InsertUser, User, Whisky, Review, TastingSession, ShippingAddress,
   users, whiskies, reviews, follows, tastingSessions, shippingAddresses, sessionParticipants, shares, ShareTrack,
-  likes, Like
+  likes, Like, InsertTastingGroup, TastingGroup, GroupMember, InsertGroupAchievement, GroupAchievement, groupMembers, tastingGroups, groupAchievements
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import session from "express-session";
@@ -56,6 +56,23 @@ export interface IStorage {
   unlikeReview(userId: number, reviewId: number): Promise<void>;
   getLikes(reviewId: number): Promise<number>;
   hasUserLiked(userId: number, reviewId: number): Promise<boolean>;
+
+  // Group methods
+  createTastingGroup(group: InsertTastingGroup): Promise<TastingGroup>;
+  getTastingGroup(id: number): Promise<TastingGroup | undefined>;
+  getTastingGroups(): Promise<(TastingGroup & { creator: User })[]>;
+  getUserGroups(userId: number): Promise<TastingGroup[]>;
+
+  // Group membership methods
+  addGroupMember(groupId: number, userId: number, role?: string): Promise<void>;
+  removeGroupMember(groupId: number, userId: number): Promise<void>;
+  getGroupMembers(groupId: number): Promise<(GroupMember & { user: User })[]>;
+  isGroupMember(groupId: number, userId: number): Promise<boolean>;
+
+  // Group achievements methods
+  createGroupAchievement(achievement: InsertGroupAchievement): Promise<GroupAchievement>;
+  getGroupAchievements(groupId: number): Promise<GroupAchievement[]>;
+  updateAchievementStatus(groupId: number, achievementId: number): Promise<void>;
 }
 
 type ReviewWithRelations = {
@@ -192,16 +209,8 @@ export class DatabaseStorage implements IStorage {
 
     return result.map(({ review, user, whisky }) => ({
       ...review,
-      user: {
-        id: user.id,
-        username: user.username,
-      },
-      whisky: {
-        id: whisky.id,
-        name: whisky.name,
-        distillery: whisky.distillery,
-        imageUrl: whisky.image_url || "/placeholder-whisky.jpg",
-      },
+      user,
+      whisky,
     }));
   }
 
@@ -218,12 +227,7 @@ export class DatabaseStorage implements IStorage {
 
     return result.map(({ review, whisky }) => ({
       ...review,
-      whisky: {
-        id: whisky.id,
-        name: whisky.name,
-        distillery: whisky.distillery,
-        imageUrl: whisky.image_url || "/placeholder-whisky.jpg",
-      },
+      whisky,
     }));
   }
 
@@ -249,37 +253,8 @@ export class DatabaseStorage implements IStorage {
     const { review, user, whisky } = result;
     return {
       ...review,
-      user: {
-        id: user.id,
-        username: user.username,
-        password: user.password,
-        email: user.email,
-        bio: user.bio,
-        avatarUrl: user.avatarUrl,
-        location: user.location,
-        isExpert: user.isExpert,
-        followerCount: user.followerCount,
-        followingCount: user.followingCount,
-        reviewCount: user.reviewCount,
-        createdAt: user.createdAt,
-        preferences: user.preferences,
-      },
-      whisky: {
-        id: whisky.id,
-        type: whisky.type,
-        name: whisky.name,
-        distillery: whisky.distillery,
-        region: whisky.region,
-        age: whisky.age,
-        abv: whisky.abv,
-        price: whisky.price,
-        imageUrl: whisky.imageUrl,
-        description: whisky.description,
-        tastingNotes: whisky.tastingNotes,
-        caskType: whisky.caskType,
-        limited: whisky.limited,
-        vintage: whisky.vintage,
-      },
+      user,
+      whisky,
     };
   }
 
@@ -431,6 +406,130 @@ export class DatabaseStorage implements IStorage {
         )
       );
     return !!like;
+  }
+
+  // Group methods
+  async createTastingGroup(group: InsertTastingGroup): Promise<TastingGroup> {
+    const [newGroup] = await db.insert(tastingGroups).values(group).returning();
+    return newGroup;
+  }
+
+  async getTastingGroup(id: number): Promise<TastingGroup | undefined> {
+    const [group] = await db.select().from(tastingGroups).where(eq(tastingGroups.id, id));
+    return group;
+  }
+
+  async getTastingGroups(): Promise<(TastingGroup & { creator: User })[]> {
+    const result = await db
+      .select({
+        group: tastingGroups,
+        creator: users,
+      })
+      .from(tastingGroups)
+      .innerJoin(users, eq(tastingGroups.createdBy, users.id));
+
+    return result.map(({ group, creator }) => ({
+      ...group,
+      creator,
+    }));
+  }
+
+  async getUserGroups(userId: number): Promise<TastingGroup[]> {
+    const result = await db
+      .select({
+        group: tastingGroups,
+      })
+      .from(groupMembers)
+      .innerJoin(tastingGroups, eq(groupMembers.groupId, tastingGroups.id))
+      .where(eq(groupMembers.userId, userId));
+
+    return result.map(({ group }) => group);
+  }
+
+  // Group membership methods
+  async addGroupMember(groupId: number, userId: number, role: string = "member"): Promise<void> {
+    await db.insert(groupMembers).values({ groupId, userId, role });
+    await db
+      .update(tastingGroups)
+      .set({ 
+        memberCount: sql`${tastingGroups.memberCount} + 1` 
+      })
+      .where(eq(tastingGroups.id, groupId));
+  }
+
+  async removeGroupMember(groupId: number, userId: number): Promise<void> {
+    await db
+      .delete(groupMembers)
+      .where(
+        and(
+          eq(groupMembers.groupId, groupId),
+          eq(groupMembers.userId, userId)
+        )
+      );
+    await db
+      .update(tastingGroups)
+      .set({ 
+        memberCount: sql`GREATEST(${tastingGroups.memberCount} - 1, 0)` 
+      })
+      .where(eq(tastingGroups.id, groupId));
+  }
+
+  async getGroupMembers(groupId: number): Promise<(GroupMember & { user: User })[]> {
+    const result = await db
+      .select({
+        member: groupMembers,
+        user: users,
+      })
+      .from(groupMembers)
+      .innerJoin(users, eq(groupMembers.userId, users.id))
+      .where(eq(groupMembers.groupId, groupId));
+
+    return result.map(({ member, user }) => ({
+      ...member,
+      user,
+    }));
+  }
+
+  async isGroupMember(groupId: number, userId: number): Promise<boolean> {
+    const [member] = await db
+      .select()
+      .from(groupMembers)
+      .where(
+        and(
+          eq(groupMembers.groupId, groupId),
+          eq(groupMembers.userId, userId)
+        )
+      );
+    return !!member;
+  }
+
+  // Group achievements methods
+  async createGroupAchievement(achievement: InsertGroupAchievement): Promise<GroupAchievement> {
+    const [newAchievement] = await db
+      .insert(groupAchievements)
+      .values(achievement)
+      .returning();
+    return newAchievement;
+  }
+
+  async getGroupAchievements(groupId: number): Promise<GroupAchievement[]> {
+    return await db
+      .select()
+      .from(groupAchievements)
+      .where(eq(groupAchievements.groupId, groupId))
+      .orderBy(groupAchievements.createdAt);
+  }
+
+  async updateAchievementStatus(groupId: number, achievementId: number): Promise<void> {
+    await db
+      .update(groupAchievements)
+      .set({ unlockedAt: sql`CURRENT_TIMESTAMP` })
+      .where(
+        and(
+          eq(groupAchievements.id, achievementId),
+          eq(groupAchievements.groupId, groupId)
+        )
+      );
   }
 }
 
