@@ -2,9 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { insertReviewSchema, insertTastingSessionSchema } from "@shared/schema";
+import { insertReviewSchema, insertTastingSessionSchema, type Review, type TastingSession } from "@shared/schema";
 import { LiveStreamingServer } from './websocket';
-import { type InsertTastingSession, type InsertReview } from '@shared/schema';
 import { getWhiskyRecommendations } from "./services/recommendations";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -95,8 +94,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const parsedReview = insertReviewSchema.parse({
       ...req.body,
-      userId: req.user.id,
-    }) as InsertReview;
+      userId: req.user!.id,
+    });
 
     const review = await storage.createReview(parsedReview);
     res.status(201).json(review);
@@ -118,8 +117,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const parsedSession = insertTastingSessionSchema.parse({
       ...req.body,
-      hostId: req.user.id,
-    }) as InsertTastingSession;
+      hostId: req.user!.id,
+    });
 
     const session = await storage.createTastingSession(parsedSession);
     res.status(201).json(session);
@@ -189,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         platform,
         url,
         title,
-        userId: req.user?.id, // Optional: only if user is logged in
+        userId: req.user?.id || null,
         timestamp: new Date()
       });
 

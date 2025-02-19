@@ -31,7 +31,10 @@ export default function ProfilePage() {
     enabled: !!userId,
   });
 
-  const { data: reviews, isLoading: isLoadingReviews } = useQuery<(Review & { whisky: { name: string; distillery: string } })[]>({
+  const { data: reviews, isLoading: isLoadingReviews } = useQuery<(Review & {
+    user: { id: number; username: string };
+    whisky: { id: number; name: string; distillery: string; imageUrl: string };
+  })[]>({
     queryKey: ["/api/users", userId, "reviews"],
     enabled: !!userId,
   });
@@ -199,7 +202,20 @@ export default function ProfilePage() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {reviews?.map((review) => (
-              <ReviewCard key={review.id} review={review} />
+              <ReviewCard
+                key={review.id}
+                review={{
+                  ...review,
+                  user: {
+                    id: user.id,
+                    username: user.username,
+                  },
+                  whisky: {
+                    ...review.whisky,
+                    imageUrl: review.whisky.imageUrl || "/placeholder-whisky.jpg",
+                  },
+                }}
+              />
             ))}
           </div>
         )}
