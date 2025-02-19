@@ -11,7 +11,7 @@ export default function Navbar() {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link href="/">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-500 to-orange-600 bg-clip-text text-transparent cursor-pointer">
-            WeWhisky.
+            WeWhiskie.
           </h1>
         </Link>
 

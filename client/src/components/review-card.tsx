@@ -3,8 +3,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StarRating } from "./star-rating";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Share2 } from "lucide-react";
+import { Share2, Twitter, Facebook } from "lucide-react";
 import { Link } from "wouter";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ReviewCardProps {
   review: {
@@ -26,12 +32,21 @@ interface ReviewCardProps {
 }
 
 export function ReviewCard({ review }: ReviewCardProps) {
-  const handleShare = () => {
-    navigator.share({
-      title: `${review.user.username}'s review of ${review.whisky.name}`,
-      text: review.content,
-      url: window.location.href,
-    });
+  const shareUrl = `${window.location.origin}/reviews/${review.id}`;
+  const shareText = `Check out ${review.user.username}'s review of ${review.whisky.name} on WeWhiskie.`;
+
+  const handleTwitterShare = () => {
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+      shareText
+    )}&url=${encodeURIComponent(shareUrl)}`;
+    window.open(twitterUrl, '_blank');
+  };
+
+  const handleFacebookShare = () => {
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+      shareUrl
+    )}&quote=${encodeURIComponent(shareText)}`;
+    window.open(facebookUrl, '_blank');
   };
 
   return (
@@ -78,10 +93,24 @@ export function ReviewCard({ review }: ReviewCardProps) {
         <p className="text-muted-foreground">{review.content}</p>
       </CardContent>
       <CardFooter className="bg-muted/50 p-4">
-        <Button variant="ghost" size="sm" onClick={handleShare}>
-          <Share2 className="h-4 w-4 mr-2" />
-          Share
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <Share2 className="h-4 w-4 mr-2" />
+              Share
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={handleTwitterShare}>
+              <Twitter className="h-4 w-4 mr-2" />
+              Share on Twitter
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleFacebookShare}>
+              <Facebook className="h-4 w-4 mr-2" />
+              Share on Facebook
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </CardFooter>
     </Card>
   );
