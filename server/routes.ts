@@ -147,6 +147,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/groups", async (_req, res) => {
+    try {
+      const groups = await storage.getTastingGroups();
+      res.json(groups);
+    } catch (error) {
+      console.error("Error fetching tasting groups:", error);
+      res.status(500).json({ message: "Failed to fetch tasting groups" });
+    }
+  });
+
+  app.post("/api/groups", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const groupData = {
+        ...req.body,
+        createdBy: req.user!.id,
+        memberCount: 1, // Creator is the first member
+      };
+
+      const group = await storage.createTastingGroup(groupData);
+      // Add the creator as a member with admin role
+      await storage.addGroupMember(group.id, req.user!.id, "admin");
+
+      res.status(201).json(group);
+    } catch (error) {
+      console.error("Error creating tasting group:", error);
+      res.status(400).json({ message: "Invalid group data" });
+    }
+  });
+
   // Tasting Session routes
   app.get("/api/sessions/:id", async (req, res) => {
     const session = await storage.getTastingSession(parseInt(req.params.id));
