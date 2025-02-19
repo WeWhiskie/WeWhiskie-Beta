@@ -46,6 +46,7 @@ const DEFAULT_NAMES = [
   "The Mash Maestro"
 ];
 
+// Update the Message interface to ensure content is always a string
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -125,8 +126,6 @@ export default function WhiskyConcierge() {
         }
       };
 
-      console.log('Sending concierge query:', payload);
-
       const response = await fetch("/api/whisky-concierge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,7 +135,6 @@ export default function WhiskyConcierge() {
 
       if (!response.ok) {
         const error = await response.json();
-        // Handle specific error types
         if (error.code === 'RATE_LIMIT_EXCEEDED') {
           throw new Error("Our AI is a bit overwhelmed right now. Please try again in a few minutes.");
         } else if (error.code === 'INVALID_API_KEY') {
@@ -146,10 +144,13 @@ export default function WhiskyConcierge() {
       }
 
       const data = await response.json();
-      console.log('Received concierge response:', data);
+      if (!data || (!data.answer && !data.recommendations)) {
+        throw new Error("Invalid response from concierge");
+      }
       return data as ConciergeResponse;
     },
     onSuccess: (data) => {
+      // Only add the message if we have an answer
       if (data.answer) {
         setMessages((prev) => [
           ...prev,
@@ -166,7 +167,7 @@ export default function WhiskyConcierge() {
       toast({
         variant: "destructive",
         title: "Concierge Unavailable",
-        description: error.message,
+        description: error.message || "Failed to get response from concierge",
       });
     },
   });
