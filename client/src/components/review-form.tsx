@@ -25,6 +25,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Image, Upload } from "lucide-react";
+import { SharePopup } from "./share-popup";
+import { useState } from "react";
 
 type FormData = {
   whiskyId: number;
@@ -37,6 +39,13 @@ type FormData = {
 
 export function ReviewForm() {
   const { toast } = useToast();
+  const [showSharePopup, setShowSharePopup] = useState(false);
+  const [lastReviewData, setLastReviewData] = useState<{
+    title: string;
+    text: string;
+    url: string;
+  } | null>(null);
+
   const { data: whiskies } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["/api/whiskies"],
   });
@@ -65,119 +74,143 @@ export function ReviewForm() {
         formData.append('media', data.mediaFile[0]);
       }
 
-      await fetch('/api/reviews', {
+      const response = await fetch('/api/reviews', {
         method: 'POST',
         body: formData,
       });
+
+      const reviewData = await response.json();
+      return { reviewData, whiskyName: whiskies?.find(w => w.id === data.whiskyId)?.name };
     },
-    onSuccess: () => {
+    onSuccess: ({ reviewData, whiskyName }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
       form.reset();
       toast({
         title: "Review posted!",
         description: "Your review has been shared with the community.",
       });
+
+      // Prepare sharing data
+      const shareUrl = `${window.location.origin}/share/${reviewData.id}`;
+      setLastReviewData({
+        title: `${whiskyName} Review`,
+        text: `Check out my ${reviewData.rating}⭐️ review of ${whiskyName} on WeWhiskie!`,
+        url: shareUrl,
+      });
+      setShowSharePopup(true);
     },
   });
 
   return (
-    <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit((data) => createReview.mutate(data))}
-        className="space-y-6"
-      >
-        <FormField
-          control={form.control}
-          name="whiskyId"
-          render={({ field: { onChange, ...field } }) => (
-            <FormItem>
-              <FormLabel>Select Whisky</FormLabel>
-              <Select onValueChange={(value) => onChange(Number(value))}>
+    <>
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit((data) => createReview.mutate(data))}
+          className="space-y-6"
+        >
+          <FormField
+            control={form.control}
+            name="whiskyId"
+            render={({ field: { onChange, ...field } }) => (
+              <FormItem>
+                <FormLabel>Select Whisky</FormLabel>
+                <Select onValueChange={(value) => onChange(Number(value))}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a whisky" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {whiskies?.map((whisky) => (
+                      <SelectItem key={whisky.id} value={whisky.id.toString()}>
+                        {whisky.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="rating"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Rating</FormLabel>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a whisky" />
-                  </SelectTrigger>
+                  <PreciseRating
+                    maxStars={10}
+                    initialRating={field.value}
+                    onChange={field.onChange}
+                  />
                 </FormControl>
-                <SelectContent>
-                  {whiskies?.map((whisky) => (
-                    <SelectItem key={whisky.id} value={whisky.id.toString()}>
-                      {whisky.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="rating"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Rating</FormLabel>
-              <FormControl>
-                <PreciseRating
-                  maxStars={10}
-                  initialRating={field.value}
-                  onChange={field.onChange}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="content"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Review</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Share your thoughts about this whisky..."
-                  className="resize-none"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="mediaFile"
-          render={({ field: { onChange, value, ...field } }) => (
-            <FormItem>
-              <FormLabel>Add Photo or Video</FormLabel>
-              <FormControl>
-                <div className="flex items-center gap-4">
-                  <Input
-                    type="file"
-                    accept="image/*,video/*"
-                    onChange={(e) => onChange(e.target.files)}
-                    className="flex-1"
+          <FormField
+            control={form.control}
+            name="content"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Review</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Share your thoughts about this whisky..."
+                    className="resize-none"
                     {...field}
                   />
-                  <Upload className="h-5 w-5 text-muted-foreground" />
-                </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <Button
-          type="submit"
-          className="w-full"
-          disabled={createReview.isPending}
-        >
-          Post Review
-        </Button>
-      </form>
-    </Form>
+          <FormField
+            control={form.control}
+            name="mediaFile"
+            render={({ field: { onChange, value, ...field } }) => (
+              <FormItem>
+                <FormLabel>Add Photo or Video</FormLabel>
+                <FormControl>
+                  <div className="flex items-center gap-4">
+                    <Input
+                      type="file"
+                      accept="image/*,video/*"
+                      onChange={(e) => onChange(e.target.files)}
+                      className="flex-1"
+                      {...field}
+                    />
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={createReview.isPending}
+          >
+            Post Review
+          </Button>
+        </form>
+      </Form>
+
+      {lastReviewData && (
+        <SharePopup
+          open={showSharePopup}
+          onOpenChange={setShowSharePopup}
+          title={lastReviewData.title}
+          text={lastReviewData.text}
+          url={lastReviewData.url}
+        />
+      )}
+    </>
   );
 }
