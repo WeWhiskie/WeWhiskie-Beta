@@ -96,6 +96,16 @@ export function ActivityFeed({ userId }: { userId?: number }) {
     );
   }
 
+  if (activities.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-muted-foreground">
+          No activities to show yet. Start interacting with the community to see updates here!
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div>
       {activities.map((activity) => (
