@@ -22,23 +22,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Fun whisky-themed concierge name suggestions
+// Updated fun whisky-themed concierge names with more variety
 const DEFAULT_NAMES = [
   "Whisky Pete",
-  "Sir Malted",
-  "The Spirit Guide",
-  "Highland Hannah",
-  "Barrel Barry",
-  "Peat Master Penny",
-  "Captain Cask",
-  "Dr. Dram",
-  "The Malt Whisperer",
-  "Cask Commander",
-  "Scotch Scholar",
-  "The Dram Detective",
+  "The Malt Maven",
+  "Dram Whisperer",
+  "Captain Caskmaster",
   "Professor Peat",
   "Lady Ladyburn",
-  "The Barrel Sage"
+  "Sir Spiritsworth",
+  "The Barrel Sage",
+  "Highland Hannah",
+  "Doctor Dram",
+  "Scotch Scholar",
+  "Master McBarley",
+  "The Spirit Sage",
+  "Cask Commander",
+  "Islay Isabella",
+  "Glen Guardian",
+  "The Whisky Wizard",
+  "Barrel Barry",
+  "Peat Master Penny",
+  "The Mash Maestro"
 ];
 
 interface Message {
@@ -69,6 +74,7 @@ export default function WhiskyConcierge() {
   const [conciergeName, setConciergeName] = useState("Whisky Pete");
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameStyle, setNameStyle] = useState<"funny" | "professional" | "casual">("casual");
+  const [customName, setCustomName] = useState("");
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -176,6 +182,15 @@ export default function WhiskyConcierge() {
     setQuery("");
   };
 
+  const handleNameSelect = (name: string) => {
+    setConciergeName(name);
+    setIsEditingName(false);
+    toast({
+      title: "Name Updated",
+      description: `Your concierge will now be known as ${name}`,
+    });
+  };
+
   return (
     <div className="container mx-auto max-w-4xl py-8 space-y-8">
       <div className="text-center space-y-4">
@@ -186,6 +201,7 @@ export default function WhiskyConcierge() {
               variant="ghost"
               size="sm"
               onClick={() => setIsEditingName(true)}
+              className="hover:bg-accent"
             >
               <Edit2 className="h-4 w-4" />
             </Button>
@@ -196,30 +212,41 @@ export default function WhiskyConcierge() {
         </p>
       </div>
 
-      {/* Name Customization Dialog */}
+      {/* Enhanced Name Customization Dialog */}
       <Dialog open={isEditingName} onOpenChange={setIsEditingName}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Customize Your Concierge</DialogTitle>
+            <DialogTitle className="text-xl">Customize Your Concierge</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-6 py-4">
+            {/* Quick Select Section */}
             <div className="space-y-2">
-              <h4 className="font-medium">Suggested Names</h4>
-              <ScrollArea className="h-[200px]">
+              <h4 className="font-medium text-lg">Featured Names</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {DEFAULT_NAMES.slice(0, 6).map((name) => (
+                  <Button
+                    key={name}
+                    variant="outline"
+                    className="justify-start hover:bg-accent transition-colors"
+                    onClick={() => handleNameSelect(name)}
+                  >
+                    {name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Browse All Names */}
+            <div className="space-y-2">
+              <h4 className="font-medium text-lg">Browse All Names</h4>
+              <ScrollArea className="h-[200px] rounded-md border p-4">
                 <div className="grid grid-cols-2 gap-2">
                   {DEFAULT_NAMES.map((name) => (
                     <Button
                       key={name}
-                      variant="outline"
-                      className="justify-start"
-                      onClick={() => {
-                        setConciergeName(name);
-                        setIsEditingName(false);
-                        toast({
-                          title: "Name Updated",
-                          description: `Your concierge will now be known as ${name}`,
-                        });
-                      }}
+                      variant="ghost"
+                      className="justify-start hover:bg-accent transition-colors"
+                      onClick={() => handleNameSelect(name)}
                     >
                       {name}
                     </Button>
@@ -228,33 +255,33 @@ export default function WhiskyConcierge() {
               </ScrollArea>
             </div>
 
+            {/* Custom Name Input */}
             <div className="space-y-2">
-              <h4 className="font-medium">Custom Name</h4>
+              <h4 className="font-medium text-lg">Create Your Own</h4>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const input = e.currentTarget.querySelector('input') as HTMLInputElement;
-                  if (input.value.trim()) {
-                    setConciergeName(input.value);
-                    setIsEditingName(false);
-                    toast({
-                      title: "Name Updated",
-                      description: `Your concierge will now be known as ${input.value}`,
-                    });
+                  if (customName.trim()) {
+                    handleNameSelect(customName);
                   }
                 }}
                 className="flex gap-2"
               >
                 <Input
-                  defaultValue={conciergeName}
-                  placeholder="Enter custom name..."
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="Enter a custom name..."
+                  className="flex-1"
                 />
-                <Button type="submit">Save</Button>
+                <Button type="submit" disabled={!customName.trim()}>
+                  Save
+                </Button>
               </form>
             </div>
 
+            {/* AI Name Generator */}
             <div className="space-y-2">
-              <h4 className="font-medium">AI Name Generator</h4>
+              <h4 className="font-medium text-lg">AI Name Generator</h4>
               <div className="flex gap-2">
                 <Select
                   value={nameStyle}
@@ -272,9 +299,10 @@ export default function WhiskyConcierge() {
                 <Button
                   onClick={() => generateNameMutation.mutate(nameStyle)}
                   disabled={generateNameMutation.isPending}
+                  className="flex-1"
                 >
                   <Wand2 className="mr-2 h-4 w-4" />
-                  {generateNameMutation.isPending ? "Generating..." : "Generate"}
+                  {generateNameMutation.isPending ? "Generating..." : "Generate AI Name"}
                 </Button>
               </div>
             </div>

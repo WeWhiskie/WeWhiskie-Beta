@@ -181,9 +181,9 @@ export async function generateConciergeName(preferences?: {
     });
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
-    return result.name || "Whisky Pete";
+    return result.name || "Whisky Pete"; 
   } catch (error) {
     console.error('Error generating concierge name:', error);
-    return "Whisky Pete";
+    return "Whisky Pete"; 
   }
 }
