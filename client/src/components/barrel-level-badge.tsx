@@ -7,9 +7,10 @@ import {
 } from "@/components/ui/hover-card";
 import { GiBarrel } from "react-icons/gi";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Crown } from "lucide-react";
 
 interface BarrelLevelBadgeProps {
-  level: number;
+  level: number | 'premium';
   points?: number;
   showProgress?: boolean;
   className?: string;
@@ -22,14 +23,19 @@ export function BarrelLevelBadge({
   className = "" 
 }: BarrelLevelBadgeProps) {
   const barrelLevel = getBarrelLevel(level);
-  const progress = points !== undefined ? getProgressToNextLevel(points) : null;
+  const progress = typeof level === 'number' && points !== undefined ? getProgressToNextLevel(points) : null;
   const rewards = getAvailableRewards(level);
+  const isPremium = level === 'premium';
 
   return (
     <HoverCard>
       <HoverCardTrigger asChild>
         <div className={`inline-flex items-center gap-2 ${className}`}>
-          <GiBarrel className={`h-5 w-5 ${barrelLevel.color}`} />
+          {isPremium ? (
+            <Crown className="h-5 w-5 text-amber-400" />
+          ) : (
+            <GiBarrel className={`h-5 w-5 ${barrelLevel.color}`} />
+          )}
           <span className={`font-medium ${barrelLevel.color}`}>
             {barrelLevel.name}
           </span>
@@ -42,7 +48,7 @@ export function BarrelLevelBadge({
             <p className="text-sm text-muted-foreground">{barrelLevel.description}</p>
           </div>
 
-          {showProgress && progress && (
+          {showProgress && progress && !isPremium && (
             <div className="space-y-2">
               <Progress 
                 value={(progress.progress / progress.required) * 100} 
@@ -58,7 +64,7 @@ export function BarrelLevelBadge({
           )}
 
           <div className="space-y-2">
-            <h5 className="text-sm font-medium">Available Rewards:</h5>
+            <h5 className="text-sm font-medium">Available Features:</h5>
             <ScrollArea className="h-[120px] w-full rounded-md border p-2">
               <ul className="text-sm space-y-1">
                 {rewards.map((reward, index) => (
