@@ -18,15 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { StarRating } from "./star-rating";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Image, Upload } from "lucide-react";
 
 type FormData = {
   whiskyId: string;
   rating: number;
   content: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  mediaFile?: FileList;
 };
 
 export function ReviewForm() {
@@ -39,6 +44,7 @@ export function ReviewForm() {
     resolver: zodResolver(
       insertReviewSchema.omit({ userId: true }).extend({
         whiskyId: insertReviewSchema.shape.whiskyId,
+        mediaFile: insertReviewSchema.shape.videoUrl.optional(),
       }),
     ),
     defaultValues: {
@@ -49,9 +55,18 @@ export function ReviewForm() {
 
   const createReview = useMutation({
     mutationFn: async (data: FormData) => {
-      await apiRequest("POST", "/api/reviews", {
-        ...data,
-        whiskyId: parseInt(data.whiskyId),
+      const formData = new FormData();
+      formData.append('whiskyId', data.whiskyId);
+      formData.append('rating', data.rating.toString());
+      formData.append('content', data.content);
+
+      if (data.mediaFile?.[0]) {
+        formData.append('media', data.mediaFile[0]);
+      }
+
+      await fetch('/api/reviews', {
+        method: 'POST',
+        body: formData,
       });
     },
     onSuccess: () => {
@@ -124,6 +139,29 @@ export function ReviewForm() {
                   className="resize-none"
                   {...field}
                 />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="mediaFile"
+          render={({ field: { onChange, ...field } }) => (
+            <FormItem>
+              <FormLabel>Add Photo or Video</FormLabel>
+              <FormControl>
+                <div className="flex items-center gap-4">
+                  <Input
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={(e) => onChange(e.target.files)}
+                    className="flex-1"
+                    {...field}
+                  />
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>

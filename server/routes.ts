@@ -5,6 +5,35 @@ import { setupAuth } from "./auth";
 import { insertReviewSchema, insertTastingSessionSchema, type Review, type TastingSession } from "@shared/schema";
 import { LiveStreamingServer } from './websocket';
 import { getWhiskyRecommendations } from "./services/recommendations";
+import multer from "multer";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
+
+// Configure multer for file uploads
+const multerStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'attached_assets/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({ 
+  storage: multerStorage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only images and videos are allowed.'));
+    }
+  }
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -87,18 +116,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(reviews);
   });
 
-  app.post("/api/reviews", async (req, res) => {
+  app.post("/api/reviews", upload.single('media'), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
-    const parsedReview = insertReviewSchema.parse({
-      ...req.body,
-      userId: req.user!.id,
-    });
+    try {
+      const reviewData = {
+        ...req.body,
+        userId: req.user!.id,
+        whiskyId: parseInt(req.body.whiskyId),
+        rating: parseInt(req.body.rating),
+      };
 
-    const review = await storage.createReview(parsedReview);
-    res.status(201).json(review);
+      if (req.file) {
+        const isVideo = req.file.mimetype.startsWith('video/');
+        if (isVideo) {
+          reviewData.videoUrl = `/attached_assets/${req.file.filename}`;
+        } else {
+          reviewData.thumbnailUrl = `/attached_assets/${req.file.filename}`;
+        }
+      }
+
+      const parsedReview = insertReviewSchema.parse(reviewData);
+      const review = await storage.createReview(parsedReview);
+      res.status(201).json(review);
+    } catch (error) {
+      console.error("Error creating review:", error);
+      res.status(400).json({ message: "Invalid review data" });
+    }
   });
 
   // Tasting Session routes
