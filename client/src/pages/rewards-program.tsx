@@ -19,11 +19,23 @@ export default function RewardsProgramPage() {
   // TODO: These would come from the backend
   const challengeProgress = {
     daysCompleted: 3,
-    totalDays: 14,
-    todaysProgress: {
-      review: true,
-      tasting: false,
-      comment: true
+    totalDays: 7,
+    categories: {
+      reviews: {
+        completed: 4,
+        required: 7,
+        today: true
+      },
+      tastings: {
+        completed: 2,
+        required: 7,
+        today: false
+      },
+      community: {
+        completed: 5,
+        required: 7,
+        today: true
+      }
     }
   };
 
@@ -87,18 +99,43 @@ export default function RewardsProgramPage() {
               The Master's Journey
             </CardTitle>
             <CardDescription>
-              Complete daily whisky activities for 14 days to earn a free month of premium
+              Complete 7 activities in each category to earn a free month of premium
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
+              {/* Reviews Progress */}
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Progress: {challengeProgress.daysCompleted} days completed</span>
-                  <span>{challengeProgress.daysCompleted}/{challengeProgress.totalDays}</span>
+                  <span>Whisky Reviews</span>
+                  <span>{challengeProgress.categories.reviews.completed}/{challengeProgress.categories.reviews.required}</span>
                 </div>
                 <Progress 
-                  value={(challengeProgress.daysCompleted / challengeProgress.totalDays) * 100}
+                  value={(challengeProgress.categories.reviews.completed / challengeProgress.categories.reviews.required) * 100}
+                  className="h-2"
+                />
+              </div>
+
+              {/* Tastings Progress */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Live Tastings</span>
+                  <span>{challengeProgress.categories.tastings.completed}/{challengeProgress.categories.tastings.required}</span>
+                </div>
+                <Progress 
+                  value={(challengeProgress.categories.tastings.completed / challengeProgress.categories.tastings.required) * 100}
+                  className="h-2"
+                />
+              </div>
+
+              {/* Community Progress */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Community Engagement</span>
+                  <span>{challengeProgress.categories.community.completed}/{challengeProgress.categories.community.required}</span>
+                </div>
+                <Progress 
+                  value={(challengeProgress.categories.community.completed / challengeProgress.categories.community.required) * 100}
                   className="h-2"
                 />
               </div>
@@ -107,20 +144,20 @@ export default function RewardsProgramPage() {
                 <h4 className="text-sm font-medium">Today's Tasks:</h4>
                 <ul className="space-y-2">
                   <li className="flex items-center gap-2 text-sm">
-                    <Check className={`h-4 w-4 ${challengeProgress.todaysProgress.review ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    <span className={challengeProgress.todaysProgress.review ? 'line-through text-muted-foreground' : ''}>
+                    <Check className={`h-4 w-4 ${challengeProgress.categories.reviews.today ? 'text-green-500' : 'text-muted-foreground'}`} />
+                    <span className={challengeProgress.categories.reviews.today ? 'line-through text-muted-foreground' : ''}>
                       Write a whisky review
                     </span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
-                    <Check className={`h-4 w-4 ${challengeProgress.todaysProgress.tasting ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    <span className={challengeProgress.todaysProgress.tasting ? 'line-through text-muted-foreground' : ''}>
+                    <Check className={`h-4 w-4 ${challengeProgress.categories.tastings.today ? 'text-green-500' : 'text-muted-foreground'}`} />
+                    <span className={challengeProgress.categories.tastings.today ? 'line-through text-muted-foreground' : ''}>
                       Join a live tasting
                     </span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
-                    <Check className={`h-4 w-4 ${challengeProgress.todaysProgress.comment ? 'text-green-500' : 'text-muted-foreground'}`} />
-                    <span className={challengeProgress.todaysProgress.comment ? 'line-through text-muted-foreground' : ''}>
+                    <Check className={`h-4 w-4 ${challengeProgress.categories.community.today ? 'text-green-500' : 'text-muted-foreground'}`} />
+                    <span className={challengeProgress.categories.community.today ? 'line-through text-muted-foreground' : ''}>
                       Comment on a review
                     </span>
                   </li>
