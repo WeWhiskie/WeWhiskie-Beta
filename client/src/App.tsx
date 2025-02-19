@@ -21,6 +21,7 @@ import RewardsProgramPage from "./pages/rewards-program";
 import Navbar from "./components/navbar";
 import { UserStatusBar } from "./components/user-status-bar";
 import { useAuth } from "./hooks/use-auth";
+import { FloatingChatButton } from "@/components/ui/floating-chat";
 
 function Router() {
   const { user } = useAuth();
@@ -52,6 +53,7 @@ function Router() {
           <Route component={NotFound} />
         </Switch>
       </main>
+      <FloatingChatButton />
     </div>
   );
 }
