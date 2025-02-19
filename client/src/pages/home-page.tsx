@@ -4,16 +4,35 @@ import { ReviewForm } from "@/components/review-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { Plus, Search, Star, Video, Users } from "lucide-react";
+import { Plus, Search, Star, Video, Users, Share2, PenSquare, Radio } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import type { Whisky, TastingSession } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import { useAuth } from "@/hooks/use-auth";
+
+interface Review {
+  id: number;
+  content: string;
+  rating: number;
+  createdAt: string;
+  user: {
+    id: number;
+    username: string;
+  };
+  whisky: {
+    id: number;
+    name: string;
+    distillery: string;
+    imageUrl: string;
+  };
+}
 
 export default function HomePage() {
   const [showForm, setShowForm] = useState(false);
-  const { data: reviews = [] } = useQuery({
+  const { user } = useAuth();
+  const { data: reviews = [] } = useQuery<Review[]>({
     queryKey: ["/api/reviews"],
   });
 
@@ -40,7 +59,50 @@ export default function HomePage() {
         <p className="text-xl text-muted-foreground">
           Better Together - Share your love of whisky with enthusiasts worldwide
         </p>
+        {user && (
+          <div className="flex justify-center gap-4 pt-4">
+            <Link href="/share">
+              <Button size="lg" className="gap-2">
+                <Share2 className="h-5 w-5" />
+                Share Discovery
+              </Button>
+            </Link>
+            <Link href="/review">
+              <Button size="lg" variant="outline" className="gap-2">
+                <PenSquare className="h-5 w-5" />
+                Write Review
+              </Button>
+            </Link>
+            <Link href="/live">
+              <Button size="lg" variant="outline" className="gap-2">
+                <Radio className="h-5 w-5" />
+                Start Live Tasting
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
+
+      {/* Quick Actions Floating Buttons for Mobile */}
+      {user && (
+        <div className="fixed bottom-6 right-6 flex flex-col gap-4 md:hidden">
+          <Link href="/share">
+            <Button size="icon" className="h-12 w-12 rounded-full shadow-lg">
+              <Share2 className="h-6 w-6" />
+            </Button>
+          </Link>
+          <Link href="/review">
+            <Button size="icon" className="h-12 w-12 rounded-full shadow-lg">
+              <PenSquare className="h-6 w-6" />
+            </Button>
+          </Link>
+          <Link href="/live">
+            <Button size="icon" className="h-12 w-12 rounded-full shadow-lg">
+              <Radio className="h-6 w-6" />
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Live Sessions Section */}
       {(liveSessions.length > 0 || upcomingSessions.length > 0) && (
@@ -163,6 +225,9 @@ export default function HomePage() {
                       </p>
                     )}
                   </div>
+                  <Button variant="ghost" className="mt-4">
+                    <Share2 className="h-5 w-5 mr-2"/> Share
+                  </Button>
                 </CardContent>
               </Card>
             </Link>
