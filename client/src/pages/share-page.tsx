@@ -5,16 +5,14 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { Review } from "@shared/schema";
 
-interface SharedContent {
-  type: 'review';
-  content: Review;
-}
-
 export default function SharePage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
 
-  const { data: sharedContent, isLoading } = useQuery<SharedContent>({
+  const { data: review, isLoading } = useQuery<Review & { 
+    user: { id: number; username: string };
+    whisky: { id: number; name: string; distillery: string; imageUrl: string };
+  }>({
     queryKey: ['/api/reviews', id],
     enabled: !!id,
   });
@@ -27,12 +25,12 @@ export default function SharePage() {
     );
   }
 
-  if (!sharedContent) {
+  if (!review) {
     return (
       <div className="text-center py-12">
-        <h1 className="text-2xl font-bold mb-4">Content Not Found</h1>
+        <h1 className="text-2xl font-bold mb-4">Review Not Found</h1>
         <p className="text-muted-foreground">
-          The shared content you're looking for might have been removed or is no longer available.
+          The review you're looking for might have been removed or is no longer available.
         </p>
         <Button variant="outline" className="mt-4" onClick={() => window.history.back()}>
           Go Back
@@ -41,21 +39,19 @@ export default function SharePage() {
     );
   }
 
-  const { content } = sharedContent;
-
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Shared Whisky Review</h1>
+      <h1 className="text-3xl font-bold mb-6">Whisky Review</h1>
       <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">{content.whisky.name}</h2>
+        <h2 className="text-xl font-semibold mb-4">{review.whisky.name}</h2>
         <div className="space-y-4">
-          <p className="text-muted-foreground">{content.content}</p>
+          <p className="text-muted-foreground">{review.content}</p>
           <div>
             <p className="text-sm text-muted-foreground">
-              Rating: {content.rating} / 5
+              Rating: {review.rating} / 5
             </p>
             <p className="text-sm text-muted-foreground">
-              By: {content.user.username}
+              By: {review.user.username}
             </p>
           </div>
         </div>
