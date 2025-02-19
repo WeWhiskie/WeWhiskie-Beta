@@ -5,6 +5,7 @@ import { setupAuth } from "./auth";
 import { insertReviewSchema, insertTastingSessionSchema } from "@shared/schema";
 import { LiveStreamingServer } from './websocket';
 import { type InsertTastingSession, type InsertReview } from '@shared/schema';
+import { getWhiskyRecommendations } from "./services/recommendations";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -164,10 +165,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(updatedSession);
   });
 
+  app.post("/api/recommendations", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const recommendations = await getWhiskyRecommendations(req.body, req.user.id);
+      res.json(recommendations);
+    } catch (error) {
+      console.error("Error getting recommendations:", error);
+      res.status(500).json({ message: "Failed to generate recommendations" });
+    }
+  });
+
   const httpServer = createServer(app);
-
-  // Initialize WebSocket server
   new LiveStreamingServer(httpServer);
-
   return httpServer;
 }

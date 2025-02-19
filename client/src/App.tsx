@@ -11,6 +11,7 @@ import ProfilePage from "./pages/profile-page";
 import WhiskyPage from "./pages/whisky-page";
 import LiveSessionPage from "./pages/live-session-page";
 import SessionsPage from "./pages/sessions-page";
+import RecommendationsPage from "./pages/recommendations-page";
 import Navbar from "./components/navbar";
 
 function Router() {
@@ -25,6 +26,7 @@ function Router() {
           <Route path="/profile/:id" component={ProfilePage} />
           <Route path="/sessions" component={SessionsPage} />
           <ProtectedRoute path="/sessions/:id" component={LiveSessionPage} />
+          <ProtectedRoute path="/recommendations" component={RecommendationsPage} />
           <Route component={NotFound} />
         </Switch>
       </main>
