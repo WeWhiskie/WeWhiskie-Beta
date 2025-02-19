@@ -31,7 +31,7 @@ export default function LiveSessionPage() {
   });
 
   const isHost = session?.hostId === user?.id;
-  const { stream, error, connectToSocket, sendMessage } = useWebRTC(isHost);
+  const { stream, error, isConnecting, connectToSocket, sendMessage } = useWebRTC(isHost);
 
   useEffect(() => {
     if (session && user) {
@@ -50,11 +50,12 @@ export default function LiveSessionPage() {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, newMessage]);
-      sendMessage("chat", { message });
+      // Fix: Add userId to the payload to match WebRTCPayload type
+      sendMessage("chat", { userId: user.id, message });
     }
   };
 
-  if (isLoadingSession) {
+  if (isLoadingSession || isConnecting) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -83,7 +84,7 @@ export default function LiveSessionPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <VideoStream stream={stream} isLoading={!stream} />
+            <VideoStream stream={stream} isLoading={!stream && !error} />
             {error && (
               <p className="text-destructive mt-2">
                 Error accessing camera: {error.message}
@@ -96,8 +97,11 @@ export default function LiveSessionPage() {
           <Card className="p-4">
             <Button
               variant="destructive"
-              onClick={() => {
-                // Implement end session functionality
+              onClick={async () => {
+                // TODO: Implement end session functionality
+                // Update session status to 'ended'
+                // Close all WebRTC connections
+                // Redirect to session list
               }}
             >
               End Session
