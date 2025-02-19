@@ -53,7 +53,7 @@ export default function WhiskyConcierge() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [conciergeName, setConciergeName] = useState(() => {
-    return localStorage.getItem("conciergeName") || DEFAULT_NAMES[Math.floor(Math.random() * DEFAULT_NAMES.length)];
+    return localStorage.getItem("conciergeName") || "Whisky Pete";
   });
   const [isEditingName, setIsEditingName] = useState(false);
   const { toast } = useToast();
