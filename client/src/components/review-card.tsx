@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { PreciseRating } from "./precise-rating";
 
 interface ReviewCardProps {
   review: {
@@ -81,7 +82,7 @@ export function ReviewCard({ review }: ReviewCardProps) {
     }
   };
 
-  const createdAtDate = typeof review.createdAt === 'string' 
+  const createdAtDate = typeof review.createdAt === 'string'
     ? new Date(review.createdAt)
     : review.createdAt;
 
@@ -122,7 +123,12 @@ export function ReviewCard({ review }: ReviewCardProps) {
           </p>
         </div>
 
-        <StarRating rating={review.rating} className="mb-4" />
+        <PreciseRating 
+          maxStars={10} 
+          initialRating={review.rating} 
+          readonly 
+          className="mb-4"
+        />
 
         <p className="text-muted-foreground">{review.content}</p>
       </CardContent>

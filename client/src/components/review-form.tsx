@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "./star-rating";
+import { PreciseRating } from "./precise-rating";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -117,9 +118,10 @@ export function ReviewForm() {
             <FormItem>
               <FormLabel>Rating</FormLabel>
               <FormControl>
-                <StarRating
-                  rating={field.value}
-                  onRate={(rating) => field.onChange(rating)}
+                <PreciseRating
+                  maxStars={10}
+                  initialRating={field.value}
+                  onChange={field.onChange}
                 />
               </FormControl>
               <FormMessage />

@@ -59,13 +59,13 @@ export const reviews = pgTable("reviews", {
   whiskyId: integer("whisky_id")
     .notNull()
     .references(() => whiskies.id),
-  rating: integer("rating").notNull(),
+  rating: doublePrecision("rating").notNull(), // Changed from integer to doublePrecision
   content: text("content").notNull(),
   nosing: text("nosing"),
   palate: text("palate"),
   finish: text("finish"),
-  videoUrl: text("video_url"), // For video reviews
-  thumbnailUrl: text("thumbnail_url"), // Video thumbnail
+  videoUrl: text("video_url"),
+  thumbnailUrl: text("thumbnail_url"),
   likes: integer("likes").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -147,7 +147,7 @@ export const insertWhiskySchema = createInsertSchema(whiskies).extend({
 });
 
 export const insertReviewSchema = createInsertSchema(reviews).extend({
-  rating: z.number().min(1).max(5),
+  rating: z.number().min(0).max(10).step(0.1), // Updated validation for decimal ratings
   nosing: z.string().optional(),
   palate: z.string().optional(),
   finish: z.string().optional(),
