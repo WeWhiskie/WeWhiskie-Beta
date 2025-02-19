@@ -1,4 +1,4 @@
-import { Twitter, Facebook, Linkedin } from "lucide-react";
+import { Twitter, Facebook, Linkedin, Copy, Share2 } from "lucide-react";
 import { SiInstagram, SiTiktok } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { shareToSocial } from "@/lib/social-sharing";
 import { useToast } from "@/hooks/use-toast";
-import { Share2 } from "lucide-react";
 
 interface SharePopupProps {
   title: string;
@@ -47,12 +46,28 @@ export function SharePopup({
 
       toast({
         title: "Shared successfully!",
-        description: `Your content has been shared to ${platform}.`,
+        description: `Your review has been shared to ${platform}.`,
       });
     } catch (error) {
       toast({
         title: "Share failed",
-        description: "Unable to share your content. Please try again.",
+        description: "Unable to share your review. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({
+        title: "Link copied!",
+        description: "Review link has been copied to your clipboard.",
+      });
+    } catch (error) {
+      toast({
+        title: "Copy failed",
+        description: "Unable to copy the link. Please try again.",
         variant: "destructive",
       });
     }
@@ -74,9 +89,9 @@ export function SharePopup({
       )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share content</DialogTitle>
+          <DialogTitle>Share Review</DialogTitle>
           <DialogDescription>
-            Share this content with your social network
+            Share this review with your social network
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-6">
@@ -119,11 +134,20 @@ export function SharePopup({
           <Button
             size="lg"
             variant="outline"
-            className="flex-1 gap-2 col-span-2 sm:col-span-1"
+            className="flex-1 gap-2"
             onClick={() => handleShare('tiktok')}
           >
             <SiTiktok className="h-5 w-5" />
             TikTok
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="flex-1 gap-2"
+            onClick={handleCopyLink}
+          >
+            <Copy className="h-5 w-5" />
+            Copy Link
           </Button>
         </div>
       </DialogContent>
