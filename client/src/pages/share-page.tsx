@@ -1,9 +1,12 @@
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function SharePage() {
-  const { id } = useParams();
+  const params = useParams<{ id: string }>();
+  const id = params?.id;
 
   const { data: sharedContent, isLoading } = useQuery({
     queryKey: ['/api/share', id],
@@ -25,6 +28,9 @@ export default function SharePage() {
         <p className="text-muted-foreground">
           The shared content you're looking for might have been removed or is no longer available.
         </p>
+        <Button variant="outline" className="mt-4" onClick={() => window.history.back()}>
+          Go Back
+        </Button>
       </div>
     );
   }
@@ -32,10 +38,13 @@ export default function SharePage() {
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-3xl font-bold mb-6">Shared Whisky Experience</h1>
-      <div className="bg-card rounded-lg shadow-lg p-6">
-        {/* Content will be implemented based on the sharing requirements */}
-        <p className="text-muted-foreground">Shared content ID: {id}</p>
-      </div>
+      <Card className="p-6">
+        <h2 className="text-xl font-semibold mb-4">{sharedContent.title}</h2>
+        <div className="space-y-4">
+          <p className="text-muted-foreground">{sharedContent.description}</p>
+          {/* Add more content display based on the shared data structure */}
+        </div>
+      </Card>
     </div>
   );
 }
