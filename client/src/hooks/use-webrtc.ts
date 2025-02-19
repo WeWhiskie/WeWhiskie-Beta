@@ -13,7 +13,6 @@ const configuration: RTCConfiguration = {
   iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle' as RTCBundlePolicy,
   rtcpMuxPolicy: 'require' as RTCRtcpMuxPolicy,
-  sdpSemantics: 'unified-plan'
 };
 
 type WebRTCPayload = {
@@ -40,6 +39,7 @@ export function useWebRTC(isHost: boolean) {
   const maxReconnectAttempts = 5;
 
   useEffect(() => {
+    console.log('useWebRTC effect triggered, isHost:', isHost);
     if (isHost) {
       initializeMediaStream();
     }
@@ -51,7 +51,15 @@ export function useWebRTC(isHost: boolean) {
 
   const initializeMediaStream = async () => {
     try {
+      console.log('Initializing media stream...');
       setIsConnecting(true);
+
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('getUserMedia is not supported in this browser');
+      }
+
+      console.log('Requesting media permissions...');
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -66,18 +74,21 @@ export function useWebRTC(isHost: boolean) {
         }
       });
 
+      console.log('Media stream obtained:', mediaStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
+
       // Apply video constraints for better quality
       const videoTrack = mediaStream.getVideoTracks()[0];
-      const constraints = {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { max: 30 },
-        bitrateMode: 'variable',
-        degradationPreference: 'maintain-framerate'
-      };
-      await videoTrack.applyConstraints(constraints);
+      if (videoTrack) {
+        console.log('Applying video constraints...');
+        await videoTrack.applyConstraints({
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { max: 30 }
+        });
+      }
 
       setStream(mediaStream);
+      console.log('Media stream initialized successfully');
     } catch (err) {
       console.error('Media stream error:', err);
       setError(err instanceof Error ? err : new Error('Failed to get media stream'));
@@ -87,13 +98,20 @@ export function useWebRTC(isHost: boolean) {
   };
 
   const cleanup = () => {
-    stream?.getTracks().forEach(track => track.stop());
+    console.log('Cleaning up WebRTC resources...');
+    if (stream) {
+      stream.getTracks().forEach(track => {
+        console.log('Stopping track:', track.kind);
+        track.stop();
+      });
+    }
     peerConnections.current.forEach(pc => pc.close());
     peerConnections.current.clear();
     socketRef.current?.close();
   };
 
   const connectToSocket = (sessionId: number, userId: number) => {
+    console.log('Connecting to WebSocket...', { sessionId, userId });
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
     socketRef.current = socket;
@@ -110,6 +128,7 @@ export function useWebRTC(isHost: boolean) {
     socket.onmessage = async (event) => {
       try {
         const message: WebRTCMessage = JSON.parse(event.data);
+        console.log('WebSocket message received:', message.type);
         await handleSocketMessage(message);
       } catch (error) {
         console.error('Error handling WebSocket message:', error);
@@ -185,7 +204,7 @@ export function useWebRTC(isHost: boolean) {
       const pc = createPeerConnection(userId);
       if (stream) {
         stream.getTracks().forEach(track => {
-          pc.addTransceiver(track, { 
+          pc.addTransceiver(track, {
             direction: 'sendonly',
             streams: [stream]
           });
@@ -204,7 +223,7 @@ export function useWebRTC(isHost: boolean) {
       const pc = createPeerConnection(userId);
       if (stream) {
         stream.getTracks().forEach(track => {
-          pc.addTransceiver(track, { 
+          pc.addTransceiver(track, {
             direction: 'sendonly',
             streams: [stream]
           });
