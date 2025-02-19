@@ -1,4 +1,5 @@
 import { Twitter, Facebook, Linkedin } from "lucide-react";
+import { SiInstagram, SiTiktok } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,7 +22,7 @@ interface SharePopupProps {
 export function SharePopup({ open, onOpenChange, title, text, url }: SharePopupProps) {
   const { toast } = useToast();
 
-  const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin') => {
+  const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin' | 'instagram' | 'tiktok') => {
     try {
       await shareToSocial(platform, {
         title,
@@ -52,7 +53,7 @@ export function SharePopup({ open, onOpenChange, title, text, url }: SharePopupP
             Share your whisky experience with your social network
           </DialogDescription>
         </DialogHeader>
-        <div className="flex justify-center gap-4 py-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 py-6">
           <Button
             size="lg"
             variant="outline"
@@ -79,6 +80,24 @@ export function SharePopup({ open, onOpenChange, title, text, url }: SharePopupP
           >
             <Linkedin className="h-5 w-5 text-blue-700" />
             LinkedIn
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="flex-1 gap-2"
+            onClick={() => handleShare('instagram')}
+          >
+            <SiInstagram className="h-5 w-5 text-pink-600" />
+            Instagram
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="flex-1 gap-2 col-span-2 sm:col-span-1"
+            onClick={() => handleShare('tiktok')}
+          >
+            <SiTiktok className="h-5 w-5" />
+            TikTok
           </Button>
         </div>
       </DialogContent>

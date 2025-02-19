@@ -1,4 +1,4 @@
-type SocialPlatform = 'twitter' | 'facebook' | 'linkedin';
+type SocialPlatform = 'twitter' | 'facebook' | 'linkedin' | 'instagram' | 'tiktok';
 
 interface ShareOptions {
   title: string;
@@ -11,7 +11,9 @@ interface ShareOptions {
 const PLATFORM_URLS = {
   twitter: 'https://twitter.com/intent/tweet',
   facebook: 'https://www.facebook.com/sharer/sharer.php',
-  linkedin: 'https://www.linkedin.com/shareArticle'
+  linkedin: 'https://www.linkedin.com/shareArticle',
+  instagram: 'https://instagram.com/share',
+  tiktok: 'https://www.tiktok.com/share'
 };
 
 export async function shareToSocial(platform: SocialPlatform, options: ShareOptions) {
@@ -38,6 +40,24 @@ export async function shareToSocial(platform: SocialPlatform, options: ShareOpti
       url.searchParams.append('url', encodeURIComponent(options.url));
       url.searchParams.append('title', encodeURIComponent(options.title));
       url.searchParams.append('summary', encodeURIComponent(options.text));
+      break;
+
+    case 'instagram':
+      // Instagram sharing is done through their app's URL scheme
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        url.searchParams.append('url', encodeURIComponent(options.url));
+        url.searchParams.append('caption', encodeURIComponent(options.text));
+      } else {
+        // On desktop, open Instagram in a new tab
+        window.open('https://instagram.com', '_blank');
+        return;
+      }
+      break;
+
+    case 'tiktok':
+      // TikTok sharing is done through their app's URL scheme
+      url.searchParams.append('url', encodeURIComponent(options.url));
+      url.searchParams.append('text', encodeURIComponent(options.text));
       break;
   }
 
