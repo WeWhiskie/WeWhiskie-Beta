@@ -28,6 +28,28 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+// Add the verify function to check session validity
+export async function verify(sessionId: string): Promise<SelectUser | null> {
+  try {
+    // Get session from storage
+    const session = await new Promise<any>((resolve) => {
+      storage.sessionStore.get(sessionId, (err, session) => {
+        if (err) resolve(null);
+        else resolve(session);
+      });
+    });
+
+    if (!session?.passport?.user) return null;
+
+    // Get user from storage
+    const user = await storage.getUser(session.passport.user);
+    return user || null;
+  } catch (error) {
+    console.error('Session verification error:', error);
+    return null;
+  }
+}
+
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
     secret: "super-secret-key-change-in-production",

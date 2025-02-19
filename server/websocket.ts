@@ -3,6 +3,9 @@ import { Server } from 'http';
 import { storage } from './storage';
 import { TastingSession } from '@shared/schema';
 import { log } from './vite';
+import { IncomingMessage } from 'http';
+import { parse } from 'cookie';
+import { verify } from './auth';
 
 interface Client {
   ws: WebSocket;
@@ -34,76 +37,129 @@ export class LiveStreamingServer {
     this.wss = new WebSocketServer({ 
       server,
       path: '/ws',
-      clientTracking: true,
+      verifyClient: this.verifyClient.bind(this),
     });
 
     this.setupWebSocketServer();
     this.startHeartbeatCheck();
     this.startMetricsCollection();
+
+    log('WebSocket server initialized and ready for connections', 'websocket');
+  }
+
+  private async verifyClient(
+    info: { origin: string; secure: boolean; req: IncomingMessage },
+    callback: (res: boolean, code?: number, message?: string) => void
+  ) {
+    try {
+      const cookies = parse(info.req.headers.cookie || '');
+      const sessionId = cookies['connect.sid'];
+
+      log(`WebSocket connection attempt - Origin: ${info.origin}, Session ID: ${sessionId?.substring(0, 8)}...`, 'websocket');
+
+      if (!sessionId) {
+        log('WebSocket connection rejected: No session cookie', 'websocket');
+        callback(false, 401, 'Unauthorized - No session cookie');
+        return;
+      }
+
+      // Verify the session
+      const user = await verify(sessionId);
+      if (!user) {
+        log('WebSocket connection rejected: Invalid session', 'websocket');
+        callback(false, 401, 'Unauthorized - Invalid session');
+        return;
+      }
+
+      log(`WebSocket connection authorized for user ${user.id}`, 'websocket');
+      callback(true);
+    } catch (error) {
+      log(`WebSocket verification error: ${error}`, 'websocket');
+      callback(false, 500, 'Internal Server Error');
+    }
   }
 
   private setupWebSocketServer() {
-    this.wss.on('connection', async (ws: WebSocket, request) => {
-      log('New WebSocket connection attempt', 'websocket');
+    this.wss.on('connection', async (ws: WebSocket, request: IncomingMessage) => {
+      try {
+        const cookies = parse(request.headers.cookie || '');
+        const user = await verify(cookies['connect.sid']);
 
-      // Initialize client metrics
-      this.clients.set(ws, {
-        ws,
-        userId: 0, // Will be set when joining session
-        connectTime: Date.now(),
-        bytesTransferred: 0,
-      });
+        if (!user) {
+          log('Connection rejected: User not authenticated', 'websocket');
+          ws.close(1008, 'User not authenticated');
+          return;
+        }
 
-      ws.on('message', async (message: string) => {
-        try {
-          // Rate limiting check
-          if (this.isRateLimited(ws)) {
-            log('Rate limit exceeded for client', 'websocket');
+        log(`New WebSocket connection established for user ${user.id}`, 'websocket');
+
+        // Initialize client metrics
+        this.clients.set(ws, {
+          ws,
+          userId: user.id,
+          connectTime: Date.now(),
+          bytesTransferred: 0,
+        });
+
+        ws.on('message', async (message: string) => {
+          try {
+            if (this.isRateLimited(ws)) {
+              log('Rate limit exceeded for client', 'websocket');
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                payload: 'Rate limit exceeded' 
+              }));
+              return;
+            }
+
+            const data: WebSocketMessage = JSON.parse(message.toString());
+            log(`Received message type: ${data.type} from user ${user.id}`, 'websocket');
+            await this.handleMessage(ws, data);
+
+            const client = this.clients.get(ws);
+            if (client) {
+              client.bytesTransferred += message.length;
+            }
+          } catch (error) {
+            log(`Error handling message: ${error}`, 'websocket');
             ws.send(JSON.stringify({ 
               type: 'error', 
-              payload: 'Rate limit exceeded' 
+              payload: 'Invalid message format' 
             }));
-            return;
           }
+        });
 
-          const data: WebSocketMessage = JSON.parse(message.toString());
-          log(`Received message type: ${data.type}`, 'websocket');
-          await this.handleMessage(ws, data);
-
-          // Update bytes transferred
+        ws.on('close', () => {
           const client = this.clients.get(ws);
-          if (client) {
-            client.bytesTransferred += message.length;
+          if (client?.sessionId) {
+            this.handleLeaveSession(ws, client.sessionId);
+            log(`Client ${client.userId} disconnected from session ${client.sessionId}`, 'websocket');
           }
-        } catch (error) {
-          log(`Error handling message: ${error}`, 'websocket');
-          ws.send(JSON.stringify({ 
-            type: 'error', 
-            payload: 'Invalid message format' 
-          }));
-        }
-      });
+          this.clients.delete(ws);
+          this.messageCounters.delete(ws);
+          log(`WebSocket connection closed for user ${user.id}`, 'websocket');
+        });
 
-      ws.on('close', () => {
-        const client = this.clients.get(ws);
-        if (client?.sessionId) {
-          this.handleLeaveSession(ws, client.sessionId);
-        }
-        this.clients.delete(ws);
-        this.messageCounters.delete(ws);
-        log('Client disconnected', 'websocket');
-      });
+        ws.on('error', (error) => {
+          log(`WebSocket error for user ${user.id}: ${error}`, 'websocket');
+          this.handleConnectionError(ws);
+        });
 
-      ws.on('error', (error) => {
-        log(`WebSocket error: ${error}`, 'websocket');
-        this.handleConnectionError(ws);
-      });
+        // Send initial connection success message
+        ws.send(JSON.stringify({ 
+          type: 'connection-established',
+          payload: { 
+            userId: user.id,
+            timestamp: Date.now() 
+          }
+        }));
 
-      // Send initial heartbeat
-      this.sendHeartbeat(ws);
+        this.sendHeartbeat(ws);
+      } catch (error) {
+        log(`Error handling WebSocket connection: ${error}`, 'websocket');
+        ws.close(1011, 'Internal Server Error');
+      }
     });
-
-    log('WebSocket server setup completed', 'websocket');
   }
 
   private isRateLimited(ws: WebSocket): boolean {

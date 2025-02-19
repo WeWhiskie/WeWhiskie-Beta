@@ -12,8 +12,7 @@ const configuration: RTCConfiguration = {
   iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
-  sdpSemantics: 'unified-plan',
-  // Enable ICE restart for better reconnection handling
+  // Remove invalid sdpSemantics property
   iceRestart: true,
 };
 
@@ -41,7 +40,11 @@ export function useWebRTC(isHost: boolean) {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectTimeout = useRef<NodeJS.Timeout>();
-  const currentQuality = useRef('1080p');
+  const currentQuality = useRef<{ width: number; height: number; frameRate: number }>({
+    width: 1280,
+    height: 720,
+    frameRate: 30
+  });
 
   const initializeMediaStream = async () => {
     try {
@@ -51,26 +54,16 @@ export function useWebRTC(isHost: boolean) {
 
       const constraints: MediaStreamConstraints = {
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
+          width: { ideal: currentQuality.current.width },
+          height: { ideal: currentQuality.current.height },
+          frameRate: { ideal: currentQuality.current.frameRate }
         },
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: true
         }
       };
-
-      // Adjust constraints based on current quality setting
-      if (currentQuality.current !== '1080p') {
-        const quality = parseInt(currentQuality.current);
-        constraints.video = {
-          ...constraints.video,
-          width: { ideal: quality * 16/9 },
-          height: { ideal: quality }
-        };
-      }
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       console.log('Media stream obtained:', mediaStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
@@ -238,12 +231,21 @@ export function useWebRTC(isHost: boolean) {
       case 'ice-candidate':
         await handleIceCandidate(payload);
         break;
+
       case 'quality-change':
         if (isHost && payload.quality) {
-          currentQuality.current = payload.quality;
-          await initializeMediaStream();
+          const [width, height] = payload.quality.split('x').map(Number);
+          if (width && height) {
+            currentQuality.current = {
+              width,
+              height,
+              frameRate: 30
+            };
+            await initializeMediaStream();
+          }
         }
         break;
+
       case 'user-joined':
       case 'user-left':
         console.log(`User ${type}:`, payload.userId);
@@ -344,9 +346,12 @@ export function useWebRTC(isHost: boolean) {
   };
 
   const changeQuality = (quality: string) => {
-    if (quality !== currentQuality.current) {
-      currentQuality.current = quality;
-      sendMessage('quality-change', { quality });
+    const [width, height] = quality.split('x').map(Number);
+    if (width && height && socketRef.current?.readyState === WebSocket.OPEN) {
+      sendMessage('quality-change', { 
+        userId: parseInt(socketRef.current.url.split('/').pop() || '0'),
+        quality: `${width}x${height}`
+      });
     }
   };
 

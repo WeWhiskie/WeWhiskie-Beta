@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Video, Users } from "lucide-react";
+import { Video, Users, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect, useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,15 +10,24 @@ import { useToast } from "@/hooks/use-toast";
 import type { TastingSession } from "@shared/schema";
 
 export default function GoLivePage() {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isInitializing, setIsInitializing] = useState(false);
   const queryClient = useQueryClient();
 
-  // Only experts can go live
-  if (!user?.isExpert) {
-    return <Redirect to="/" />;
+  // Show loading state while checking auth
+  if (isAuthLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Redirect if not authenticated or not an expert
+  if (!user || !user.isExpert) {
+    return <Redirect to="/auth" />;
   }
 
   const createSessionMutation = useMutation({
@@ -64,8 +73,6 @@ export default function GoLivePage() {
   });
 
   const handleStartStream = async () => {
-    if (!user) return;
-
     try {
       setIsInitializing(true);
       console.log("Initializing stream...");

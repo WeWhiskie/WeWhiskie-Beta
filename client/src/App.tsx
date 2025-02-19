@@ -28,14 +28,18 @@ function Router() {
           <Route path="/whisky/:id" component={WhiskyPage} />
           <Route path="/auth" component={AuthPage} />
           <Route path="/profile/:id" component={ProfilePage} />
-          <Route path="/review" component={ReviewPage} />
-          <Route path="/review/:id" component={ReviewPage} />
+          <ProtectedRoute path="/review" component={ReviewPage} />
+          <ProtectedRoute path="/review/:id" component={ReviewPage} />
           <Route path="/sessions" component={SessionsPage} />
           <ProtectedRoute path="/sessions/:id" component={LiveSessionPage} />
           <ProtectedRoute path="/recommendations" component={RecommendationsPage} />
           <ProtectedRoute path="/groups" component={TastingGroups} />
           <ProtectedRoute path="/groups/new" component={NewTastingGroup} />
-          <ProtectedRoute path="/live" component={GoLivePage} />
+          <ProtectedRoute 
+            path="/live" 
+            component={GoLivePage} 
+            expertOnly={true}
+          />
           <Route component={NotFound} />
         </Switch>
       </main>
