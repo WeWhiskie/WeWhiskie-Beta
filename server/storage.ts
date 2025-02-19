@@ -31,6 +31,7 @@ export interface IStorage {
   getReviews(): Promise<(Review & { user: User; whisky: Whisky })[]>;
   getUserReviews(userId: number): Promise<(Review & { whisky: Whisky })[]>;
   createReview(review: Omit<Review, "id" | "createdAt">): Promise<Review>;
+  getReview(id: number): Promise<(Review & { user: User; whisky: Whisky }) | undefined>;
 
   // Tasting session methods
   createTastingSession(session: Omit<TastingSession, "id" | "createdAt">): Promise<TastingSession>;
@@ -223,6 +224,36 @@ export class DatabaseStorage implements IStorage {
   async createReview(review: Omit<Review, "id" | "createdAt">): Promise<Review> {
     const [newReview] = await db.insert(reviews).values(review).returning();
     return newReview;
+  }
+
+  async getReview(id: number): Promise<(Review & { user: User; whisky: Whisky }) | undefined> {
+    const result = await db
+      .select({
+        review: reviews,
+        user: users,
+        whisky: whiskies,
+      })
+      .from(reviews)
+      .innerJoin(users, eq(reviews.userId, users.id))
+      .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id))
+      .where(eq(reviews.id, id)) as ReviewWithRelations[];
+
+    if (result.length === 0) return undefined;
+
+    const { review, user, whisky } = result[0];
+    return {
+      ...review,
+      user: {
+        id: user.id,
+        username: user.username,
+      },
+      whisky: {
+        id: whisky.id,
+        name: whisky.name,
+        distillery: whisky.distillery,
+        imageUrl: whisky.image_url || "/placeholder-whisky.jpg",
+      },
+    };
   }
 
   // Tasting session methods

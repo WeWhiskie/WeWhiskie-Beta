@@ -199,6 +199,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/reviews/:id", async (req, res) => {
+    const review = await storage.getReview(parseInt(req.params.id));
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+    res.json(review);
+  });
+
   const httpServer = createServer(app);
   new LiveStreamingServer(httpServer);
   return httpServer;
