@@ -2,7 +2,9 @@ import { pgTable, text, serial, integer, timestamp, doublePrecision, boolean, js
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Existing users table with enhanced social features
+// ============= Table Definitions =============
+
+// Users and Authentication
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -15,8 +17,8 @@ export const users = pgTable("users", {
   followerCount: integer("follower_count").default(0),
   followingCount: integer("following_count").default(0),
   isVerified: boolean("is_verified").default(false),
-  socialLinks: jsonb("social_links"),  // Store social media links
-  expertiseAreas: text("expertise_areas").array(), // Specific whisky expertise
+  socialLinks: jsonb("social_links"),
+  expertiseAreas: text("expertise_areas").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -32,7 +34,7 @@ export const follows = pgTable("follows", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Existing whiskies table remains the same
+// Whiskies catalog
 export const whiskies = pgTable("whiskies", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -50,7 +52,7 @@ export const whiskies = pgTable("whiskies", {
   vintage: text("vintage"),
 });
 
-// Enhanced reviews with video support
+// Reviews
 export const reviews = pgTable("reviews", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
@@ -59,7 +61,7 @@ export const reviews = pgTable("reviews", {
   whiskyId: integer("whisky_id")
     .notNull()
     .references(() => whiskies.id),
-  rating: doublePrecision("rating").notNull(), // Changed from integer to doublePrecision
+  rating: doublePrecision("rating").notNull(),
   content: text("content").notNull(),
   nosing: text("nosing"),
   palate: text("palate"),
@@ -81,12 +83,12 @@ export const tastingSessions = pgTable("tasting_sessions", {
   title: text("title").notNull(),
   description: text("description"),
   scheduledFor: timestamp("scheduled_for").notNull(),
-  duration: integer("duration").notNull(), // in minutes
+  duration: integer("duration").notNull(),
   maxParticipants: integer("max_participants"),
   price: doublePrecision("price").default(0),
   isPrivate: boolean("is_private").default(false),
   streamUrl: text("stream_url"),
-  status: text("status").default("scheduled"), // scheduled, live, ended
+  status: text("status").default("scheduled"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   groupId: integer("group_id")
     .references(() => tastingGroups.id),
@@ -102,10 +104,10 @@ export const sessionParticipants = pgTable("session_participants", {
     .notNull()
     .references(() => users.id),
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
-  status: text("status").default("registered"), // registered, attended
+  status: text("status").default("registered"),
 });
 
-// User shipping addresses
+// Shipping addresses
 export const shippingAddresses = pgTable("shipping_addresses", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
@@ -121,17 +123,17 @@ export const shippingAddresses = pgTable("shipping_addresses", {
   isDefault: boolean("is_default").default(false),
 });
 
-// Additional table for tracking social shares
+// Social sharing tracking
 export const shares = pgTable("shares", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id),
-  platform: text("platform").notNull(), // twitter, facebook, linkedin
+  platform: text("platform").notNull(),
   url: text("url").notNull(),
   title: text("title").notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
-// Add likes table after shares table
+// Likes tracking
 export const likes = pgTable("likes", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
@@ -166,7 +168,7 @@ export const groupMembers = pgTable("group_members", {
   userId: integer("user_id")
     .notNull()
     .references(() => users.id),
-  role: text("role").default("member"), // admin, moderator, member
+  role: text("role").default("member"),
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
 });
 
@@ -179,12 +181,89 @@ export const groupAchievements = pgTable("group_achievements", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   badgeUrl: text("badge_url").notNull(),
-  criteria: jsonb("criteria").notNull(), // JSON object defining achievement criteria
+  criteria: jsonb("criteria").notNull(),
   unlockedAt: timestamp("unlocked_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Insert schemas
+// Activity Feed
+export const activityFeed = pgTable("activity_feed", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  activityType: text("activity_type").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: integer("entity_id").notNull(),
+  metadata: jsonb("metadata"),
+  visibility: text("visibility").default("public").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Stream Configuration
+export const streamConfigurations = pgTable("stream_configurations", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => tastingSessions.id),
+  quality: text("quality").notNull(),
+  bitrate: integer("bitrate").notNull(),
+  framerate: integer("framerate").notNull(),
+  keyframeInterval: integer("keyframe_interval").notNull(),
+  audioQuality: integer("audio_quality").notNull(),
+  enabled: boolean("enabled").default(true),
+});
+
+// Stream Statistics
+export const streamStats = pgTable("stream_stats", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => tastingSessions.id),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  currentViewers: integer("current_viewers").default(0),
+  peakViewers: integer("peak_viewers").default(0),
+  bandwidth: integer("bandwidth").default(0),
+  cpuUsage: doublePrecision("cpu_usage"),
+  memoryUsage: integer("memory_usage"),
+  streamHealth: integer("stream_health").default(100),
+  errors: jsonb("errors").default([]),
+});
+
+// Viewer Analytics
+export const viewerAnalytics = pgTable("viewer_analytics", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => tastingSessions.id),
+  userId: integer("user_id")
+    .references(() => users.id),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  watchDuration: integer("watch_duration").default(0),
+  quality: text("quality").notNull(),
+  bufferingEvents: integer("buffering_events").default(0),
+  region: text("region"),
+  deviceType: text("device_type"),
+  browserInfo: text("browser_info"),
+  networkType: text("network_type"),
+});
+
+// CDN Configuration
+export const cdnConfigs = pgTable("cdn_configs", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => tastingSessions.id),
+  provider: text("provider").notNull(),
+  region: text("region").notNull(),
+  endpoint: text("endpoint").notNull(),
+  credentials: jsonb("credentials"),
+  settings: jsonb("settings"),
+  active: boolean("active").default(true),
+});
+
+// ============= Insert Schemas =============
+
 export const insertUserSchema = createInsertSchema(users).extend({
   email: z.string().email(),
   password: z.string().min(8),
@@ -202,7 +281,7 @@ export const insertWhiskySchema = createInsertSchema(whiskies).extend({
 });
 
 export const insertReviewSchema = createInsertSchema(reviews).extend({
-  rating: z.number().min(0).max(10).step(0.1), // Updated validation for decimal ratings
+  rating: z.number().min(0).max(10).step(0.1),
   nosing: z.string().optional(),
   palate: z.string().optional(),
   finish: z.string().optional(),
@@ -230,7 +309,29 @@ export const insertGroupAchievementSchema = createInsertSchema(groupAchievements
   criteria: z.record(z.unknown()),
 });
 
-// Type exports
+export const insertActivitySchema = createInsertSchema(activityFeed).extend({
+  activityType: z.enum([
+    "review_created",
+    "whisky_rated",
+    "user_followed",
+    "group_joined",
+    "tasting_scheduled",
+    "achievement_unlocked"
+  ]),
+  entityType: z.enum(["review", "whisky", "user", "group", "tasting_session", "achievement"]),
+  metadata: z.record(z.unknown()).optional(),
+  visibility: z.enum(["public", "followers", "private"]).default("public"),
+});
+
+export const insertShareSchema = createInsertSchema(shares);
+export const insertLikeSchema = createInsertSchema(likes);
+export const insertStreamConfigSchema = createInsertSchema(streamConfigurations);
+export const insertStreamStatsSchema = createInsertSchema(streamStats);
+export const insertViewerAnalyticsSchema = createInsertSchema(viewerAnalytics);
+export const insertCdnConfigSchema = createInsertSchema(cdnConfigs);
+
+// ============= Type Exports =============
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Whisky = typeof whiskies.$inferSelect;
@@ -240,97 +341,22 @@ import type { InferSelect } from 'drizzle-orm';
 export type ShippingAddress = typeof shippingAddresses.$inferSelect;
 export type SessionParticipant = typeof sessionParticipants.$inferSelect;
 export type ShareTrack = typeof shares.$inferSelect;
-export const insertShareSchema = createInsertSchema(shares);
 export type InsertShareTrack = z.infer<typeof insertShareSchema>;
-
-// Add to type exports
 export type Like = typeof likes.$inferSelect;
-export const insertLikeSchema = createInsertSchema(likes);
 export type InsertLike = z.infer<typeof insertLikeSchema>;
-
 export type TastingGroup = typeof tastingGroups.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
 export type GroupAchievement = typeof groupAchievements.$inferSelect;
 export type InsertTastingGroup = z.infer<typeof insertTastingGroupSchema>;
 export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
 export type InsertGroupAchievement = z.infer<typeof insertGroupAchievementSchema>;
-
-
-// Stream Configuration for different quality levels
-export const streamConfigurations = pgTable("stream_configurations", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id")
-    .notNull()
-    .references(() => tastingSessions.id),
-  quality: text("quality").notNull(), // 1080p, 720p, 480p, 360p
-  bitrate: integer("bitrate").notNull(), // in kbps
-  framerate: integer("framerate").notNull(),
-  keyframeInterval: integer("keyframe_interval").notNull(),
-  audioQuality: integer("audio_quality").notNull(), // in kbps
-  enabled: boolean("enabled").default(true),
-});
-
-// Stream Statistics for monitoring
-export const streamStats = pgTable("stream_stats", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id")
-    .notNull()
-    .references(() => tastingSessions.id),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-  currentViewers: integer("current_viewers").default(0),
-  peakViewers: integer("peak_viewers").default(0),
-  bandwidth: integer("bandwidth").default(0), // in bytes
-  cpuUsage: doublePrecision("cpu_usage"),
-  memoryUsage: integer("memory_usage"), // in bytes
-  streamHealth: integer("stream_health").default(100), // 0-100
-  errors: jsonb("errors").default([]),
-});
-
-// Viewer Analytics
-export const viewerAnalytics = pgTable("viewer_analytics", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id")
-    .notNull()
-    .references(() => tastingSessions.id),
-  userId: integer("user_id")
-    .references(() => users.id),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-  watchDuration: integer("watch_duration").default(0), // in seconds
-  quality: text("quality").notNull(),
-  bufferingEvents: integer("buffering_events").default(0),
-  region: text("region"),
-  deviceType: text("device_type"),
-  browserInfo: text("browser_info"),
-  networkType: text("network_type"),
-});
-
-// CDN Configuration
-export const cdnConfigs = pgTable("cdn_configs", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id")
-    .notNull()
-    .references(() => tastingSessions.id),
-  provider: text("provider").notNull(),
-  region: text("region").notNull(),
-  endpoint: text("endpoint").notNull(),
-  credentials: jsonb("credentials"),
-  settings: jsonb("settings"),
-  active: boolean("active").default(true),
-});
-
-// Add insert schemas
-export const insertStreamConfigSchema = createInsertSchema(streamConfigurations);
-export const insertStreamStatsSchema = createInsertSchema(streamStats);
-export const insertViewerAnalyticsSchema = createInsertSchema(viewerAnalytics);
-export const insertCdnConfigSchema = createInsertSchema(cdnConfigs);
-
-// Add types
 export type StreamConfiguration = typeof streamConfigurations.$inferSelect;
 export type StreamStats = typeof streamStats.$inferSelect;
 export type ViewerAnalytics = typeof viewerAnalytics.$inferSelect;
 export type CdnConfig = typeof cdnConfigs.$inferSelect;
-
 export type InsertStreamConfig = z.infer<typeof insertStreamConfigSchema>;
 export type InsertStreamStats = z.infer<typeof insertStreamStatsSchema>;
 export type InsertViewerAnalytics = z.infer<typeof insertViewerAnalyticsSchema>;
 export type InsertCdnConfig = z.infer<typeof insertCdnConfigSchema>;
+export type ActivityFeed = typeof activityFeed.$inferSelect;
+export type InsertActivity = z.infer<typeof insertActivitySchema>;

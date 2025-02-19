@@ -3,7 +3,8 @@ import {
   InsertUser, User, Whisky, Review, TastingSession, ShippingAddress,
   users, whiskies, reviews, follows, tastingSessions, shippingAddresses, sessionParticipants, shares, ShareTrack,
   likes, Like, InsertTastingGroup, TastingGroup, GroupMember, InsertGroupAchievement, GroupAchievement, groupMembers, tastingGroups, groupAchievements,
-  InsertStreamConfig, StreamConfiguration, InsertStreamStats, StreamStats, InsertViewerAnalytics, ViewerAnalytics, InsertCdnConfig, CdnConfig, streamConfigurations, streamStats, viewerAnalytics, cdnConfigs
+  InsertStreamConfig, StreamConfiguration, InsertStreamStats, StreamStats, InsertViewerAnalytics, ViewerAnalytics, InsertCdnConfig, CdnConfig, streamConfigurations, streamStats, viewerAnalytics, cdnConfigs,
+  activityFeed, ActivityFeed, InsertActivity
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import session from "express-session";
@@ -95,6 +96,11 @@ export interface IStorage {
   getCdnConfigs(sessionId: number): Promise<CdnConfig[]>;
   getActiveCdnConfig(sessionId: number): Promise<CdnConfig | undefined>;
   updateCdnConfig(id: number, updates: Partial<CdnConfig>): Promise<CdnConfig>;
+
+  // Activity methods
+  getActivities(options: { visibility: string[] }): Promise<ActivityFeed[]>;
+  getUserActivities(userId: number): Promise<ActivityFeed[]>;
+  createActivity(activity: InsertActivity): Promise<ActivityFeed>;
 }
 
 type ReviewWithRelations = {
@@ -655,6 +661,76 @@ export class DatabaseStorage implements IStorage {
       .where(eq(cdnConfigs.id, id))
       .returning();
     return updated;
+  }
+
+  // Activity methods implementation
+  async getActivities(options: { visibility: string[] }): Promise<ActivityFeed[]> {
+    const activities = await db
+      .select()
+      .from(activityFeed)
+      .where(sql`${activityFeed.visibility} = ANY(ARRAY[${sql.join(options.visibility, sql`, `)}])`)
+      .orderBy(sql`${activityFeed.createdAt} DESC`);
+
+    // Fetch related user data for each activity
+    const activitiesWithData = await Promise.all(
+      activities.map(async (activity) => {
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, activity.userId));
+
+        let metadata: any = activity.metadata || {};
+
+        // Add username to metadata
+        if (user) {
+          metadata.username = user.username;
+        }
+
+        // Add entity-specific data based on activity type
+        if (activity.entityType === "whisky") {
+          const [whisky] = await db
+            .select()
+            .from(whiskies)
+            .where(eq(whiskies.id, activity.entityId));
+          if (whisky) {
+            metadata.whiskyName = whisky.name;
+          }
+        } else if (activity.entityType === "user") {
+          const [targetUser] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, activity.entityId));
+          if (targetUser) {
+            metadata.targetUsername = targetUser.username;
+          }
+        }
+
+        return {
+          ...activity,
+          metadata,
+        };
+      })
+    );
+
+    return activitiesWithData;
+  }
+
+  async getUserActivities(userId: number): Promise<ActivityFeed[]> {
+    const activities = await db
+      .select()
+      .from(activityFeed)
+      .where(eq(activityFeed.userId, userId))
+      .orderBy(sql`${activityFeed.createdAt} DESC`);
+
+    return activities;
+  }
+
+  async createActivity(activity: InsertActivity): Promise<ActivityFeed> {
+    const [newActivity] = await db
+      .insert(activityFeed)
+      .values(activity)
+      .returning();
+    return newActivity;
   }
 }
 

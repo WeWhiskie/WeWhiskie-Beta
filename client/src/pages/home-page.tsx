@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { ReviewCard } from "@/components/review-card";
 import { ReviewForm } from "@/components/review-form";
-import { Card, CardContent } from "@/components/ui/card";
+import { ActivityFeed } from "@/components/activity-feed";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Plus, Search, Star, Video, Users, PenSquare, Radio } from "lucide-react";
@@ -141,6 +142,15 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* Activity Feed Section */}
+      <div>
+        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+          <Users className="h-6 w-6" />
+          Community Activity
+        </h2>
+        <ActivityFeed />
+      </div>
 
       {/* Search and Actions */}
       <div className="flex gap-4">

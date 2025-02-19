@@ -8,6 +8,7 @@ import { getWhiskyRecommendations } from "./services/recommendations";
 import multer from "multer";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
+import { insertActivitySchema, type InsertActivity } from "@shared/schema";
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -415,6 +416,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "No active CDN configuration found" });
     }
     res.json(config);
+  });
+
+
+  // Get user's activity feed
+  app.get("/api/activities", async (req, res) => {
+    try {
+      const visibility = req.isAuthenticated() ? ["public", "followers"] : ["public"];
+      const activities = await storage.getActivities({ visibility });
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      res.status(500).json({ message: "Failed to fetch activities" });
+    }
+  });
+
+  // Get user's personal activity feed
+  app.get("/api/users/:userId/activities", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.userId);
+      const activities = await storage.getUserActivities(userId);
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching user activities:", error);
+      res.status(500).json({ message: "Failed to fetch user activities" });
+    }
+  });
+
+  // Record a new activity
+  app.post("/api/activities", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      const activityData: InsertActivity = {
+        ...req.body,
+        userId: req.user!.id,
+      };
+
+      const parsedActivity = insertActivitySchema.parse(activityData);
+      const activity = await storage.createActivity(parsedActivity);
+      res.status(201).json(activity);
+    } catch (error) {
+      console.error("Error creating activity:", error);
+      res.status(400).json({ message: "Invalid activity data" });
+    }
   });
 
   // Return the HTTP server instance
