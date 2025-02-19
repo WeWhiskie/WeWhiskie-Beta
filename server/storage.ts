@@ -180,12 +180,21 @@ export class DatabaseStorage implements IStorage {
       })
       .from(reviews)
       .innerJoin(users, eq(reviews.userId, users.id))
-      .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id)) as ReviewWithRelations[];
+      .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id))
+      .orderBy(sql`${reviews.createdAt} DESC`) as ReviewWithRelations[];
 
     return result.map(({ review, user, whisky }) => ({
       ...review,
-      user,
-      whisky,
+      user: {
+        id: user.id,
+        username: user.username
+      },
+      whisky: {
+        id: whisky.id,
+        name: whisky.name,
+        distillery: whisky.distillery,
+        imageUrl: whisky.imageUrl || "/placeholder-whisky.jpg"
+      }
     }));
   }
 
@@ -197,11 +206,17 @@ export class DatabaseStorage implements IStorage {
       })
       .from(reviews)
       .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id))
-      .where(eq(reviews.userId, userId)) as ReviewWithWhisky[];
+      .where(eq(reviews.userId, userId))
+      .orderBy(sql`${reviews.createdAt} DESC`) as ReviewWithWhisky[];
 
     return result.map(({ review, whisky }) => ({
       ...review,
-      whisky,
+      whisky: {
+        id: whisky.id,
+        name: whisky.name,
+        distillery: whisky.distillery,
+        imageUrl: whisky.imageUrl || "/placeholder-whisky.jpg"
+      }
     }));
   }
 

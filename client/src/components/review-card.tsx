@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { shareToSocial, generateShareText } from "@/lib/social-sharing";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface ReviewCardProps {
@@ -19,7 +19,7 @@ interface ReviewCardProps {
     id: number;
     content: string;
     rating: number;
-    createdAt: string;
+    createdAt: string | Date;
     user: {
       id: number;
       username: string;
@@ -37,22 +37,33 @@ export function ReviewCard({ review }: ReviewCardProps) {
   const { toast } = useToast();
   const shareUrl = `${window.location.origin}/reviews/${review.id}`;
   const shareTitle = `${review.user.username}'s review of ${review.whisky.name}`;
-  const shareText = generateShareText({
-    type: 'review',
-    title: review.whisky.name,
-    rating: review.rating,
-    distillery: review.whisky.distillery
-  });
 
   const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin') => {
     try {
-      await shareToSocial(platform, {
-        title: shareTitle,
-        text: shareText,
+      let shareUrl;
+      const text = `Check out this ${review.whisky.name} review by ${review.user.username}!`;
+
+      switch (platform) {
+        case 'twitter':
+          shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
+          break;
+        case 'facebook':
+          shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+          break;
+        case 'linkedin':
+          shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+          break;
+      }
+
+      // Track share analytics
+      await apiRequest("POST", "/api/share-analytics", {
+        platform,
         url: shareUrl,
-        hashtags: ['whisky', 'WeWhiskie', review.whisky.name.replace(/\s+/g, '')],
-        via: 'WeWhiskie'
+        title: shareTitle,
       });
+
+      // Open share dialog
+      window.open(shareUrl, '_blank', 'width=600,height=400');
 
       toast({
         title: "Shared successfully!",
@@ -66,6 +77,10 @@ export function ReviewCard({ review }: ReviewCardProps) {
       });
     }
   };
+
+  const createdAtDate = typeof review.createdAt === 'string' 
+    ? new Date(review.createdAt)
+    : review.createdAt;
 
   return (
     <Card className="overflow-hidden">
@@ -92,9 +107,7 @@ export function ReviewCard({ review }: ReviewCardProps) {
               </h3>
             </Link>
             <p className="text-sm text-muted-foreground">
-              {formatDistanceToNow(new Date(review.createdAt), {
-                addSuffix: true,
-              })}
+              {formatDistanceToNow(createdAtDate, { addSuffix: true })}
             </p>
           </div>
         </div>
