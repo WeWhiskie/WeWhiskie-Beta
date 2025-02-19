@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Updated fun whisky-themed concierge names with more variety
+// Whisky-themed concierge names
 const DEFAULT_NAMES = [
   "Whisky Pete",
   "The Malt Maven",
@@ -68,27 +68,24 @@ interface ConciergeResponse {
   suggestedTopics?: string[];
 }
 
+const STORAGE_KEY = 'whiskyConcierge.name';
+
 export default function WhiskyConcierge() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [conciergeName, setConciergeName] = useState("Whisky Pete");
+  const [conciergeName, setConciergeName] = useState<string>(() => {
+    // Initialize from localStorage with fallback to default
+    return localStorage.getItem(STORAGE_KEY) || "Whisky Pete";
+  });
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameStyle, setNameStyle] = useState<"funny" | "professional" | "casual">("casual");
   const [customName, setCustomName] = useState("");
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Load saved name from localStorage on component mount
+  // Persist name changes to localStorage
   useEffect(() => {
-    const savedName = localStorage.getItem("conciergeName");
-    if (savedName) {
-      setConciergeName(savedName);
-    }
-  }, []);
-
-  // Save name changes to localStorage
-  useEffect(() => {
-    localStorage.setItem("conciergeName", conciergeName);
+    localStorage.setItem(STORAGE_KEY, conciergeName);
   }, [conciergeName]);
 
   // Name generation mutation
@@ -97,7 +94,7 @@ export default function WhiskyConcierge() {
       const response = await fetch("/api/whisky-concierge/generate-name", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: 'include', // Important for authentication
+        credentials: 'include',
         body: JSON.stringify({ style }),
       });
       if (!response.ok) throw new Error("Failed to generate name");
@@ -105,21 +102,36 @@ export default function WhiskyConcierge() {
       return data.name;
     },
     onSuccess: (name) => {
-      setConciergeName(name);
-      toast({
-        title: "Name Generated",
-        description: `Your concierge will now be known as ${name}`,
-      });
-      setIsEditingName(false);
+      handleNameSelect(name);
     },
     onError: () => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to generate a new name",
+        description: "Failed to generate a new name. Please try again.",
       });
     },
   });
+
+  const handleNameSelect = (name: string) => {
+    if (!name.trim()) return;
+
+    setConciergeName(name);
+    setIsEditingName(false);
+    setCustomName(""); // Reset custom name input
+
+    toast({
+      title: "Name Updated",
+      description: `Your concierge will now be known as ${name}`,
+    });
+  };
+
+  const handleCustomNameSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (customName.trim()) {
+      handleNameSelect(customName);
+    }
+  };
 
   // Get user's collection
   const { data: collection } = useQuery<Whisky[]>({
@@ -132,7 +144,7 @@ export default function WhiskyConcierge() {
       const response = await fetch("/api/whisky-concierge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: 'include', // Important for authentication
+        credentials: 'include',
         body: JSON.stringify({
           query: message,
           context: {
@@ -182,14 +194,6 @@ export default function WhiskyConcierge() {
     setQuery("");
   };
 
-  const handleNameSelect = (name: string) => {
-    setConciergeName(name);
-    setIsEditingName(false);
-    toast({
-      title: "Name Updated",
-      description: `Your concierge will now be known as ${name}`,
-    });
-  };
 
   return (
     <div className="container mx-auto max-w-4xl py-8 space-y-8">
@@ -212,8 +216,16 @@ export default function WhiskyConcierge() {
         </p>
       </div>
 
-      {/* Enhanced Name Customization Dialog */}
-      <Dialog open={isEditingName} onOpenChange={setIsEditingName}>
+      {/* Name Customization Dialog */}
+      <Dialog 
+        open={isEditingName} 
+        onOpenChange={(open) => {
+          setIsEditingName(open);
+          if (!open) {
+            setCustomName(""); // Reset custom name when dialog closes
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle className="text-xl">Customize Your Concierge</DialogTitle>
@@ -227,7 +239,9 @@ export default function WhiskyConcierge() {
                   <Button
                     key={name}
                     variant="outline"
-                    className="justify-start hover:bg-accent transition-colors"
+                    className={`justify-start hover:bg-accent transition-colors ${
+                      name === conciergeName ? "bg-accent" : ""
+                    }`}
                     onClick={() => handleNameSelect(name)}
                   >
                     {name}
@@ -245,7 +259,9 @@ export default function WhiskyConcierge() {
                     <Button
                       key={name}
                       variant="ghost"
-                      className="justify-start hover:bg-accent transition-colors"
+                      className={`justify-start hover:bg-accent transition-colors ${
+                        name === conciergeName ? "bg-accent" : ""
+                      }`}
                       onClick={() => handleNameSelect(name)}
                     >
                       {name}
@@ -258,15 +274,7 @@ export default function WhiskyConcierge() {
             {/* Custom Name Input */}
             <div className="space-y-2">
               <h4 className="font-medium text-lg">Create Your Own</h4>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (customName.trim()) {
-                    handleNameSelect(customName);
-                  }
-                }}
-                className="flex gap-2"
-              >
+              <form onSubmit={handleCustomNameSubmit} className="flex gap-2">
                 <Input
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}

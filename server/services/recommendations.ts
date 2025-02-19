@@ -144,11 +144,11 @@ export async function getWhiskyConciergeResponse(
     }`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", 
+      model: "gpt-4o",
       messages: [
-        { 
-          role: "user", 
-          content: prompt 
+        {
+          role: "user",
+          content: prompt
         }
       ],
       temperature: 0.7,
@@ -174,7 +174,7 @@ export async function generateConciergeName(preferences?: {
     Format as JSON: { "name": "generated name" }`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", 
+      model: "gpt-4", 
       messages: [{ role: "user", content: prompt }],
       temperature: 0.9,
       response_format: { type: "json_object" }
