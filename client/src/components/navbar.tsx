@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { Video, PenSquare, Radio, Wine } from "lucide-react";
+import { Video, PenSquare, Radio, Wine, Users } from "lucide-react";
 
 export default function Navbar() {
   const { user, logoutMutation } = useAuth();
@@ -24,6 +24,12 @@ export default function Navbar() {
           </Link>
           {user ? (
             <>
+              <Link href="/groups">
+                <Button variant="ghost" className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Tasting Groups
+                </Button>
+              </Link>
               <Link href="/recommendations">
                 <Button variant="ghost" className="flex items-center gap-2">
                   <Wine className="h-4 w-4" />
