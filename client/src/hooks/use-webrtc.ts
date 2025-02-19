@@ -2,17 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 
 const configuration: RTCConfiguration = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls: 'turn:numb.viagenie.ca',
-      username: 'webrtc@live.com',
-      credential: 'muazkh'
+    { 
+      urls: [
+        'stun:stun1.l.google.com:19302',
+        'stun:stun2.l.google.com:19302',
+        'stun:stun3.l.google.com:19302',
+        'stun:stun4.l.google.com:19302'
+      ]
     }
   ],
   iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
+  sdpSemantics: 'unified-plan'
 };
 
 type WebRTCPayload = {
@@ -37,12 +39,14 @@ export function useWebRTC(isHost: boolean) {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
+  const reconnectTimeout = useRef<NodeJS.Timeout>();
   const activePeerConnection = useRef<RTCPeerConnection | null>(null);
 
   const initializeMediaStream = async () => {
     try {
       console.log('Initializing media stream...');
       setIsConnecting(true);
+      setError(null); // Reset any previous errors
 
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -60,24 +64,13 @@ export function useWebRTC(isHost: boolean) {
 
       console.log('Media stream obtained:', mediaStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled })));
 
-      // Apply video constraints for better quality
-      const videoTrack = mediaStream.getVideoTracks()[0];
-      if (videoTrack) {
-        console.log('Applying video constraints...');
-        await videoTrack.applyConstraints({
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { max: 30 }
-        });
-      }
-
       setStream(mediaStream);
-      console.log('Media stream initialized successfully');
       return mediaStream;
     } catch (err) {
-      console.error('Media stream error:', err);
-      setError(err instanceof Error ? err : new Error('Failed to get media stream'));
-      throw err;
+      const error = err instanceof Error ? err : new Error('Failed to get media stream');
+      console.error('Media stream error:', error);
+      setError(error);
+      throw error;
     } finally {
       setIsConnecting(false);
     }
@@ -85,6 +78,14 @@ export function useWebRTC(isHost: boolean) {
 
   const cleanup = () => {
     console.log('Cleaning up WebRTC resources...');
+
+    // Clear reconnect timeout if it exists
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = undefined;
+    }
+
+    // Stop all tracks in the stream
     if (stream) {
       stream.getTracks().forEach(track => {
         console.log('Stopping track:', track.kind);
@@ -92,13 +93,23 @@ export function useWebRTC(isHost: boolean) {
       });
       setStream(null);
     }
-    peerConnections.current.forEach(pc => pc.close());
+
+    // Close all peer connections
+    peerConnections.current.forEach(pc => {
+      if (pc.connectionState !== 'closed') {
+        pc.close();
+      }
+    });
     peerConnections.current.clear();
+
+    // Close WebSocket connection
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current?.close();
+      socketRef.current?.close(1000, 'Normal closure');
     }
     socketRef.current = null;
     setConnectionState('closed');
+    setError(null);
+    reconnectAttempts.current = 0;
   };
 
   const connectToSocket = (sessionId: number, userId: number) => {
@@ -179,7 +190,7 @@ export function useWebRTC(isHost: boolean) {
     setIsReconnecting(true);
     reconnectAttempts.current += 1;
 
-    setTimeout(() => {
+    reconnectTimeout.current = setTimeout(() => {
       console.log(`Attempting to reconnect (${reconnectAttempts.current}/${maxReconnectAttempts})`);
       connectToSocket(sessionId, userId);
     }, Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000));

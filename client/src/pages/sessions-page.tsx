@@ -19,6 +19,44 @@ export default function SessionsPage() {
     (session) => session.status === "scheduled"
   );
 
+  const renderSessionCard = (session: TastingSession) => (
+    <Link key={session.id} href={`/sessions/${session.id}`}>
+      <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <Badge 
+              variant={session.status === "live" ? "destructive" : "secondary"}
+            >
+              {session.status === "live" ? "Live Now" : "Upcoming"}
+            </Badge>
+            {typeof session.price === 'number' && session.price > 0 && (
+              <Badge variant="outline">${session.price.toFixed(2)}</Badge>
+            )}
+          </div>
+          <h3 className="text-lg font-semibold mb-2">{session.title}</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {session.description}
+          </p>
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-1">
+              <Users className="h-4 w-4" />
+              <span>
+                {typeof session.maxParticipants === 'number' 
+                  ? session.maxParticipants 
+                  : "∞"}
+              </span>
+            </div>
+            <span className="text-muted-foreground">
+              {formatDistanceToNow(new Date(session.scheduledFor), {
+                addSuffix: true,
+              })}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  );
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -42,30 +80,7 @@ export default function SessionsPage() {
             Live Now
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {liveSessions.map((session) => (
-              <Link key={session.id} href={`/sessions/${session.id}`}>
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <Badge variant="destructive">Live Now</Badge>
-                      {session.price > 0 && (
-                        <Badge variant="outline">${session.price}</Badge>
-                      )}
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2">{session.title}</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {session.description}
-                    </p>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4" />
-                        <span>{session.maxParticipants || "∞"}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+            {liveSessions.map(renderSessionCard)}
           </div>
         </div>
       )}
@@ -77,35 +92,7 @@ export default function SessionsPage() {
         </h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {upcomingSessions.length > 0 ? (
-            upcomingSessions.map((session) => (
-              <Link key={session.id} href={`/sessions/${session.id}`}>
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <Badge variant="secondary">Upcoming</Badge>
-                      {session.price > 0 && (
-                        <Badge variant="outline">${session.price}</Badge>
-                      )}
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2">{session.title}</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {session.description}
-                    </p>
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4" />
-                        <span>{session.maxParticipants || "∞"}</span>
-                      </div>
-                      <span className="text-muted-foreground">
-                        {formatDistanceToNow(new Date(session.scheduledFor), {
-                          addSuffix: true,
-                        })}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))
+            upcomingSessions.map(renderSessionCard)
           ) : (
             <Card className="md:col-span-2 lg:col-span-3">
               <CardContent className="p-6 text-center text-muted-foreground">

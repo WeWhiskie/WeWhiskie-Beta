@@ -116,8 +116,8 @@ export default function HomePage() {
                       <Badge variant={session.status === "live" ? "destructive" : "secondary"}>
                         {session.status === "live" ? "Live Now" : "Upcoming"}
                       </Badge>
-                      {session.price > 0 && (
-                        <Badge variant="outline">${session.price}</Badge>
+                      {typeof session.price === 'number' && session.price > 0 && (
+                        <Badge variant="outline">${session.price.toFixed(2)}</Badge>
                       )}
                     </div>
                     <h3 className="text-lg font-semibold mb-2">{session.title}</h3>
@@ -127,7 +127,11 @@ export default function HomePage() {
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
-                        <span>{session.maxParticipants || "∞"}</span>
+                        <span>
+                          {typeof session.maxParticipants === 'number' 
+                            ? session.maxParticipants 
+                            : "∞"}
+                        </span>
                       </div>
                       <span className="text-muted-foreground">
                         {formatDistanceToNow(new Date(session.scheduledFor), {

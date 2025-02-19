@@ -7,7 +7,7 @@ import { VideoStream } from "@/components/live-session/video-stream";
 import { ChatBox } from "@/components/live-session/chat-box";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Wifi, WifiOff } from "lucide-react";
 import type { TastingSession, User } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -58,7 +58,7 @@ export default function LiveSessionPage() {
       return response.json();
     },
     onSuccess: () => {
-      cleanup(); // Cleanup WebRTC resources
+      cleanup();
       toast({
         title: "Session ended",
         description: "The live session has been ended successfully.",
@@ -68,7 +68,7 @@ export default function LiveSessionPage() {
     onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to end the session. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to end the session. Please try again.",
         variant: "destructive",
       });
     },
@@ -116,8 +116,39 @@ export default function LiveSessionPage() {
   }
 
   if (!session) {
-    return <div>Session not found</div>;
+    return (
+      <div className="container mx-auto py-6">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="h-8 w-8 mx-auto mb-4 text-destructive" />
+            <h2 className="text-xl font-semibold mb-2">Session Not Found</h2>
+            <p className="text-muted-foreground mb-4">
+              This session may have ended or been removed.
+            </p>
+            <Button onClick={() => setLocation("/sessions")}>
+              Return to Sessions
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
+
+  const getConnectionStatusColor = () => {
+    switch (connectionState) {
+      case 'connected':
+        return 'text-green-500';
+      case 'connecting':
+      case 'new':
+        return 'text-yellow-500';
+      case 'disconnected':
+      case 'failed':
+      case 'closed':
+        return 'text-destructive';
+      default:
+        return 'text-muted-foreground';
+    }
+  };
 
   return (
     <div className="container mx-auto py-6 grid lg:grid-cols-[1fr,350px] gap-6">
@@ -128,6 +159,16 @@ export default function LiveSessionPage() {
               <div>
                 <h2 className="text-2xl font-bold">{session.title}</h2>
                 <p className="text-muted-foreground">{session.description}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {connectionState === 'connected' ? (
+                  <Wifi className={getConnectionStatusColor()} />
+                ) : (
+                  <WifiOff className={getConnectionStatusColor()} />
+                )}
+                <span className={`text-sm ${getConnectionStatusColor()}`}>
+                  {connectionState.charAt(0).toUpperCase() + connectionState.slice(1)}
+                </span>
               </div>
             </div>
           </CardHeader>
@@ -143,13 +184,21 @@ export default function LiveSessionPage() {
             {streamError && (
               <div className="mt-4 p-4 bg-destructive/10 text-destructive rounded-lg flex items-center gap-2">
                 <AlertCircle className="h-5 w-5" />
-                <p>Error accessing stream: {streamError.message}</p>
+                <div>
+                  <p className="font-semibold">Stream Error</p>
+                  <p className="text-sm">{streamError.message}</p>
+                  {isHost && (
+                    <p className="text-sm mt-2">
+                      Please check your camera and microphone permissions.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
-            {connectionState !== 'connected' && !isConnecting && (
-              <div className="mt-4 p-4 bg-warning/10 text-warning rounded-lg flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                <p>Connection status: {connectionState}</p>
+            {(isConnecting || isReconnecting) && (
+              <div className="mt-4 p-4 bg-yellow-500/10 text-yellow-500 rounded-lg flex items-center gap-2">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <p>{isReconnecting ? "Reconnecting..." : "Connecting..."}</p>
               </div>
             )}
           </CardContent>
@@ -179,6 +228,7 @@ export default function LiveSessionPage() {
         <ChatBox 
           messages={messages} 
           onSendMessage={handleSendMessage}
+          disabled={connectionState !== 'connected'}
         />
       </div>
     </div>
