@@ -1,4 +1,4 @@
-import { getBarrelLevel, getProgressToNextLevel } from "@/lib/user-levels";
+import { getBarrelLevel, getProgressToNextLevel, getAvailableRewards } from "@/lib/user-levels";
 import { Progress } from "@/components/ui/progress";
 import { 
   HoverCard,
@@ -6,6 +6,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { GiBarrel } from "react-icons/gi";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface BarrelLevelBadgeProps {
   level: number;
@@ -22,6 +23,7 @@ export function BarrelLevelBadge({
 }: BarrelLevelBadgeProps) {
   const barrelLevel = getBarrelLevel(level);
   const progress = points !== undefined ? getProgressToNextLevel(points) : null;
+  const rewards = getAvailableRewards(level);
 
   return (
     <HoverCard>
@@ -34,8 +36,12 @@ export function BarrelLevelBadge({
         </div>
       </HoverCardTrigger>
       <HoverCardContent className="w-80">
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-muted-foreground">{barrelLevel.description}</p>
+        <div className="flex flex-col gap-3">
+          <div>
+            <h4 className="font-medium mb-1">{barrelLevel.name}</h4>
+            <p className="text-sm text-muted-foreground">{barrelLevel.description}</p>
+          </div>
+
           {showProgress && progress && (
             <div className="space-y-2">
               <Progress 
@@ -45,8 +51,24 @@ export function BarrelLevelBadge({
               <p className="text-xs text-muted-foreground">
                 {progress.progress} / {progress.required} XP to next level
               </p>
+              <p className="text-xs text-muted-foreground">
+                Daily check-in reward: {barrelLevel.dailyReward} XP
+              </p>
             </div>
           )}
+
+          <div className="space-y-2">
+            <h5 className="text-sm font-medium">Available Rewards:</h5>
+            <ScrollArea className="h-[120px] w-full rounded-md border p-2">
+              <ul className="text-sm space-y-1">
+                {rewards.map((reward, index) => (
+                  <li key={index} className="text-muted-foreground">
+                    • {reward}
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
+          </div>
         </div>
       </HoverCardContent>
     </HoverCard>
