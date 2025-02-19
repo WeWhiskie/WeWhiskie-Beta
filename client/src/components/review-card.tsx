@@ -35,41 +35,44 @@ interface ReviewCardProps {
 
 export function ReviewCard({ review }: ReviewCardProps) {
   const { toast } = useToast();
-  const shareUrl = `${window.location.origin}/reviews/${review.id}`;
+  const reviewUrl = `${window.location.origin}/reviews/${review.id}`;
   const shareTitle = `${review.user.username}'s review of ${review.whisky.name}`;
 
   const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin') => {
     try {
-      let shareUrl;
+      let socialUrl;
       const text = `Check out this ${review.whisky.name} review by ${review.user.username}!`;
 
       switch (platform) {
         case 'twitter':
-          shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
+          socialUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(reviewUrl)}`;
           break;
         case 'facebook':
-          shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+          socialUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(reviewUrl)}`;
           break;
         case 'linkedin':
-          shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+          socialUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(reviewUrl)}`;
           break;
       }
 
       // Track share analytics
       await apiRequest("POST", "/api/share-analytics", {
         platform,
-        url: shareUrl,
+        url: reviewUrl,
         title: shareTitle,
       });
 
       // Open share dialog
-      window.open(shareUrl, '_blank', 'width=600,height=400');
+      if (socialUrl) {
+        window.open(socialUrl, '_blank', 'width=600,height=400');
+      }
 
       toast({
         title: "Shared successfully!",
         description: `Your review has been shared to ${platform}.`,
       });
     } catch (error) {
+      console.error("Share error:", error);
       toast({
         title: "Share failed",
         description: "Unable to share your review. Please try again.",

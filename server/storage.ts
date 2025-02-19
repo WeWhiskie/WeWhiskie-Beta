@@ -187,14 +187,14 @@ export class DatabaseStorage implements IStorage {
       ...review,
       user: {
         id: user.id,
-        username: user.username
+        username: user.username,
       },
       whisky: {
         id: whisky.id,
         name: whisky.name,
         distillery: whisky.distillery,
-        imageUrl: whisky.imageUrl || "/placeholder-whisky.jpg"
-      }
+        imageUrl: whisky.image_url || "/placeholder-whisky.jpg",
+      },
     }));
   }
 
@@ -215,8 +215,8 @@ export class DatabaseStorage implements IStorage {
         id: whisky.id,
         name: whisky.name,
         distillery: whisky.distillery,
-        imageUrl: whisky.imageUrl || "/placeholder-whisky.jpg"
-      }
+        imageUrl: whisky.image_url || "/placeholder-whisky.jpg",
+      },
     }));
   }
 
