@@ -71,3 +71,6 @@ export class WhiskyConcierge {
 
 // Export a singleton instance
 export const whiskyConcierge = new WhiskyConcierge();
+
+// Export the name generation function
+export { generateConciergeName } from './recommendations';

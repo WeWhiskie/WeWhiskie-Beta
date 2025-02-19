@@ -9,6 +9,8 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { insertActivitySchema, type InsertActivity } from "@shared/schema";
 import { whiskyConcierge } from "./services/ai-concierge";
+import {generateConciergeName} from "./services/ai-concierge"; // Assuming this function exists
+
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -479,6 +481,18 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     } catch (error) {
       console.error("Error with whisky concierge:", error);
       res.status(500).json({ message: "Failed to process whisky concierge request" });
+    }
+  });
+
+  // Whisky Concierge name generation
+  app.post("/api/whisky-concierge/generate-name", async (req, res) => {
+    try {
+      const { style, theme } = req.body;
+      const name = await generateConciergeName({ style, theme });
+      res.json({ name });
+    } catch (error) {
+      console.error("Error generating concierge name:", error);
+      res.status(500).json({ message: "Failed to generate concierge name" });
     }
   });
 
