@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import type { TastingSession } from "@shared/schema";
 
 export default function GoLivePage() {
   const { user } = useAuth();
@@ -21,22 +22,26 @@ export default function GoLivePage() {
 
   const createSessionMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest<{ id: number }>("POST", "/api/sessions", {
+      const data = {
         title: `Live Tasting with ${user.username}`,
         description: "Join me for a live whisky tasting session!",
         status: "live",
         scheduledFor: new Date().toISOString(),
         hostId: user.id,
-      });
-      return response;
+      };
+
+      const response = await apiRequest("POST", "/api/sessions", data);
+      const session = await response.json() as TastingSession;
+      return session;
     },
   });
 
   const handleStartStream = async () => {
     try {
       setIsInitializing(true);
-      // Request camera/mic permissions
-      const stream = await navigator.mediaDevices.getUserMedia({
+
+      // Request camera/mic permissions first
+      await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true,
       });
@@ -44,14 +49,20 @@ export default function GoLivePage() {
       // Create the live session
       const session = await createSessionMutation.mutateAsync();
 
-      // Navigate to the live session page
-      setLocation(`/sessions/${session.id}`);
+      if (session.id) {
+        // Navigate to the live session page
+        setLocation(`/sessions/${session.id}`);
+      } else {
+        throw new Error("Failed to create session");
+      }
     } catch (error) {
+      console.error("Stream error:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to start stream",
         variant: "destructive",
       });
+    } finally {
       setIsInitializing(false);
     }
   };

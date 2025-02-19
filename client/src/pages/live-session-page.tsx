@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Loader2, Users } from "lucide-react";
 import type { TastingSession, User } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChatMessage {
   id: number;
@@ -22,8 +23,11 @@ export default function LiveSessionPage() {
   const { id } = useParams();
   const sessionId = parseInt(id || "0");
   const { user } = useAuth();
+  const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<User[]>([]);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   const { data: session, isLoading: isLoadingSession } = useQuery<TastingSession>({
     queryKey: ["/api/sessions", sessionId],
@@ -31,31 +35,104 @@ export default function LiveSessionPage() {
   });
 
   const isHost = session?.hostId === user?.id;
-  const { stream, error, isConnecting, connectToSocket, sendMessage } = useWebRTC(isHost);
 
+  // Initialize WebSocket connection
   useEffect(() => {
-    if (session && user) {
-      const cleanup = connectToSocket(sessionId, user.id);
-      return cleanup;
-    }
+    if (!session || !user) return;
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      // Join the session room
+      ws.send(JSON.stringify({
+        type: 'join-session',
+        payload: { userId: user.id, sessionId }
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      switch (data.type) {
+        case 'chat':
+          const { userId, username, message } = data.payload;
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            userId,
+            username,
+            message,
+            timestamp: new Date()
+          }]);
+          break;
+        case 'user-joined':
+        case 'user-left':
+          // Update participants list
+          const { participants: newParticipants } = data.payload;
+          setParticipants(newParticipants);
+          break;
+      }
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
   }, [session, user, sessionId]);
 
+  // Initialize media stream for host
+  useEffect(() => {
+    if (!isHost) return;
+
+    const initStream = async () => {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        setStream(mediaStream);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to access media devices'));
+        toast({
+          title: "Stream Error",
+          description: "Failed to access camera or microphone",
+          variant: "destructive"
+        });
+      }
+    };
+
+    initStream();
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [isHost, toast]);
+
   const handleSendMessage = (message: string) => {
-    if (user) {
-      const newMessage = {
-        id: Date.now(),
-        userId: user.id,
-        username: user.username,
-        message,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, newMessage]);
-      // Fix: Add userId to the payload to match WebRTCPayload type
-      sendMessage("chat", { userId: user.id, message });
+    if (!user) return;
+
+    const newMessage = {
+      id: Date.now(),
+      userId: user.id,
+      username: user.username,
+      message,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, newMessage]);
+
+    // Send message through WebSocket
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'chat',
+        payload: { userId: user.id, message }
+      }));
     }
   };
 
-  if (isLoadingSession || isConnecting) {
+  if (isLoadingSession) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -97,11 +174,12 @@ export default function LiveSessionPage() {
           <Card className="p-4">
             <Button
               variant="destructive"
-              onClick={async () => {
-                // TODO: Implement end session functionality
-                // Update session status to 'ended'
-                // Close all WebRTC connections
-                // Redirect to session list
+              onClick={() => {
+                if (stream) {
+                  stream.getTracks().forEach(track => track.stop());
+                }
+                // TODO: Update session status to ended
+                window.location.href = '/sessions';
               }}
             >
               End Session
