@@ -13,7 +13,6 @@ import ReviewPage from "./pages/review-page";
 import LiveSessionPage from "./pages/live-session-page";
 import SessionsPage from "./pages/sessions-page";
 import RecommendationsPage from "./pages/recommendations-page";
-import SharePage from "@/pages/share-page";
 import Navbar from "./components/navbar";
 
 function Router() {
@@ -26,7 +25,6 @@ function Router() {
           <Route path="/whisky/:id" component={WhiskyPage} />
           <Route path="/auth" component={AuthPage} />
           <Route path="/profile/:id" component={ProfilePage} />
-          <Route path="/reviews/:id" component={SharePage} />
           <Route path="/review" component={ReviewPage} />
           <Route path="/review/:id" component={ReviewPage} />
           <Route path="/sessions" component={SessionsPage} />

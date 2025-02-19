@@ -4,6 +4,7 @@ import { StarRating } from "./star-rating";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Share2, Twitter, Facebook, Linkedin, Heart } from "lucide-react";
+import { SiInstagram, SiTiktok } from "react-icons/si";
 import { Link } from "wouter";
 import {
   DropdownMenu,
@@ -17,6 +18,7 @@ import { PreciseRating } from "./precise-rating";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
+import { shareToSocial } from "@/lib/social-sharing";
 
 interface ReviewCardProps {
   review: {
@@ -48,7 +50,8 @@ export function ReviewCard({ review }: ReviewCardProps) {
     enabled: !!user,
     queryFn: async () => {
       const res = await apiRequest('GET', `/api/reviews/${review.id}/liked`);
-      return res.liked;
+      if (!res.ok) return false;
+      return res.json().then(data => data.liked);
     }
   });
 
@@ -77,40 +80,26 @@ export function ReviewCard({ review }: ReviewCardProps) {
     },
   });
 
-  const shareTitle = `${review.user.username}'s review of ${review.whisky.name}`;
-  const reviewUrl = `/share/${review.id}`;
-
-  const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin') => {
+  const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin' | 'instagram' | 'tiktok') => {
     try {
-      const fullUrl = `${window.location.origin}${reviewUrl}`;
-      let socialUrl;
-      const text = `Check out this ${review.whisky.name} review by ${review.user.username}!`;
-
-      switch (platform) {
-        case 'twitter':
-          socialUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(fullUrl)}`;
-          break;
-        case 'facebook':
-          socialUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(fullUrl)}`;
-          break;
-        case 'linkedin':
-          socialUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(fullUrl)}`;
-          break;
-      }
-
-      await apiRequest("POST", "/api/share-analytics", {
-        platform,
-        url: fullUrl,
-        title: shareTitle,
+      const shareUrl = `${window.location.origin}/review/${review.id}`;
+      await shareToSocial(platform, {
+        title: `${review.whisky.name} Review`,
+        text: `Check out this ${review.rating}⭐️ review of ${review.whisky.name} by ${review.user.username} on WeWhiskie!`,
+        url: shareUrl,
+        hashtags: ['WeWhiskie', 'WhiskyLover'],
       });
-
-      if (socialUrl) {
-        window.open(socialUrl, '_blank', 'width=600,height=400');
-      }
 
       toast({
         title: "Shared successfully!",
         description: `Your review has been shared to ${platform}.`,
+      });
+
+      // Track the share analytics
+      await apiRequest("POST", "/api/share-analytics", {
+        platform,
+        url: shareUrl,
+        title: `${review.whisky.name} Review`
       });
     } catch (error) {
       console.error("Share error:", error);
@@ -167,10 +156,9 @@ export function ReviewCard({ review }: ReviewCardProps) {
           maxStars={10} 
           initialRating={review.rating} 
           readonly 
-          className="mb-4"
         />
 
-        <p className="text-muted-foreground">{review.content}</p>
+        <p className="mt-4 text-muted-foreground">{review.content}</p>
       </CardContent>
       <CardFooter className="bg-muted/50 p-4 flex justify-between">
         <Button
@@ -209,6 +197,14 @@ export function ReviewCard({ review }: ReviewCardProps) {
             <DropdownMenuItem onClick={() => handleShare('linkedin')}>
               <Linkedin className="h-4 w-4 mr-2" />
               Share on LinkedIn
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleShare('instagram')}>
+              <SiInstagram className="h-4 w-4 mr-2 text-pink-600" />
+              Share on Instagram
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleShare('tiktok')}>
+              <SiTiktok className="h-4 w-4 mr-2" />
+              Share on TikTok
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
