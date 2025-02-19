@@ -9,8 +9,7 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { insertActivitySchema, type InsertActivity } from "@shared/schema";
 import { whiskyConcierge } from "./services/ai-concierge";
-import {generateConciergeName} from "./services/ai-concierge"; // Assuming this function exists
-
+import {generateConciergeName} from "./services/ai-concierge";
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -488,13 +487,46 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   app.post("/api/whisky-concierge/generate-name", async (req, res) => {
     try {
       const { style, theme } = req.body;
-      console.log("Generating name with style:", style, "theme:", theme); // Add logging
+      console.log("Generating name with style:", style, "theme:", theme);
       const name = await generateConciergeName({ style, theme });
-      console.log("Generated name:", name); // Add logging
+      console.log("Generated name:", name);
       res.json({ name });
     } catch (error) {
       console.error("Error generating concierge name:", error);
       res.status(500).json({ message: "Failed to generate concierge name" });
+    }
+  });
+
+  // New endpoint for generating/retrieving concierge personality
+  app.post("/api/whisky-concierge/personality", async (req, res) => {
+    try {
+      const { name, style } = req.body;
+      if (!name) {
+        return res.status(400).json({ message: "Name is required" });
+      }
+
+      const personality = await whiskyConcierge.generatePersonality(name, style);
+      res.json(personality);
+    } catch (error) {
+      console.error("Error generating concierge personality:", error);
+      res.status(500).json({ message: "Failed to generate concierge personality" });
+    }
+  });
+
+  // Get existing personality
+  app.get("/api/whisky-concierge/personality/:name", async (req, res) => {
+    try {
+      const { name } = req.params;
+      const personality = whiskyConcierge.getPersonality(name);
+
+      if (!personality) {
+        return res.status(404).json({ message: "Personality not found" });
+      }
+
+      res.json(personality);
+    } catch (error) {
+      console.error("Error fetching concierge personality:", error);
+      res.status(500).json({ message: "Failed to fetch concierge personality" });
     }
   });
 
