@@ -488,7 +488,9 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   app.post("/api/whisky-concierge/generate-name", async (req, res) => {
     try {
       const { style, theme } = req.body;
+      console.log("Generating name with style:", style, "theme:", theme); // Add logging
       const name = await generateConciergeName({ style, theme });
+      console.log("Generated name:", name); // Add logging
       res.json({ name });
     } catch (error) {
       console.error("Error generating concierge name:", error);

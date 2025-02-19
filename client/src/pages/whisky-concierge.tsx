@@ -74,7 +74,6 @@ export default function WhiskyConcierge() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [conciergeName, setConciergeName] = useState<string>(() => {
-    // Initialize from localStorage with fallback to default
     return localStorage.getItem(STORAGE_KEY) || "Whisky Pete";
   });
   const [isEditingName, setIsEditingName] = useState(false);
@@ -88,23 +87,31 @@ export default function WhiskyConcierge() {
     localStorage.setItem(STORAGE_KEY, conciergeName);
   }, [conciergeName]);
 
-  // Name generation mutation
+  // Name generation mutation with improved error handling
   const generateNameMutation = useMutation({
     mutationFn: async (style: "funny" | "professional" | "casual") => {
+      console.log("Generating name with style:", style); 
       const response = await fetch("/api/whisky-concierge/generate-name", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: 'include',
         body: JSON.stringify({ style }),
       });
-      if (!response.ok) throw new Error("Failed to generate name");
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to generate name");
+      }
+
       const data = await response.json();
+      console.log("Generated name:", data.name); 
       return data.name;
     },
     onSuccess: (name) => {
       handleNameSelect(name);
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("Name generation error:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -118,7 +125,7 @@ export default function WhiskyConcierge() {
 
     setConciergeName(name);
     setIsEditingName(false);
-    setCustomName(""); // Reset custom name input
+    setCustomName(""); 
 
     toast({
       title: "Name Updated",
@@ -222,7 +229,7 @@ export default function WhiskyConcierge() {
         onOpenChange={(open) => {
           setIsEditingName(open);
           if (!open) {
-            setCustomName(""); // Reset custom name when dialog closes
+            setCustomName(""); 
           }
         }}
       >
@@ -318,16 +325,24 @@ export default function WhiskyConcierge() {
         </DialogContent>
       </Dialog>
 
-      {/* Chat Interface */}
-      <Card>
+      {/* Chat Interface with reduced size */}
+      <Card className="max-w-2xl mx-auto"> 
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
             Chat with {conciergeName}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditingName(true)}
+              className="ml-2 hover:bg-accent"
+            >
+              <Edit2 className="h-4 w-4" />
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[400px] pr-4">
+          <ScrollArea className="h-[300px] pr-4"> 
             <div className="space-y-4">
               {messages.map((msg, i) => (
                 <div
@@ -361,7 +376,7 @@ export default function WhiskyConcierge() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Ask ${conciergeName} about whisky styles, recommendations, or tasting tips...`}
+              placeholder={`Ask ${conciergeName} about whisky...`}
               disabled={conciergeQuery.isPending}
             />
             <Button type="submit" disabled={conciergeQuery.isPending}>
