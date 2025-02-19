@@ -227,7 +227,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getReview(id: number): Promise<(Review & { user: User; whisky: Whisky }) | undefined> {
-    const result = await db
+    const [result] = await db
       .select({
         review: reviews,
         user: users,
@@ -236,22 +236,43 @@ export class DatabaseStorage implements IStorage {
       .from(reviews)
       .innerJoin(users, eq(reviews.userId, users.id))
       .innerJoin(whiskies, eq(reviews.whiskyId, whiskies.id))
-      .where(eq(reviews.id, id)) as ReviewWithRelations[];
+      .where(eq(reviews.id, id));
 
-    if (result.length === 0) return undefined;
+    if (!result) return undefined;
 
-    const { review, user, whisky } = result[0];
+    const { review, user, whisky } = result;
     return {
       ...review,
       user: {
         id: user.id,
         username: user.username,
+        password: user.password,
+        email: user.email,
+        bio: user.bio,
+        avatarUrl: user.avatarUrl,
+        location: user.location,
+        isExpert: user.isExpert,
+        followerCount: user.followerCount,
+        followingCount: user.followingCount,
+        reviewCount: user.reviewCount,
+        createdAt: user.createdAt,
+        preferences: user.preferences,
       },
       whisky: {
         id: whisky.id,
+        type: whisky.type,
         name: whisky.name,
         distillery: whisky.distillery,
-        imageUrl: whisky.image_url || "/placeholder-whisky.jpg",
+        region: whisky.region,
+        age: whisky.age,
+        abv: whisky.abv,
+        price: whisky.price,
+        imageUrl: whisky.imageUrl,
+        description: whisky.description,
+        tastingNotes: whisky.tastingNotes,
+        caskType: whisky.caskType,
+        limited: whisky.limited,
+        vintage: whisky.vintage,
       },
     };
   }
