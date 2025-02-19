@@ -13,7 +13,7 @@ import ReviewPage from "./pages/review-page";
 import LiveSessionPage from "./pages/live-session-page";
 import SessionsPage from "./pages/sessions-page";
 import RecommendationsPage from "./pages/recommendations-page";
-import SharePage from "./pages/share-page";
+import SharePage from "@/pages/share-page";
 import Navbar from "./components/navbar";
 
 function Router() {
