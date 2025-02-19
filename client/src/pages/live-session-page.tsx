@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
-import { useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useCallback } from "react";
+import { useParams, useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebRTC } from "@/hooks/use-webrtc";
 import { VideoStream } from "@/components/live-session/video-stream";
 import { ChatBox } from "@/components/live-session/chat-box";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Loader2, Users } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import type { TastingSession, User } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ChatMessage {
   id: number;
@@ -21,13 +22,23 @@ interface ChatMessage {
 
 export default function LiveSessionPage() {
   const { id } = useParams();
+  const [, setLocation] = useLocation();
   const sessionId = parseInt(id || "0");
   const { user } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<User[]>([]);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [error, setError] = useState<Error | null>(null);
+  const [wsConnection, setWsConnection] = useState<{ cleanup: () => void } | null>(null);
+
+  const { 
+    stream, 
+    error: streamError, 
+    isConnecting,
+    isReconnecting,
+    connectionState,
+    connectToSocket,
+    sendMessage 
+  } = useWebRTC(false);
 
   const { data: session, isLoading: isLoadingSession } = useQuery<TastingSession>({
     queryKey: ["/api/sessions", sessionId],
@@ -36,82 +47,40 @@ export default function LiveSessionPage() {
 
   const isHost = session?.hostId === user?.id;
 
+  const endSessionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/sessions/${sessionId}/end`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Session ended",
+        description: "The live session has been ended successfully.",
+      });
+      setLocation("/sessions");
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to end the session. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Initialize WebSocket connection
   useEffect(() => {
     if (!session || !user) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      // Join the session room
-      ws.send(JSON.stringify({
-        type: 'join-session',
-        payload: { userId: user.id, sessionId }
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      switch (data.type) {
-        case 'chat':
-          const { userId, username, message } = data.payload;
-          setMessages(prev => [...prev, {
-            id: Date.now(),
-            userId,
-            username,
-            message,
-            timestamp: new Date()
-          }]);
-          break;
-        case 'user-joined':
-        case 'user-left':
-          // Update participants list
-          const { participants: newParticipants } = data.payload;
-          setParticipants(newParticipants);
-          break;
-      }
-    };
+    const cleanup = connectToSocket(sessionId, user.id);
+    setWsConnection({ cleanup });
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
+      wsConnection?.cleanup();
     };
-  }, [session, user, sessionId]);
+  }, [session, user, sessionId, connectToSocket]);
 
-  // Initialize media stream for host
-  useEffect(() => {
-    if (!isHost) return;
-
-    const initStream = async () => {
-      try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        });
-        setStream(mediaStream);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to access media devices'));
-        toast({
-          title: "Stream Error",
-          description: "Failed to access camera or microphone",
-          variant: "destructive"
-        });
-      }
-    };
-
-    initStream();
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [isHost, toast]);
-
-  const handleSendMessage = (message: string) => {
+  const handleSendMessage = useCallback((message: string) => {
     if (!user) return;
 
     const newMessage = {
@@ -123,14 +92,11 @@ export default function LiveSessionPage() {
     };
     setMessages((prev) => [...prev, newMessage]);
 
-    // Send message through WebSocket
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'chat',
-        payload: { userId: user.id, message }
-      }));
-    }
-  };
+    sendMessage('chat', { 
+      userId: user.id, 
+      message 
+    });
+  }, [user, sendMessage]);
 
   if (isLoadingSession) {
     return (
@@ -145,7 +111,7 @@ export default function LiveSessionPage() {
   }
 
   return (
-    <div className="grid lg:grid-cols-[1fr,300px] gap-6">
+    <div className="container mx-auto py-6 grid lg:grid-cols-[1fr,350px] gap-6">
       <div className="space-y-6">
         <Card>
           <CardHeader>
@@ -154,18 +120,27 @@ export default function LiveSessionPage() {
                 <h2 className="text-2xl font-bold">{session.title}</h2>
                 <p className="text-muted-foreground">{session.description}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                <span>{participants.length}</span>
-              </div>
             </div>
           </CardHeader>
           <CardContent>
-            <VideoStream stream={stream} isLoading={!stream && !error} />
-            {error && (
-              <p className="text-destructive mt-2">
-                Error accessing camera: {error.message}
-              </p>
+            <VideoStream 
+              stream={stream} 
+              isLoading={isConnecting || isReconnecting}
+              isHost={isHost}
+              participantCount={participants.length}
+              className="rounded-lg overflow-hidden"
+            />
+            {streamError && (
+              <div className="mt-4 p-4 bg-destructive/10 text-destructive rounded-lg flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                <p>Error accessing stream: {streamError.message}</p>
+              </div>
+            )}
+            {connectionState !== 'connected' && !isConnecting && (
+              <div className="mt-4 p-4 bg-warning/10 text-warning rounded-lg flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                <p>Connection status: {connectionState}</p>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -174,22 +149,28 @@ export default function LiveSessionPage() {
           <Card className="p-4">
             <Button
               variant="destructive"
-              onClick={() => {
-                if (stream) {
-                  stream.getTracks().forEach(track => track.stop());
-                }
-                // TODO: Update session status to ended
-                window.location.href = '/sessions';
-              }}
+              onClick={() => endSessionMutation.mutate()}
+              disabled={endSessionMutation.isPending}
+              className="w-full"
             >
-              End Session
+              {endSessionMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Ending Session...
+                </>
+              ) : (
+                "End Session"
+              )}
             </Button>
           </Card>
         )}
       </div>
 
       <div className="h-[calc(100vh-8rem)]">
-        <ChatBox messages={messages} onSendMessage={handleSendMessage} />
+        <ChatBox 
+          messages={messages} 
+          onSendMessage={handleSendMessage}
+        />
       </div>
     </div>
   );
