@@ -144,8 +144,13 @@ export async function getWhiskyConciergeResponse(
     }`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
+      model: "gpt-4o", 
+      messages: [
+        { 
+          role: "user", 
+          content: prompt 
+        }
+      ],
       temperature: 0.7,
       response_format: { type: "json_object" }
     });
@@ -154,5 +159,31 @@ export async function getWhiskyConciergeResponse(
   } catch (error) {
     console.error('Error with whisky concierge:', error);
     throw new Error('Failed to process whisky concierge request');
+  }
+}
+
+export async function generateConciergeName(preferences?: {
+  style?: "funny" | "professional" | "casual";
+  theme?: string;
+}): Promise<string> {
+  try {
+    const prompt = `Generate a creative and ${preferences?.style || 'friendly'} name for a whisky concierge/expert. 
+    ${preferences?.theme ? `Incorporate the theme: ${preferences.theme}` : ''}
+    The name should be memorable, unique, and reflect expertise in whisky.
+
+    Format as JSON: { "name": "generated name" }`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", 
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.9,
+      response_format: { type: "json_object" }
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    return result.name || "Whisky Pete";
+  } catch (error) {
+    console.error('Error generating concierge name:', error);
+    return "Whisky Pete";
   }
 }
