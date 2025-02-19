@@ -44,7 +44,8 @@ export default function LiveSessionPage() {
     connectionState,
     connectToSocket,
     sendMessage,
-    peerConnection 
+    peerConnection,
+    cleanup 
   } = useWebRTC(isHost);
 
   const endSessionMutation = useMutation({
@@ -57,6 +58,7 @@ export default function LiveSessionPage() {
       return response.json();
     },
     onSuccess: () => {
+      cleanup(); // Cleanup WebRTC resources
       toast({
         title: "Session ended",
         description: "The live session has been ended successfully.",
@@ -76,9 +78,14 @@ export default function LiveSessionPage() {
   useEffect(() => {
     if (!session || !user || !sessionId) return;
 
-    const cleanup = connectToSocket(sessionId, user.id);
-    return cleanup;
-  }, [session, user, sessionId, connectToSocket]);
+    const cleanupFn = connectToSocket(sessionId, user.id);
+
+    // Cleanup on unmount
+    return () => {
+      cleanupFn();
+      cleanup();
+    };
+  }, [session, user, sessionId, connectToSocket, cleanup]);
 
   // Handle received WebSocket messages for chat
   const handleSendMessage = useCallback((message: string) => {

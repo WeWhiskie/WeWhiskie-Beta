@@ -23,7 +23,7 @@ type WebRTCPayload = {
 };
 
 type WebRTCMessage = {
-  type: 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'request-offer' | 'user-joined' | 'user-left' | 'broadcast-ready';
+  type: 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'request-offer' | 'user-joined' | 'user-left' | 'broadcast-ready' | 'stream-started' | 'stream-ended';
   payload: WebRTCPayload;
 };
 
@@ -38,17 +38,6 @@ export function useWebRTC(isHost: boolean) {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const activePeerConnection = useRef<RTCPeerConnection | null>(null);
-
-  useEffect(() => {
-    console.log('useWebRTC effect triggered, isHost:', isHost);
-    if (isHost) {
-      initializeMediaStream();
-    }
-
-    return () => {
-      cleanup();
-    };
-  }, [isHost]);
 
   const initializeMediaStream = async () => {
     try {
@@ -87,6 +76,7 @@ export function useWebRTC(isHost: boolean) {
     } catch (err) {
       console.error('Media stream error:', err);
       setError(err instanceof Error ? err : new Error('Failed to get media stream'));
+      throw err; // Re-throw to handle in the component
     } finally {
       setIsConnecting(false);
     }
@@ -117,6 +107,22 @@ export function useWebRTC(isHost: boolean) {
         type: 'join-session',
         payload: { sessionId, userId }
       }));
+
+      if (isHost) {
+        // Initialize media stream for host when socket is ready
+        initializeMediaStream()
+          .then(() => {
+            console.log('Host media stream initialized');
+            socket.send(JSON.stringify({
+              type: 'broadcast-ready',
+              payload: { userId }
+            }));
+          })
+          .catch(err => {
+            console.error('Failed to initialize host media stream:', err);
+            setError(err instanceof Error ? err : new Error('Failed to initialize media stream'));
+          });
+      }
     };
 
     socket.onmessage = async (event) => {
@@ -196,6 +202,10 @@ export function useWebRTC(isHost: boolean) {
       case 'user-left':
         console.log(`User ${type}:`, payload.userId);
         break;
+      case 'stream-started':
+      case 'stream-ended':
+          console.log(`Stream ${type}:`, payload.userId);
+          break;
     }
   };
 
@@ -315,6 +325,19 @@ export function useWebRTC(isHost: boolean) {
     }
   };
 
+  useEffect(() => {
+    console.log('useWebRTC effect triggered, isHost:', isHost);
+    if (isHost) {
+      // Moved to socket.onopen for better timing
+      // initializeMediaStream();
+    }
+
+    return () => {
+      cleanup();
+    };
+  }, [isHost]);
+
+
   return {
     stream,
     error,
@@ -323,6 +346,7 @@ export function useWebRTC(isHost: boolean) {
     connectionState,
     connectToSocket,
     sendMessage,
-    peerConnection: activePeerConnection.current
+    peerConnection: activePeerConnection.current,
+    cleanup  // Export cleanup function
   };
 }

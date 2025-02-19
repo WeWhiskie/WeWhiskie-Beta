@@ -41,13 +41,17 @@ export default function GoLivePage() {
         const error = await response.json();
         throw new Error(error.message || 'Failed to create session');
       }
-      const session = await response.json() as TastingSession;
-      return session;
+      return await response.json() as TastingSession;
     },
-    onSuccess: (data) => {
+    onSuccess: (session) => {
       queryClient.invalidateQueries({ queryKey: ["/api/sessions"] });
+      toast({
+        title: "Session Created",
+        description: "Redirecting to live session...",
+      });
       // Redirect to the live session page after successful creation
-      setLocation(`/sessions/${data.id}`);
+      setLocation(`/sessions/${session.id}`);
+      setIsInitializing(false);
     },
     onError: (error) => {
       toast({
@@ -55,6 +59,7 @@ export default function GoLivePage() {
         description: error instanceof Error ? error.message : "Failed to create session",
         variant: "destructive",
       });
+      setIsInitializing(false);
     }
   });
 
@@ -88,7 +93,6 @@ export default function GoLivePage() {
         description: error instanceof Error ? error.message : "Failed to start stream. Please check your camera and microphone permissions.",
         variant: "destructive",
       });
-    } finally {
       setIsInitializing(false);
     }
   };
@@ -112,7 +116,9 @@ export default function GoLivePage() {
                 disabled={isInitializing || createSessionMutation.isPending}
               >
                 <Video className="w-4 h-4 mr-2" />
-                {isInitializing ? "Initializing..." : createSessionMutation.isPending ? "Creating Session..." : "Start Streaming"}
+                {isInitializing ? "Initializing Stream..." : 
+                 createSessionMutation.isPending ? "Creating Session..." : 
+                 "Start Live Session"}
               </Button>
             </div>
           </CardContent>
