@@ -28,7 +28,6 @@ export default function LiveSessionPage() {
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<User[]>([]);
-  const [wsConnection, setWsConnection] = useState<{ cleanup: () => void } | null>(null);
 
   const { 
     stream, 
@@ -39,7 +38,7 @@ export default function LiveSessionPage() {
     connectToSocket,
     sendMessage,
     peerConnection 
-  } = useWebRTC(false);
+  } = useWebRTC(user?.id === sessionId);
 
   const { data: session, isLoading: isLoadingSession } = useQuery<TastingSession>({
     queryKey: ["/api/sessions", sessionId],
@@ -51,6 +50,10 @@ export default function LiveSessionPage() {
   const endSessionMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", `/api/sessions/${sessionId}/end`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to end session');
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -74,10 +77,9 @@ export default function LiveSessionPage() {
     if (!session || !user) return;
 
     const cleanup = connectToSocket(sessionId, user.id);
-    setWsConnection({ cleanup });
 
     return () => {
-      wsConnection?.cleanup();
+      cleanup?.();
     };
   }, [session, user, sessionId, connectToSocket]);
 

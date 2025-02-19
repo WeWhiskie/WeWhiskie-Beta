@@ -55,12 +55,6 @@ export function useWebRTC(isHost: boolean) {
       console.log('Initializing media stream...');
       setIsConnecting(true);
 
-      // Check if getUserMedia is available
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('getUserMedia is not supported in this browser');
-      }
-
-      console.log('Requesting media permissions...');
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -113,14 +107,12 @@ export function useWebRTC(isHost: boolean) {
 
   const connectToSocket = (sessionId: number, userId: number) => {
     console.log('Connecting to WebSocket...', { sessionId, userId });
-    // Use secure WebSocket connection if the page is served over HTTPS
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Create WebSocket connection with credentials
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
     socket.onopen = () => {
       console.log('WebSocket connected');
       reconnectAttempts.current = 0;
-      // Send join session message once connected
       socket.send(JSON.stringify({
         type: 'join-session',
         payload: { sessionId, userId }
@@ -164,7 +156,6 @@ export function useWebRTC(isHost: boolean) {
     setIsReconnecting(true);
     reconnectAttempts.current += 1;
 
-    // Exponential backoff with max delay of 10 seconds
     setTimeout(() => {
       console.log(`Attempting to reconnect (${reconnectAttempts.current}/${maxReconnectAttempts})`);
       connectToSocket(sessionId, userId);
@@ -323,7 +314,6 @@ export function useWebRTC(isHost: boolean) {
       console.error('Error handling ICE candidate:', error);
     }
   };
-
 
   return {
     stream,

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Video, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect, useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +14,7 @@ export default function GoLivePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isInitializing, setIsInitializing] = useState(false);
+  const queryClient = useQueryClient();
 
   // Only experts can go live
   if (!user?.isExpert) {
@@ -28,11 +29,23 @@ export default function GoLivePage() {
         status: "live",
         scheduledFor: new Date().toISOString(),
         hostId: user.id,
+        duration: 3600, // 1 hour default duration
+        price: null,
+        whiskyId: null,
+        maxParticipants: null,
+        groupId: null
       };
 
       const response = await apiRequest("POST", "/api/sessions", data);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create session');
+      }
       const session = await response.json() as TastingSession;
       return session;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sessions"] });
     },
   });
 
@@ -41,15 +54,26 @@ export default function GoLivePage() {
       setIsInitializing(true);
 
       // Request camera/mic permissions first
-      await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
 
       // Create the live session
       const session = await createSessionMutation.mutateAsync();
 
       if (session.id) {
+        // Release the test stream
+        stream.getTracks().forEach(track => track.stop());
+
         // Navigate to the live session page
         setLocation(`/sessions/${session.id}`);
       } else {
@@ -59,7 +83,7 @@ export default function GoLivePage() {
       console.error("Stream error:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to start stream",
+        description: error instanceof Error ? error.message : "Failed to start stream. Please check your camera and microphone permissions.",
         variant: "destructive",
       });
     } finally {
