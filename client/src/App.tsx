@@ -16,6 +16,7 @@ import RecommendationsPage from "./pages/recommendations-page";
 import TastingGroups from "./pages/TastingGroups";
 import NewTastingGroup from "./pages/NewTastingGroup";
 import GoLivePage from "./pages/go-live-page";
+import RewardsProgramPage from "./pages/rewards-program";
 import Navbar from "./components/navbar";
 import { UserStatusBar } from "./components/user-status-bar";
 import { useAuth } from "./hooks/use-auth";
@@ -33,6 +34,7 @@ function Router() {
           <Route path="/whisky/:id" component={WhiskyPage} />
           <Route path="/auth" component={AuthPage} />
           <Route path="/profile/:id" component={ProfilePage} />
+          <Route path="/rewards" component={RewardsProgramPage} />
           <ProtectedRoute path="/review" component={ReviewPage} />
           <ProtectedRoute path="/review/:id" component={ReviewPage} />
           <Route path="/sessions" component={SessionsPage} />

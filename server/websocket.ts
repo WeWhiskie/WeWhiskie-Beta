@@ -62,27 +62,21 @@ export class LiveStreamingServer {
     callback: (res: boolean, code?: number, message?: string) => void
   ) {
     try {
-      log(`WebSocket connection attempt from ${info.origin}`, 'websocket');
-      log(`Headers: ${JSON.stringify(info.req.headers)}`, 'websocket');
-
       const cookies = parse(info.req.headers.cookie || '');
       const sessionId = cookies['connect.sid'];
 
-      log(`Parsed cookies: ${JSON.stringify(cookies)}`, 'websocket');
-      log(`Session ID: ${sessionId ? sessionId.substring(0, 8) + '...' : 'none'}`, 'websocket');
-
-      // Temporarily allow connections without valid session for debugging
+      // If no session cookie, reject the connection
       if (!sessionId) {
-        log('No session cookie found, but allowing connection for debugging', 'websocket');
-        callback(true);
+        log('WebSocket connection rejected: No session cookie', 'websocket');
+        callback(false, 401, 'Unauthorized');
         return;
       }
 
       // Verify the session
       const user = await verify(sessionId);
       if (!user) {
-        log('Invalid session, but allowing connection for debugging', 'websocket');
-        callback(true);
+        log('WebSocket connection rejected: Invalid session', 'websocket');
+        callback(false, 401, 'Unauthorized');
         return;
       }
 
@@ -90,8 +84,7 @@ export class LiveStreamingServer {
       callback(true);
     } catch (error) {
       log(`WebSocket verification error: ${error}`, 'websocket');
-      // Still allow connection for debugging
-      callback(true);
+      callback(false, 500, 'Internal Server Error');
     }
   }
 
