@@ -34,13 +34,14 @@ export function ProtectedRoute({
     );
   }
 
-  if (user.level < requiredLevel) {
+  const userLevel = user.level || 1;
+  if (userLevel < requiredLevel) {
     return (
       <Route path={path}>
         <div className="container mx-auto py-8">
           <Alert variant="destructive">
             <AlertDescription>
-              This feature requires level {requiredLevel} to access. You are currently level {user.level}.
+              This feature requires level {requiredLevel} to access. You are currently level {userLevel}.
               Continue participating in tastings and writing reviews to level up!
             </AlertDescription>
           </Alert>

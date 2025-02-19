@@ -17,11 +17,16 @@ import TastingGroups from "./pages/TastingGroups";
 import NewTastingGroup from "./pages/NewTastingGroup";
 import GoLivePage from "./pages/go-live-page";
 import Navbar from "./components/navbar";
+import { UserStatusBar } from "./components/user-status-bar";
+import { useAuth } from "./hooks/use-auth";
 
 function Router() {
+  const { user } = useAuth();
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      {user && <UserStatusBar />}
       <main className="container mx-auto px-4 py-8">
         <Switch>
           <Route path="/" component={HomePage} />
@@ -38,7 +43,7 @@ function Router() {
           <ProtectedRoute 
             path="/live" 
             component={GoLivePage} 
-            expertOnly={true}
+            requiredLevel={3}
           />
           <Route component={NotFound} />
         </Switch>

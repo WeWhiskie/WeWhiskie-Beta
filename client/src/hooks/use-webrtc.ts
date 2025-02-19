@@ -11,9 +11,7 @@ const configuration: RTCConfiguration = {
   ],
   iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle',
-  rtcpMuxPolicy: 'require',
-  // Remove invalid sdpSemantics property
-  iceRestart: true,
+  rtcpMuxPolicy: 'require'
 };
 
 type WebRTCPayload = {
@@ -113,15 +111,19 @@ export function useWebRTC(isHost: boolean) {
     console.log('Connecting to WebSocket...', { sessionId, userId });
 
     if (socketRef.current?.readyState === WebSocket.OPEN) {
+      console.log('Closing existing WebSocket connection');
       socketRef.current.close();
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    console.log('Connecting to WebSocket URL:', wsUrl);
+
+    const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 
     socket.onopen = async () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected successfully');
       reconnectAttempts.current = 0;
       setConnectionState('connecting');
 
@@ -146,13 +148,11 @@ export function useWebRTC(isHost: boolean) {
       }
     };
 
-    socket.onmessage = async (event) => {
-      try {
-        const message: WebRTCMessage = JSON.parse(event.data);
-        console.log('WebSocket message received:', message);
-        await handleSocketMessage(message);
-      } catch (error) {
-        console.error('Error handling WebSocket message:', error);
+    socket.onclose = (event) => {
+      console.log('WebSocket closed:', event.code, event.reason);
+      setConnectionState('disconnected');
+      if (event.code !== 1000) {
+        attemptReconnect(sessionId, userId);
       }
     };
 
@@ -163,17 +163,13 @@ export function useWebRTC(isHost: boolean) {
       attemptReconnect(sessionId, userId);
     };
 
-    socket.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason);
-      setConnectionState('disconnected');
-      if (event.code !== 1000) {
-        attemptReconnect(sessionId, userId);
-      }
-    };
-
-    return () => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.close();
+    socket.onmessage = async (event) => {
+      try {
+        const message: WebRTCMessage = JSON.parse(event.data);
+        console.log('WebSocket message received:', message);
+        await handleSocketMessage(message);
+      } catch (error) {
+        console.error('Error handling WebSocket message:', error);
       }
     };
   };

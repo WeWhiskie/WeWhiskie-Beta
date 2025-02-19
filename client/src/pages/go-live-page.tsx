@@ -32,8 +32,10 @@ export default function GoLivePage() {
     return <Redirect to="/auth" />;
   }
 
+  const userLevel = user.level || 1;
+
   // Show level requirement message if user level is too low
-  if (user.level < REQUIRED_LEVEL_FOR_HOSTING) {
+  if (userLevel < REQUIRED_LEVEL_FOR_HOSTING) {
     return (
       <div className="container mx-auto py-8">
         <Card>
@@ -44,7 +46,7 @@ export default function GoLivePage() {
             <div className="flex flex-col gap-4">
               <p className="text-muted-foreground">
                 Hosting live tasting sessions becomes available at level {REQUIRED_LEVEL_FOR_HOSTING}.
-                You're currently level {user.level}!
+                You're currently level {userLevel}!
               </p>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Star className="w-4 h-4" />
