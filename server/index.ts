@@ -37,30 +37,69 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const { server, liveStreamingServer } = await registerRoutes(app);
+  try {
+    const { server, liveStreamingServer } = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+      res.status(status).json({ message });
+      throw err;
+    });
 
-    res.status(status).json({ message });
-    throw err;
-  });
+    if (app.get("env") === "development") {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
+    }
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+    const PORT = 5001; // Changed port to 5001 to avoid conflicts
+
+    // Improved server start function with more robust error handling
+    const startServer = () => {
+      return new Promise((resolve, reject) => {
+        try {
+          const serverInstance = server.listen(PORT, "0.0.0.0", () => {
+            log(`Server started successfully on port ${PORT}`);
+            log('WebSocket server initialized and ready for connections');
+            resolve(serverInstance);
+          });
+
+          serverInstance.on('error', async (error: NodeJS.ErrnoException) => {
+            if (error.code === 'EADDRINUSE') {
+              log(`Port ${PORT} is in use. Attempting to free the port...`);
+              reject(new Error(`Port ${PORT} is in use`));
+            } else {
+              reject(error);
+            }
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    };
+
+    // Handle graceful shutdown
+    const cleanup = () => {
+      log('Shutting down gracefully...');
+      server.close(() => {
+        log('Server closed');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', cleanup);
+    process.on('SIGINT', cleanup);
+
+    // Start the server with retries
+    try {
+      await startServer();
+    } catch (error) {
+      log(`Fatal error starting server: ${error}`);
+      process.exit(1);
+    }
+  } catch (error) {
+    log(`Fatal error during initialization: ${error}`);
+    process.exit(1);
   }
-
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client
-  const PORT = 5000;
-  server.listen(PORT, "0.0.0.0", () => {
-    log(`serving on port ${PORT}`);
-    log('WebSocket server initialized and ready for connections');
-  });
 })();
