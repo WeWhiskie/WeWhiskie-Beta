@@ -36,30 +36,32 @@ interface ReviewCardProps {
 
 export function ReviewCard({ review }: ReviewCardProps) {
   const { toast } = useToast();
-  const reviewUrl = `${window.location.origin}/reviews/${review.id}`;
   const shareTitle = `${review.user.username}'s review of ${review.whisky.name}`;
+  // Generate the correct share URL
+  const reviewUrl = `/share/${review.id}`;
 
   const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin') => {
     try {
+      const fullUrl = `${window.location.origin}${reviewUrl}`;
       let socialUrl;
       const text = `Check out this ${review.whisky.name} review by ${review.user.username}!`;
 
       switch (platform) {
         case 'twitter':
-          socialUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(reviewUrl)}`;
+          socialUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(fullUrl)}`;
           break;
         case 'facebook':
-          socialUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(reviewUrl)}`;
+          socialUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(fullUrl)}`;
           break;
         case 'linkedin':
-          socialUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(reviewUrl)}`;
+          socialUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(fullUrl)}`;
           break;
       }
 
       // Track share analytics
       await apiRequest("POST", "/api/share-analytics", {
         platform,
-        url: reviewUrl,
+        url: fullUrl,
         title: shareTitle,
       });
 
