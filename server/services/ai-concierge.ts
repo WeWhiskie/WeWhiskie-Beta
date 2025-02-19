@@ -37,38 +37,54 @@ export class WhiskyConcierge {
   private personalities: Map<string, ConciergePersonality> = new Map();
 
   async getResponse(userId: number, query: string, context?: z.infer<typeof whiskyConciergeSchema>['context']) {
-    const validation = whiskyConciergeSchema.safeParse({ 
-      query, 
-      context: { 
-        ...context,
-        userId 
-      } 
-    });
+    console.log('Received request:', { userId, query, context });
 
-    if (!validation.success) {
-      throw new Error('Invalid query format');
-    }
+    try {
+      const validation = whiskyConciergeSchema.safeParse({ 
+        query, 
+        context: { 
+          ...context,
+          userId 
+        } 
+      });
 
-    // Get previous interactions for this user
-    const previousInteractions = this.conversationHistory.get(userId) || [];
+      if (!validation.success) {
+        console.error('Validation failed:', validation.error);
+        throw new Error('Invalid query format');
+      }
 
-    const response = await getWhiskyConciergeResponse(query, {
-      userId,
-      collectionIds: context?.collectionIds,
-      previousInteractions,
-      personality: context?.conciergePersonality
-    });
+      // Get previous interactions for this user
+      const previousInteractions = this.conversationHistory.get(userId) || [];
 
-    // Update conversation history
-    if (response.answer) {
-      const newInteraction = { query, response: response.answer };
-      this.conversationHistory.set(
+      console.log('Getting concierge response with:', {
+        query,
         userId,
-        [...(previousInteractions.slice(-5)), newInteraction] // Keep last 5 interactions
-      );
-    }
+        collectionIds: context?.collectionIds,
+        personality: context?.conciergePersonality
+      });
 
-    return response;
+      const response = await getWhiskyConciergeResponse(query, {
+        userId,
+        collectionIds: context?.collectionIds,
+        previousInteractions,
+        personality: context?.conciergePersonality
+      });
+
+      // Update conversation history
+      if (response.answer) {
+        const newInteraction = { query, response: response.answer };
+        this.conversationHistory.set(
+          userId,
+          [...(previousInteractions.slice(-5)), newInteraction]
+        );
+      }
+
+      console.log('Generated response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error in getResponse:', error);
+      throw error;
+    }
   }
 
   // Generate or update concierge personality

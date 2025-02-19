@@ -81,11 +81,128 @@ export default function WhiskyConcierge() {
   const [customName, setCustomName] = useState("");
   const { toast } = useToast();
   const { user } = useAuth();
+  const [personality, setPersonality] = useState<any>(null);
+
+  // Get user's collection
+  const { data: collection } = useQuery<Whisky[]>({
+    queryKey: ["/api/whiskies", "collection"],
+    enabled: !!user?.id,
+  });
+
+  // Fetch personality when name changes
+  useEffect(() => {
+    const fetchPersonality = async () => {
+      try {
+        const response = await fetch(`/api/whisky-concierge/personality/${encodeURIComponent(conciergeName)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPersonality(data);
+        }
+      } catch (error) {
+        console.error('Error fetching personality:', error);
+      }
+    };
+    fetchPersonality();
+  }, [conciergeName]);
 
   // Persist name changes to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, conciergeName);
   }, [conciergeName]);
+
+  const conciergeQuery = useMutation({
+    mutationFn: async (message: string) => {
+      if (!message.trim()) {
+        throw new Error("Please enter a message");
+      }
+
+      const payload = {
+        query: message,
+        context: {
+          userId: user?.id,
+          collectionIds: collection?.map((w) => w.id) || [],
+          personality: personality
+        }
+      };
+
+      console.log('Sending concierge query:', payload);
+
+      const response = await fetch("/api/whisky-concierge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to get response from concierge");
+      }
+
+      const data = await response.json();
+      console.log('Received concierge response:', data);
+      return data as ConciergeResponse;
+    },
+    onSuccess: (data) => {
+      if (data.answer) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.answer,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }
+    },
+    onError: (error: Error) => {
+      console.error('Concierge query error:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to get response from the whisky concierge",
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
+    // Add user message first
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: query,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+
+    // Send query to concierge
+    conciergeQuery.mutate(query);
+    setQuery("");
+  };
+
+  const handleNameSelect = (name: string) => {
+    if (!name.trim()) return;
+
+    setConciergeName(name);
+    setIsEditingName(false);
+    setCustomName(""); 
+
+    toast({
+      title: "Name Updated",
+      description: `Your concierge will now be known as ${name}`,
+    });
+  };
+
+  const handleCustomNameSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (customName.trim()) {
+      handleNameSelect(customName);
+    }
+  };
 
   // Name generation mutation with improved error handling
   const generateNameMutation = useMutation({
@@ -119,87 +236,6 @@ export default function WhiskyConcierge() {
       });
     },
   });
-
-  const handleNameSelect = (name: string) => {
-    if (!name.trim()) return;
-
-    setConciergeName(name);
-    setIsEditingName(false);
-    setCustomName(""); 
-
-    toast({
-      title: "Name Updated",
-      description: `Your concierge will now be known as ${name}`,
-    });
-  };
-
-  const handleCustomNameSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customName.trim()) {
-      handleNameSelect(customName);
-    }
-  };
-
-  // Get user's collection
-  const { data: collection } = useQuery<Whisky[]>({
-    queryKey: ["/api/whiskies", "collection"],
-    enabled: !!user?.id,
-  });
-
-  const conciergeQuery = useMutation({
-    mutationFn: async (message: string) => {
-      const response = await fetch("/api/whisky-concierge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: 'include',
-        body: JSON.stringify({
-          query: message,
-          context: {
-            userId: user?.id,
-            collectionIds: collection?.map((w) => w.id) || [],
-          },
-        }),
-      });
-      if (!response.ok) throw new Error("Failed to get response from concierge");
-      return response.json() as Promise<ConciergeResponse>;
-    },
-    onSuccess: (data) => {
-      if (data.answer) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: data.answer || "I apologize, I couldn't generate a response.",
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      }
-    },
-    onError: () => {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to get response from the whisky concierge",
-      });
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content: query,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
-
-    conciergeQuery.mutate(query);
-    setQuery("");
-  };
 
 
   return (

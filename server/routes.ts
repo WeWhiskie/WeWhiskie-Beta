@@ -474,12 +474,34 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   // Whisky Concierge route
   app.post("/api/whisky-concierge", async (req, res) => {
     try {
+      console.log('Received whisky concierge request:', req.body);
+
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
       const { query, context } = req.body;
-      const response = await whiskyConcierge.getResponse(query, context);
+
+      if (!query) {
+        return res.status(400).json({ message: "Query is required" });
+      }
+
+      const response = await whiskyConcierge.getResponse(
+        req.user!.id,
+        query,
+        {
+          ...context,
+          userId: req.user!.id
+        }
+      );
+
+      console.log('Sending whisky concierge response:', response);
       res.json(response);
     } catch (error) {
       console.error("Error with whisky concierge:", error);
-      res.status(500).json({ message: "Failed to process whisky concierge request" });
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to process whisky concierge request" 
+      });
     }
   });
 
