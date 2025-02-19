@@ -3,13 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import type { Review } from "@shared/schema";
+
+interface SharedContent {
+  type: 'review';
+  content: Review;
+}
 
 export default function SharePage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
 
-  const { data: sharedContent, isLoading } = useQuery({
-    queryKey: ['/api/share', id],
+  const { data: sharedContent, isLoading } = useQuery<SharedContent>({
+    queryKey: ['/api/reviews', id],
     enabled: !!id,
   });
 
@@ -35,14 +41,23 @@ export default function SharePage() {
     );
   }
 
+  const { content } = sharedContent;
+
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Shared Whisky Experience</h1>
+      <h1 className="text-3xl font-bold mb-6">Shared Whisky Review</h1>
       <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">{sharedContent.title}</h2>
+        <h2 className="text-xl font-semibold mb-4">{content.whisky.name}</h2>
         <div className="space-y-4">
-          <p className="text-muted-foreground">{sharedContent.description}</p>
-          {/* Add more content display based on the shared data structure */}
+          <p className="text-muted-foreground">{content.content}</p>
+          <div>
+            <p className="text-sm text-muted-foreground">
+              Rating: {content.rating} / 5
+            </p>
+            <p className="text-sm text-muted-foreground">
+              By: {content.user.username}
+            </p>
+          </div>
         </div>
       </Card>
     </div>
