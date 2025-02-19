@@ -215,16 +215,17 @@ export default function WhiskyPage() {
             <CardContent className="p-6">
               <h2 className="text-2xl font-semibold mb-6">Awards & Recognition</h2>
               <div className="space-y-4">
-                {whisky.awards && Array.isArray(whisky.awards) && whisky.awards.map((award: { name: string; description: string }, index: number) => (
-                  <div key={index} className="flex items-center gap-4">
-                    <Award className="h-8 w-8 text-amber-500" />
-                    <div>
-                      <h3 className="font-semibold">{award.name}</h3>
-                      <p className="text-muted-foreground">{award.description}</p>
+                {whisky.awards && Array.isArray(whisky.awards) ? (
+                  whisky.awards.map((award, index) => (
+                    <div key={index} className="flex items-center gap-4">
+                      <Award className="h-8 w-8 text-amber-500" />
+                      <div>
+                        <h3 className="font-semibold">{award.name}</h3>
+                        <p className="text-muted-foreground">{award.description}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {(!whisky.awards || !Array.isArray(whisky.awards) || whisky.awards.length === 0) && (
+                  ))
+                ) : (
                   <p className="text-muted-foreground">No awards information available.</p>
                 )}
               </div>

@@ -8,6 +8,7 @@ import multer from "multer";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { insertActivitySchema, type InsertActivity } from "@shared/schema";
+import { whiskyConcierge } from "./services/ai-concierge";
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -466,6 +467,18 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     } catch (error) {
       console.error("Error creating activity:", error);
       res.status(400).json({ message: "Invalid activity data" });
+    }
+  });
+
+  // Whisky Concierge route
+  app.post("/api/whisky-concierge", async (req, res) => {
+    try {
+      const { query, context } = req.body;
+      const response = await whiskyConcierge.getResponse(query, context);
+      res.json(response);
+    } catch (error) {
+      console.error("Error with whisky concierge:", error);
+      res.status(500).json({ message: "Failed to process whisky concierge request" });
     }
   });
 

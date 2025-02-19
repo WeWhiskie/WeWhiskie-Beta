@@ -1,0 +1,237 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { MessageSquare, Book, Lightbulb, GraduationCap } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import type { Whisky } from "@shared/schema";
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}
+
+interface ConciergeResponse {
+  answer?: string;
+  recommendations?: Array<{
+    whisky: {
+      id: number;
+      name: string;
+      distillery: string;
+      type: string;
+      price?: number;
+    };
+    reason: string;
+    confidence: number;
+    educationalContent?: {
+      history?: string;
+      production?: string;
+      tastingNotes?: string;
+      pairingAdvice?: string;
+    };
+  }>;
+  suggestedTopics?: string[];
+}
+
+export default function WhiskyConcierge() {
+  const [query, setQuery] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Get user's collection
+  const { data: collection } = useQuery<Whisky[]>({
+    queryKey: ["/api/whiskies", "collection"],
+    enabled: !!user?.id,
+  });
+
+  const conciergeQuery = useMutation({
+    mutationFn: async (message: string) => {
+      const response = await fetch("/api/whisky-concierge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: message,
+          context: {
+            userId: user?.id,
+            collectionIds: collection?.map((w) => w.id) || [],
+          },
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to get response from concierge");
+      return response.json() as Promise<ConciergeResponse>;
+    },
+    onSuccess: (data) => {
+      if (data.answer) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.answer || "I'm sorry, I couldn't generate a response.",
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      }
+
+      // Show recommendations if available
+      if (data.recommendations?.length) {
+        // Update recommendations cache
+        queryClient.setQueryData(
+          ["/api/recommendations"],
+          data.recommendations
+        );
+      }
+
+      // Show suggested topics if available
+      if (data.suggestedTopics?.length) {
+        toast({
+          title: "Suggested Topics",
+          description: (
+            <div className="mt-2 space-y-1">
+              {data.suggestedTopics.map((topic, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4" />
+                  <span>{topic}</span>
+                </div>
+              ))}
+            </div>
+          ),
+        });
+      }
+    },
+    onError: () => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to get response from the whisky concierge",
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+
+    // Add user message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: query,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+
+    // Get concierge response
+    conciergeQuery.mutate(query);
+    setQuery("");
+  };
+
+  return (
+    <div className="container mx-auto max-w-4xl py-8 space-y-8">
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-bold">Your Personal Whisky Concierge</h1>
+        <p className="text-muted-foreground text-lg">
+          Expert guidance and personalized recommendations for your whisky journey
+        </p>
+      </div>
+
+      {/* Chat Interface */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            Chat with Your Concierge
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[400px] pr-4">
+            <div className="space-y-4">
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-3 ${
+                    msg.role === "assistant"
+                      ? "flex-row"
+                      : "flex-row-reverse"
+                  }`}
+                >
+                  <div
+                    className={`rounded-lg p-3 max-w-[80%] ${
+                      msg.role === "assistant"
+                        ? "bg-muted"
+                        : "bg-primary text-primary-foreground ml-auto"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  </div>
+                </div>
+              ))}
+              {conciergeQuery.isPending && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="animate-pulse">Thinking...</div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask about whisky styles, recommendations, or tasting tips..."
+              disabled={conciergeQuery.isPending}
+            />
+            <Button type="submit" disabled={conciergeQuery.isPending}>
+              Send
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Quick Access Cards */}
+      <div className="grid md:grid-cols-3 gap-6">
+        <Card className="cursor-pointer hover:bg-accent transition-colors">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-2">
+              <Book className="h-8 w-8 mx-auto" />
+              <h3 className="font-semibold">Whisky Encyclopedia</h3>
+              <p className="text-sm text-muted-foreground">
+                Explore detailed information about whisky types and regions
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-accent transition-colors">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-2">
+              <GraduationCap className="h-8 w-8 mx-auto" />
+              <h3 className="font-semibold">Learning Path</h3>
+              <p className="text-sm text-muted-foreground">
+                Track your whisky knowledge progress
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-accent transition-colors">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-2">
+              <Lightbulb className="h-8 w-8 mx-auto" />
+              <h3 className="font-semibold">Personalized Tips</h3>
+              <p className="text-sm text-muted-foreground">
+                Get custom recommendations based on your taste
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

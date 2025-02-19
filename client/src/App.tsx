@@ -9,6 +9,7 @@ import HomePage from "./pages/home-page";
 import AuthPage from "./pages/auth-page";
 import ProfilePage from "./pages/profile-page";
 import WhiskyPage from "./pages/whisky-page";
+import WhiskyConcierge from "./pages/whisky-concierge";
 import ReviewPage from "./pages/review-page";
 import LiveSessionPage from "./pages/live-session-page";
 import SessionsPage from "./pages/sessions-page";
@@ -35,6 +36,7 @@ function Router() {
           <Route path="/auth" component={AuthPage} />
           <Route path="/profile/:id" component={ProfilePage} />
           <Route path="/rewards" component={RewardsProgramPage} />
+          <ProtectedRoute path="/concierge" component={WhiskyConcierge} />
           <ProtectedRoute path="/review" component={ReviewPage} />
           <ProtectedRoute path="/review/:id" component={ReviewPage} />
           <Route path="/sessions" component={SessionsPage} />
