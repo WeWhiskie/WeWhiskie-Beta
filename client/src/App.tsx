@@ -15,6 +15,7 @@ import SessionsPage from "./pages/sessions-page";
 import RecommendationsPage from "./pages/recommendations-page";
 import TastingGroups from "./pages/TastingGroups";
 import NewTastingGroup from "./pages/NewTastingGroup";
+import GoLivePage from "./pages/go-live-page";
 import Navbar from "./components/navbar";
 
 function Router() {
@@ -34,6 +35,7 @@ function Router() {
           <ProtectedRoute path="/recommendations" component={RecommendationsPage} />
           <ProtectedRoute path="/groups" component={TastingGroups} />
           <ProtectedRoute path="/groups/new" component={NewTastingGroup} />
+          <ProtectedRoute path="/live" component={GoLivePage} />
           <Route component={NotFound} />
         </Switch>
       </main>
