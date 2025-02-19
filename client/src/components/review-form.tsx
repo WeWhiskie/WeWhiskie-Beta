@@ -27,7 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Image, Upload } from "lucide-react";
 
 type FormData = {
-  whiskyId: string;
+  whiskyId: number;
   rating: number;
   content: string;
   videoUrl?: string;
@@ -57,7 +57,7 @@ export function ReviewForm() {
   const createReview = useMutation({
     mutationFn: async (data: FormData) => {
       const formData = new FormData();
-      formData.append('whiskyId', data.whiskyId);
+      formData.append('whiskyId', data.whiskyId.toString());
       formData.append('rating', data.rating.toString());
       formData.append('content', data.content);
 
@@ -89,10 +89,10 @@ export function ReviewForm() {
         <FormField
           control={form.control}
           name="whiskyId"
-          render={({ field }) => (
+          render={({ field: { onChange, ...field } }) => (
             <FormItem>
               <FormLabel>Select Whisky</FormLabel>
-              <Select onValueChange={field.onChange}>
+              <Select onValueChange={(value) => onChange(Number(value))}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose a whisky" />
@@ -150,7 +150,7 @@ export function ReviewForm() {
         <FormField
           control={form.control}
           name="mediaFile"
-          render={({ field: { onChange, ...field } }) => (
+          render={({ field: { onChange, value, ...field } }) => (
             <FormItem>
               <FormLabel>Add Photo or Video</FormLabel>
               <FormControl>
