@@ -776,7 +776,12 @@ export class DatabaseStorage implements IStorage {
       })
       .from(users)
       .where(eq(users.id, userId));
-    return user;
+
+    // Ensure we return valid numbers even if the database has nulls
+    return {
+      level: user?.level ?? 1,
+      points: user?.points ?? 0
+    };
   }
 
   async updateUserStreak(userId: number): Promise<{ streak: number; reward: number }> {
@@ -785,7 +790,7 @@ export class DatabaseStorage implements IStorage {
       .set({ 
         dailyStreak: sql`CASE 
           WHEN ${users.lastCheckIn} >= CURRENT_DATE - INTERVAL '1 day' 
-          THEN ${users.dailyStreak} + 1 
+          THEN COALESCE(${users.dailyStreak}, 0) + 1 
           ELSE 1 
         END`,
         lastCheckIn: sql`CURRENT_TIMESTAMP`,
@@ -793,8 +798,9 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
 
-    const reward = Math.min(Math.floor(user.dailyStreak / 7) * 10, 50);
-    return { streak: user.dailyStreak, reward };
+    const currentStreak = user?.dailyStreak ?? 1;
+    const reward = Math.min(Math.floor(currentStreak / 7) * 10, 50);
+    return { streak: currentStreak, reward };
   }
 
   async createDailyTasks(userId: number): Promise<DailyTask[]> {
@@ -926,12 +932,12 @@ export class DatabaseStorage implements IStorage {
     await db
       .update(users)
       .set({
-        achievementBadges: sql`${users.achievementBadges} || ${sql.json({
+        achievementBadges: sql`COALESCE(${users.achievementBadges}, '[]'::jsonb) || ${sql.json({
           id: achievement.id,
           name: achievement.name,
           unlockedAt: new Date().toISOString(),
-        })}`,
-        experiencePoints: sql`${users.experiencePoints} + ${achievement.reward}`,
+        })}::jsonb`,
+        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + ${achievement.reward}`,
       })
       .where(eq(users.id, userId));
   }

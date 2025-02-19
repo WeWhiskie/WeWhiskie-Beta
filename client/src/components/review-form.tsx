@@ -28,7 +28,7 @@ import { SharePopup } from "./share-popup";
 import { useState } from "react";
 
 type FormData = {
-  whiskyId: number;
+  whiskyId: string; // Changed to string for Select compatibility
   rating: number;
   content: string;
   videoUrl?: string;
@@ -52,6 +52,7 @@ export function ReviewForm() {
   const form = useForm<FormData>({
     resolver: zodResolver(
       insertReviewSchema.omit({ userId: true, likes: true }).extend({
+        whiskyId: insertReviewSchema.shape.whiskyId.transform(String),
         mediaFile: insertReviewSchema.shape.videoUrl.optional(),
       })
     ),
@@ -64,8 +65,8 @@ export function ReviewForm() {
   const createReview = useMutation({
     mutationFn: async (data: FormData) => {
       const formData = new FormData();
-      formData.append('whiskyId', data.whiskyId.toString());
-      formData.append('rating', data.rating.toString());
+      formData.append('whiskyId', String(data.whiskyId));
+      formData.append('rating', String(data.rating));
       formData.append('content', data.content);
 
       if (data.mediaFile?.[0]) {
@@ -75,7 +76,7 @@ export function ReviewForm() {
       const response = await fetch('/api/reviews', {
         method: 'POST',
         body: formData,
-        credentials: 'include', // Important: Include credentials for authentication
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -84,7 +85,7 @@ export function ReviewForm() {
       }
 
       const reviewData = await response.json();
-      return { reviewData, whiskyName: whiskies?.find(w => w.id === data.whiskyId)?.name };
+      return { reviewData, whiskyName: whiskies?.find(w => w.id === Number(data.whiskyId))?.name };
     },
     onError: (error: Error) => {
       console.error('Review creation error:', error);
@@ -113,7 +114,6 @@ export function ReviewForm() {
   });
 
   const onSubmit = async (data: FormData) => {
-    console.log('Submitting form data:', data);
     try {
       await createReview.mutate(data);
     } catch (error) {
@@ -131,10 +131,13 @@ export function ReviewForm() {
           <FormField
             control={form.control}
             name="whiskyId"
-            render={({ field: { onChange, ...field } }) => (
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>Select Whisky</FormLabel>
-                <Select onValueChange={(value) => onChange(Number(value))} {...field}>
+                <Select 
+                  onValueChange={field.onChange} 
+                  value={field.value}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a whisky" />
@@ -142,7 +145,7 @@ export function ReviewForm() {
                   </FormControl>
                   <SelectContent>
                     {whiskies?.map((whisky) => (
-                      <SelectItem key={whisky.id} value={whisky.id.toString()}>
+                      <SelectItem key={whisky.id} value={String(whisky.id)}>
                         {whisky.name}
                       </SelectItem>
                     ))}
@@ -211,18 +214,6 @@ export function ReviewForm() {
               </FormItem>
             )}
           />
-
-          <div className="space-y-2">
-            {form.formState.errors.whiskyId && (
-              <p className="text-sm text-red-500">{form.formState.errors.whiskyId.message}</p>
-            )}
-            {form.formState.errors.rating && (
-              <p className="text-sm text-red-500">{form.formState.errors.rating.message}</p>
-            )}
-            {form.formState.errors.content && (
-              <p className="text-sm text-red-500">{form.formState.errors.content.message}</p>
-            )}
-          </div>
 
           <Button
             type="submit"

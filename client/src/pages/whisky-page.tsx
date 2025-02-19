@@ -38,9 +38,9 @@ export default function WhiskyPage() {
       {/* Hero Section with Background Image */}
       <div className="relative w-full h-[600px] mb-12 overflow-hidden rounded-xl">
         {/* Black and white distillery background */}
-        <div 
+        <div
           className="absolute inset-0 bg-center bg-cover grayscale"
-          style={{ 
+          style={{
             backgroundImage: `url(https://images.unsplash.com/photo-1630344745900-b5385f94f360)`,
           }}
         >
@@ -215,7 +215,7 @@ export default function WhiskyPage() {
             <CardContent className="p-6">
               <h2 className="text-2xl font-semibold mb-6">Awards & Recognition</h2>
               <div className="space-y-4">
-                {(whisky.awards || []).map((award, index) => (
+                {whisky.awards && Array.isArray(whisky.awards) && whisky.awards.map((award: { name: string; description: string }, index: number) => (
                   <div key={index} className="flex items-center gap-4">
                     <Award className="h-8 w-8 text-amber-500" />
                     <div>
@@ -224,7 +224,7 @@ export default function WhiskyPage() {
                     </div>
                   </div>
                 ))}
-                {!(whisky.awards || []).length && (
+                {(!whisky.awards || !Array.isArray(whisky.awards) || whisky.awards.length === 0) && (
                   <p className="text-muted-foreground">No awards information available.</p>
                 )}
               </div>

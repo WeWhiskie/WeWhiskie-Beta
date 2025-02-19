@@ -99,6 +99,14 @@ export const whiskies = pgTable("whiskies", {
   caskType: text("cask_type"),
   limited: integer("limited").default(0),
   vintage: text("vintage"),
+  // Add new fields for detailed tasting profile
+  aroma: text("aroma"),
+  palate: text("palate"),
+  finish: text("finish"),
+  founded: text("founded"),
+  waterSource: text("water_source"),
+  distilleryHistory: text("distillery_history"),
+  awards: jsonb("awards").default([]).notNull(),
 });
 
 // Reviews
@@ -335,6 +343,16 @@ export const insertWhiskySchema = createInsertSchema(whiskies).extend({
   tastingNotes: z.string().min(1),
   description: z.string().min(10),
   region: z.string().min(1),
+  aroma: z.string().optional(),
+  palate: z.string().optional(),
+  finish: z.string().optional(),
+  awards: z.array(z.object({
+    name: z.string(),
+    description: z.string(),
+  })).default([]),
+  founded: z.string().optional(),
+  waterSource: z.string().optional(),
+  distilleryHistory: z.string().optional(),
 });
 
 export const insertReviewSchema = createInsertSchema(reviews).extend({
@@ -398,7 +416,6 @@ export type User = typeof users.$inferSelect;
 export type Whisky = typeof whiskies.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type TastingSession = typeof tastingSessions.$inferSelect;
-import type { InferSelect } from 'drizzle-orm';
 export type ShippingAddress = typeof shippingAddresses.$inferSelect;
 export type SessionParticipant = typeof sessionParticipants.$inferSelect;
 export type ShareTrack = typeof shares.$inferSelect;
