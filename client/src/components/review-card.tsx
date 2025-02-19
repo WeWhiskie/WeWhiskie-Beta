@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StarRating } from "./star-rating";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Share2, Twitter, Facebook, Linkedin } from "lucide-react";
+import { Share2, Twitter, Facebook, Linkedin, Heart } from "lucide-react";
 import { Link } from "wouter";
 import {
   DropdownMenu,
@@ -14,6 +14,9 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { PreciseRating } from "./precise-rating";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
 
 interface ReviewCardProps {
   review: {
@@ -21,6 +24,7 @@ interface ReviewCardProps {
     content: string;
     rating: number;
     createdAt: string | Date;
+    likes: number;
     user: {
       id: number;
       username: string;
@@ -36,8 +40,44 @@ interface ReviewCardProps {
 
 export function ReviewCard({ review }: ReviewCardProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data: hasLiked } = useQuery({
+    queryKey: ['/api/reviews', review.id, 'liked'],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/reviews/${review.id}/liked`);
+      return res.liked;
+    }
+  });
+
+  const likeMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) {
+        throw new Error('Must be logged in to like reviews');
+      }
+      await apiRequest(
+        hasLiked ? 'DELETE' : 'POST',
+        `/api/reviews/${review.id}/like`
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/reviews'] });
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/reviews', review.id, 'liked'] 
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const shareTitle = `${review.user.username}'s review of ${review.whisky.name}`;
-  // Generate the correct share URL
   const reviewUrl = `/share/${review.id}`;
 
   const handleShare = async (platform: 'twitter' | 'facebook' | 'linkedin') => {
@@ -58,14 +98,12 @@ export function ReviewCard({ review }: ReviewCardProps) {
           break;
       }
 
-      // Track share analytics
       await apiRequest("POST", "/api/share-analytics", {
         platform,
         url: fullUrl,
         title: shareTitle,
       });
 
-      // Open share dialog
       if (socialUrl) {
         window.open(socialUrl, '_blank', 'width=600,height=400');
       }
@@ -134,7 +172,24 @@ export function ReviewCard({ review }: ReviewCardProps) {
 
         <p className="text-muted-foreground">{review.content}</p>
       </CardContent>
-      <CardFooter className="bg-muted/50 p-4">
+      <CardFooter className="bg-muted/50 p-4 flex justify-between">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => likeMutation.mutate()}
+          disabled={!user || likeMutation.isPending}
+          className={cn(
+            "gap-2",
+            hasLiked && "text-red-500 hover:text-red-600"
+          )}
+        >
+          <Heart className={cn(
+            "h-4 w-4",
+            hasLiked && "fill-current"
+          )} />
+          {review.likes || 0}
+        </Button>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">

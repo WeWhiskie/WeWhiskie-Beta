@@ -129,6 +129,18 @@ export const shares = pgTable("shares", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
+// Add likes table after shares table
+export const likes = pgTable("likes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  reviewId: integer("review_id")
+    .notNull()
+    .references(() => reviews.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).extend({
   email: z.string().email(),
@@ -166,8 +178,14 @@ export type User = typeof users.$inferSelect;
 export type Whisky = typeof whiskies.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
 export type TastingSession = typeof tastingSessions.$inferSelect;
+import type { InferSelect } from 'drizzle-orm';
 export type ShippingAddress = typeof shippingAddresses.$inferSelect;
 export type SessionParticipant = typeof sessionParticipants.$inferSelect;
 export type ShareTrack = typeof shares.$inferSelect;
 export const insertShareSchema = createInsertSchema(shares);
 export type InsertShareTrack = z.infer<typeof insertShareSchema>;
+
+// Add to type exports
+export type Like = typeof likes.$inferSelect;
+export const insertLikeSchema = createInsertSchema(likes);
+export type InsertLike = z.infer<typeof insertLikeSchema>;

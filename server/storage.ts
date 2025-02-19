@@ -1,7 +1,8 @@
 import { db } from "./db";
 import { 
   InsertUser, User, Whisky, Review, TastingSession, ShippingAddress,
-  users, whiskies, reviews, follows, tastingSessions, shippingAddresses, sessionParticipants, shares, ShareTrack
+  users, whiskies, reviews, follows, tastingSessions, shippingAddresses, sessionParticipants, shares, ShareTrack,
+  likes, Like
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import session from "express-session";
@@ -50,6 +51,11 @@ export interface IStorage {
   sessionStore: session.Store;
   // Share tracking methods
   trackShare(shareData: Omit<ShareTrack, "id">): Promise<ShareTrack>;
+  // Like methods
+  likeReview(userId: number, reviewId: number): Promise<void>;
+  unlikeReview(userId: number, reviewId: number): Promise<void>;
+  getLikes(reviewId: number): Promise<number>;
+  hasUserLiked(userId: number, reviewId: number): Promise<boolean>;
 }
 
 type ReviewWithRelations = {
@@ -377,6 +383,54 @@ export class DatabaseStorage implements IStorage {
   async trackShare(shareData: Omit<ShareTrack, "id">): Promise<ShareTrack> {
     const [share] = await db.insert(shares).values(shareData).returning();
     return share;
+  }
+  // Like methods
+  async likeReview(userId: number, reviewId: number): Promise<void> {
+    await db.insert(likes).values({ userId, reviewId });
+    await db
+      .update(reviews)
+      .set({ 
+        likes: sql`COALESCE(${reviews.likes}, 0) + 1` 
+      })
+      .where(eq(reviews.id, reviewId));
+  }
+
+  async unlikeReview(userId: number, reviewId: number): Promise<void> {
+    await db
+      .delete(likes)
+      .where(
+        and(
+          eq(likes.userId, userId),
+          eq(likes.reviewId, reviewId)
+        )
+      );
+    await db
+      .update(reviews)
+      .set({ 
+        likes: sql`GREATEST(COALESCE(${reviews.likes}, 0) - 1, 0)` 
+      })
+      .where(eq(reviews.id, reviewId));
+  }
+
+  async getLikes(reviewId: number): Promise<number> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(likes)
+      .where(eq(likes.reviewId, reviewId));
+    return result?.count || 0;
+  }
+
+  async hasUserLiked(userId: number, reviewId: number): Promise<boolean> {
+    const [like] = await db
+      .select()
+      .from(likes)
+      .where(
+        and(
+          eq(likes.userId, userId),
+          eq(likes.reviewId, reviewId)
+        )
+      );
+    return !!like;
   }
 }
 
