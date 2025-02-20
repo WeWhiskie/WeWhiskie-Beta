@@ -71,7 +71,6 @@ const INITIAL_RETRY_DELAY = 1000; // 1 second
 async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
   return requestQueue.add(async () => {
     try {
-      // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
@@ -92,10 +91,16 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
           await sleep(delay);
           return makeOpenAIRequest(prompt, retryCount + 1);
         }
-        throw new WhiskyAIError(
-          "We're experiencing high demand. Please wait 30 seconds before trying again.",
-          "RATE_LIMIT_EXCEEDED"
-        );
+        // If we hit max retries, return a fallback response
+        return {
+          answer: "I apologize, but I'm experiencing high demand at the moment. Please try again in a few minutes. In the meantime, I'd be happy to show you our curated whisky collection or help you find specific information about whisky types and regions.",
+          suggestedTopics: [
+            "Browse our whisky collection",
+            "Learn about whisky regions",
+            "Understanding whisky types",
+            "Basic tasting techniques"
+          ]
+        };
       }
 
       if (error.status === 401 || !process.env.OPENAI_API_KEY) {
@@ -106,10 +111,16 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
       }
 
       console.error('OpenAI request error:', error);
-      throw new WhiskyAIError(
-        "Unable to process request at this time. Please try again later.",
-        "AI_SERVICE_ERROR"
-      );
+      // Return a generic fallback response instead of throwing
+      return {
+        answer: "I apologize, but I'm having trouble processing your request at the moment. While I'm getting back to normal, would you like to explore our whisky collection or learn about different whisky regions?",
+        suggestedTopics: [
+          "View popular whiskies",
+          "Explore whisky regions",
+          "Learn about tasting notes",
+          "Basic whisky terminology"
+        ]
+      };
     }
   });
 }
