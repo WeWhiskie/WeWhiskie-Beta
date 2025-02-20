@@ -443,9 +443,9 @@ export default function WhiskyConcierge() {
 
       {/* Enhanced Chat Interface */}
       <Card className="max-w-2xl mx-auto">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5" />
+        <CardHeader className="py-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MessageSquare className="h-4 w-4" />
             Chat with {conciergeName}
             <Button
               variant="ghost"
@@ -453,12 +453,12 @@ export default function WhiskyConcierge() {
               onClick={() => setIsEditingName(true)}
               className="ml-2 hover:bg-accent"
             >
-              <Edit2 className="h-4 w-4" />
+              <Edit2 className="h-3 w-3" />
             </Button>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[400px] pr-4">
+        <CardContent className="p-3">
+          <ScrollArea className="h-[180px] pr-2">
             <AnimatePresence>
               {messages.map((msg, i) => (
                 <motion.div
@@ -467,10 +467,10 @@ export default function WhiskyConcierge() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.3 }}
-                  className="mb-4"
+                  className="mb-2"
                 >
                   <ChatBubble isUser={msg.role === "user"}>
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
                   </ChatBubble>
                 </motion.div>
               ))}
@@ -479,9 +479,9 @@ export default function WhiskyConcierge() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="flex items-start gap-3"
+                  className="flex items-start gap-2"
                 >
-                  <div className="bg-muted rounded-lg p-3">
+                  <div className="bg-muted rounded-lg p-2">
                     <TypingIndicator />
                   </div>
                 </motion.div>
@@ -490,29 +490,30 @@ export default function WhiskyConcierge() {
             <div ref={messagesEndRef} />
           </ScrollArea>
 
-          <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+          <form onSubmit={handleSubmit} className="mt-2 flex gap-2">
             <Input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Ask ${conciergeName} about whisky...`}
+              placeholder={`Ask ${conciergeName}...`}
               disabled={isThinking}
-              className="flex-1"
+              className="flex-1 h-8 text-sm"
             />
             <Button 
               type="submit" 
               disabled={isThinking || !query.trim()}
-              className="px-6"
+              className="px-2 h-8"
+              size="sm"
             >
               {isThinking ? (
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                 >
-                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+                  <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full" />
                 </motion.div>
               ) : (
-                <Send className="h-4 w-4" />
+                <Send className="h-3 w-3" />
               )}
             </Button>
           </form>
