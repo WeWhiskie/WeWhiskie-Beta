@@ -10,16 +10,16 @@ export function FloatingChatButton() {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {isOpen ? (
-        <Card className="w-[293px] h-[390px] shadow-lg">
+        <Card className="w-[293px] h-[390px] shadow-lg overflow-hidden">
           <Button
             variant="ghost"
             size="sm"
-            className="absolute top-2 right-2"
+            className="absolute top-2 right-2 z-10"
             onClick={() => setIsOpen(false)}
           >
             ✕
           </Button>
-          <div className="h-full p-4">
+          <div className="h-full">
             <WhiskyConcierge />
           </div>
         </Card>

@@ -9,7 +9,7 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { insertActivitySchema, type InsertActivity } from "@shared/schema";
 import { whiskyConcierge } from "./services/ai-concierge";
-import {generateConciergeName} from "./services/ai-concierge";
+import { generateConciergeName, getWhiskyRecommendations } from "./services/recommendations";
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -257,7 +257,7 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     }
 
     try {
-      const recommendations = await getWhiskyRecommendations(req.body, req.user.id);
+      const recommendations = await getWhiskyRecommendations(req.body, req.user!.id);
       res.json(recommendations);
     } catch (error) {
       console.error("Error getting recommendations:", error);
