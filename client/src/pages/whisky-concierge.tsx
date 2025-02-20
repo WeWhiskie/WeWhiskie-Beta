@@ -126,31 +126,39 @@ export default function WhiskyConcierge() {
         }
       };
 
-      const response = await fetch("/api/whisky-concierge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
+      try {
+        const response = await fetch("/api/whisky-concierge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
-        if (error.code === 'RATE_LIMIT_EXCEEDED') {
-          throw new Error("Our AI is a bit overwhelmed right now. Please try again in a few minutes.");
-        } else if (error.code === 'INVALID_API_KEY') {
-          throw new Error("There's a temporary issue with our AI service. We're working on it!");
+        if (!response.ok) {
+          const error = await response.json();
+          console.error('Concierge response error:', error);
+
+          if (error.code === 'RATE_LIMIT_EXCEEDED') {
+            throw new Error("Our AI is a bit overwhelmed right now. Please try again in a few minutes.");
+          } else if (error.code === 'INVALID_API_KEY') {
+            throw new Error("There's a temporary issue with our AI service. We're working on it!");
+          } else if (error.message) {
+            throw new Error(error.message);
+          }
+          throw new Error("Unable to process request at this time. Please try again later.");
         }
-        throw new Error(error.message || "Failed to get response from concierge");
-      }
 
-      const data = await response.json();
-      if (!data || (!data.answer && !data.recommendations)) {
-        throw new Error("Invalid response from concierge");
+        const data = await response.json();
+        if (!data || (!data.answer && !data.recommendations)) {
+          throw new Error("Invalid response from concierge");
+        }
+        return data as ConciergeResponse;
+      } catch (error: any) {
+        console.error('Concierge request error:', error);
+        throw error;
       }
-      return data as ConciergeResponse;
     },
     onSuccess: (data) => {
-      // Only add the message if we have an answer
       if (data.answer) {
         setMessages((prev) => [
           ...prev,
@@ -168,6 +176,7 @@ export default function WhiskyConcierge() {
         variant: "destructive",
         title: "Concierge Unavailable",
         description: error.message || "Failed to get response from concierge",
+        duration: 5000,
       });
     },
   });

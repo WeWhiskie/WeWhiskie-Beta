@@ -43,13 +43,19 @@ const INITIAL_RETRY_DELAY = 1000; // 1 second
 
 async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
   try {
+    // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
     const response = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
       response_format: { type: "json_object" }
     });
-    return JSON.parse(response.choices[0].message.content || "{}");
+
+    if (!response.choices[0].message.content) {
+      throw new Error("Empty response from AI service");
+    }
+
+    return JSON.parse(response.choices[0].message.content);
   } catch (error: any) {
     if (error.status === 429) { // Rate limit error
       if (retryCount < MAX_RETRIES) {
@@ -64,13 +70,14 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
       );
     }
 
-    if (error.status === 401) {
+    if (error.status === 401 || !process.env.OPENAI_API_KEY) {
       throw new WhiskyAIError(
         "AI service configuration error. Please contact support.",
         "INVALID_API_KEY"
       );
     }
 
+    console.error('OpenAI request error:', error);
     throw new WhiskyAIError(
       "Unable to process request at this time. Please try again later.",
       "AI_SERVICE_ERROR"
