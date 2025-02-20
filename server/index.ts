@@ -52,30 +52,35 @@ app.use((req, res, next) => {
     
     const startServer = async () => {
       for (const PORT of tryPorts) {
-      return new Promise((resolve, reject) => {
         try {
-          log('Starting server...', 'express');
-          const serverInstance = server.listen(PORT, "0.0.0.0", () => {
-            log(`Server started successfully on port ${PORT}`, 'express');
-            log('WebSocket server initialized and ready for connections', 'websocket');
-            resolve(serverInstance);
-          });
+          const serverInstance = await new Promise((resolve, reject) => {
+            log('Starting server...', 'express');
+            const instance = server.listen(PORT, "0.0.0.0", () => {
+              log(`Server started successfully on port ${PORT}`, 'express');
+              log('WebSocket server initialized and ready for connections', 'websocket');
+              resolve(instance);
+            });
 
-          serverInstance.on('error', (error: NodeJS.ErrnoException) => {
-            if (error.code === 'EADDRINUSE') {
-              log(`Port ${PORT} is in use, trying next port...`, 'error');
-              serverInstance.close();
-              continue;
-            } else {
-              log(`Server error: ${error.message}`, 'error');
-              reject(error);
-            }
+            instance.on('error', (error: NodeJS.ErrnoException) => {
+              if (error.code === 'EADDRINUSE') {
+                log(`Port ${PORT} is in use, trying next port...`, 'error');
+                instance.close();
+                reject(error);
+              } else {
+                log(`Server error: ${error.message}`, 'error');
+                reject(error);
+              }
+            });
           });
+          return serverInstance;
         } catch (error) {
-          log(`Failed to start server: ${error}`, 'error');
-          reject(error);
+          if (PORT === tryPorts[tryPorts.length - 1]) {
+            throw error;
+          }
+          continue;
         }
-      });
+      }
+      throw new Error('All ports in use');
     };
 
     // Handle graceful shutdown
