@@ -47,8 +47,8 @@ export default function WhiskyConcierge() {
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
 
-  // Get user's collection
-  const { data: collection } = useQuery({
+  // Get user's collection with proper typing
+  const { data: collection = [] } = useQuery<Whisky[]>({
     queryKey: ["/api/whiskies", "collection"],
     enabled: !!user?.id,
   });
@@ -78,7 +78,7 @@ export default function WhiskyConcierge() {
         query: message,
         context: {
           userId: user.id,
-          collectionIds: collection?.map((w: Whisky) => w.id) || []
+          collectionIds: collection.map(w => w.id)
         }
       };
 
@@ -233,8 +233,8 @@ export default function WhiskyConcierge() {
             disabled={isThinking}
             className="flex-1 text-sm"
           />
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={isThinking || !query.trim()}
             size="sm"
             className="px-2"

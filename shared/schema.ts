@@ -29,6 +29,7 @@ export const users = pgTable("users", {
   followerCount: integer("follower_count").default(0),
   followingCount: integer("following_count").default(0),
   isVerified: boolean("is_verified").default(false),
+  isPremium: boolean("is_premium").default(false),
   socialLinks: jsonb("social_links"),
   expertiseAreas: text("expertise_areas").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
