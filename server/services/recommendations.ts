@@ -1,32 +1,8 @@
-import OpenAI from "openai";
+import { huggingFaceClient } from "./huggingface-client";
 import { storage } from "../storage";
 import type { Whisky, Review } from "@shared/schema";
 import type { ConciergePersonality } from "./ai-concierge";
 import { createHash } from 'crypto';
-
-// Initialize OpenAI with proper configuration
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY,
-  maxRetries: 2,
-  timeout: 12000, // Reduced timeout for faster fallback
-  defaultHeaders: { 'Whisky-Bot-Version': '1.0' },
-  defaultQuery: { stream: false }
-});
-
-// Add connection checking
-const checkOpenAIConnection = async () => {
-  try {
-    await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: "test" }],
-      max_tokens: 5
-    });
-    return true;
-  } catch (error) {
-    console.error('OpenAI connection test failed:', error);
-    return false;
-  }
-};
 
 // Enhanced error handling
 class WhiskyAIError extends Error {
@@ -40,7 +16,7 @@ class WhiskyAIError extends Error {
 class RequestQueue {
   private queue: Array<() => Promise<any>> = [];
   private processing = false;
-  private readonly MAX_CONCURRENT = 3; // Increased concurrent requests
+  private readonly MAX_CONCURRENT = 3;
   private currentConcurrent = 0;
 
   async add<T>(request: () => Promise<T>): Promise<T> {
@@ -53,7 +29,7 @@ class RequestQueue {
           reject(error);
         } finally {
           this.currentConcurrent--;
-          this.processQueue(); // Process next request after completion
+          this.processQueue();
         }
       });
       this.processQueue();
@@ -83,15 +59,15 @@ class RequestQueue {
   }
 }
 
-// Enhanced caching with smarter key generation and shorter TTL
+// Enhanced caching
 class ResponseCache {
   private cache: Map<string, { response: any; timestamp: number }> = new Map();
-  private readonly TTL = 1000 * 60 * 30; // 30 minutes cache to ensure fresher responses
+  private readonly TTL = 1000 * 60 * 30; // 30 minutes cache
 
   private generateKey(prompt: string, context: any = {}): string {
     const sanitizedContext = {
       ...context,
-      userId: context.userId, // Only include essential context
+      userId: context.userId,
       collectionIds: context.collectionIds
     };
     const data = JSON.stringify({ prompt, context: sanitizedContext });
@@ -122,87 +98,6 @@ class ResponseCache {
 
 const requestQueue = new RequestQueue();
 const responseCache = new ResponseCache();
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 1000;
-
-// Enhanced OpenAI request handler with better error recovery
-async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
-  console.log('Making OpenAI request:', prompt.substring(0, 50) + '...');
-
-  // Check cache first
-  const cachedResponse = responseCache.get(prompt);
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-
-  return requestQueue.add(async () => {
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-        response_format: { type: "json_object" },
-        max_tokens: 500,
-        presence_penalty: 0.6, // Added to encourage more diverse responses
-        frequency_penalty: 0.1
-      });
-
-      if (!response.choices[0].message.content) {
-        throw new Error("Empty response from AI service");
-      }
-
-      const parsedResponse = JSON.parse(response.choices[0].message.content);
-      responseCache.set(prompt, parsedResponse);
-      return parsedResponse;
-    } catch (error: any) {
-      console.error('OpenAI request error:', error);
-
-      if (error.status === 429 || (error.message && error.message.includes('rate'))) {
-        if (retryCount < MAX_RETRIES) {
-          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
-          console.log(`Rate limit hit, retrying in ${delay}ms...`);
-          await sleep(delay);
-          return makeOpenAIRequest(prompt, retryCount + 1);
-        }
-      }
-
-      // Enhanced themed conversation handlers with personality-driven responses
-      const getThemedResponse = (personality?: ConciergePersonality) => {
-        const responses = [
-          {
-            highland: {
-              answer: "Ach, let me gather my thoughts while I nose this dram. In my 40 years at Highland Park, I learned that patience reveals the finest notes. Speaking of which, shall we explore the noble Highland malts?",
-              suggestedTopics: ["Highland whisky characteristics", "Age statements", "Cask influence"]
-            },
-            speyside: {
-              answer: "While I check my notes, let me tell you about the magic of Speyside. As we say in Dufftown, 'Rome was built on seven hills, but Dufftown stands on seven stills!' Shall we explore these legendary distilleries?",
-              suggestedTopics: ["Speyside distilleries", "Water influence", "Fruity notes"]
-            },
-            islay: {
-              answer: "By the roar of the Atlantic! While I gather my thoughts, let's talk about how the sea shapes our island's mighty drams. Have you experienced the maritime magic of Islay malts?",
-              suggestedTopics: ["Islay peat", "Coastal influence", "Smoky profiles"]
-            }
-          }
-        ];
-
-        const defaultStyle = personality?.accent?.toLowerCase().includes('highland') ? 'highland' : 
-                           personality?.accent?.toLowerCase().includes('speyside') ? 'speyside' : 'islay';
-        
-        const response = responses[Math.floor(Math.random() * responses.length)][defaultStyle];
-        return {
-          answer: personality?.catchphrase + " " + response.answer,
-          suggestedTopics: response.suggestedTopics
-        };
-      };
-
-      const fallbackResponses = getThemedResponse(context?.personality);
-
-      const randomIndex = Math.floor(Math.random() * fallbackResponses.length);
-      return fallbackResponses[randomIndex];
-    }
-  });
-}
 
 interface WhiskyRecommendation {
   whisky: Whisky;
@@ -220,6 +115,31 @@ interface ConciergeResponse {
   recommendations?: WhiskyRecommendation[];
   answer?: string;
   suggestedTopics?: string[];
+}
+
+async function processAIResponse(prompt: string, requestContext?: any): Promise<any> {
+  try {
+    const cachedResponse = responseCache.get(prompt, requestContext);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    const response = await requestQueue.add(async () => {
+      const generatedText = await huggingFaceClient.generateResponse(prompt);
+      try {
+        return JSON.parse(generatedText);
+      } catch (error) {
+        console.error('Error parsing AI response:', error);
+        return { answer: generatedText };
+      }
+    });
+
+    responseCache.set(prompt, response, requestContext);
+    return response;
+  } catch (error) {
+    console.error('Error in processAIResponse:', error);
+    throw error;
+  }
 }
 
 export async function getWhiskyRecommendations(
@@ -247,31 +167,9 @@ export async function getWhiskyRecommendations(
     Available whiskies:
     ${whiskies.map(w => `- ${w.name} (${w.type}, $${w.price}, ${w.tastingNotes})`).join('\n')}
 
-    For each recommendation, provide:
-    1. A personalized reason why this whisky matches their preferences
-    2. Educational content about the whisky's history and production
-    3. Detailed tasting notes and how to best appreciate them
-    4. Food pairing suggestions
-    5. A confidence score (0-1) based on preference matching
+    Format the response as a JSON object with recommendations array containing objects with whiskyId, reason, confidence, and educationalContent fields.`;
 
-    Format the response as a JSON object:
-    {
-      "recommendations": [
-        {
-          "whiskyId": number,
-          "reason": string,
-          "confidence": number,
-          "educationalContent": {
-            "history": string,
-            "production": string,
-            "tastingNotes": string,
-            "pairingAdvice": string
-          }
-        }
-      ]
-    }`;
-
-    const result = await makeOpenAIRequest(prompt);
+    const result = await processAIResponse(prompt);
 
     const recommendations: WhiskyRecommendation[] = await Promise.all(
       (result.recommendations || []).map(async (rec: any) => {
@@ -294,15 +192,39 @@ export async function getWhiskyRecommendations(
     return recommendations;
   } catch (error) {
     console.error('Error generating recommendations:', error);
-    if (error instanceof WhiskyAIError) {
-      throw error;
-    }
     throw new WhiskyAIError(
       "Failed to generate whisky recommendations",
       "RECOMMENDATION_ERROR"
     );
   }
 }
+
+// Themed responses for different personalities
+const getThemedResponse = (personality?: ConciergePersonality) => {
+  const responses = {
+    highland: {
+      answer: "Ach, let me gather my thoughts while I nose this dram. In my 40 years at Highland Park, I learned that patience reveals the finest notes. Speaking of which, shall we explore the noble Highland malts?",
+      suggestedTopics: ["Highland whisky characteristics", "Age statements", "Cask influence"]
+    },
+    speyside: {
+      answer: "While I check my notes, let me tell you about the magic of Speyside. As we say in Dufftown, 'Rome was built on seven hills, but Dufftown stands on seven stills!' Shall we explore these legendary distilleries?",
+      suggestedTopics: ["Speyside distilleries", "Water influence", "Fruity notes"]
+    },
+    islay: {
+      answer: "By the roar of the Atlantic! While I gather my thoughts, let's talk about how the sea shapes our island's mighty drams. Have you experienced the maritime magic of Islay malts?",
+      suggestedTopics: ["Islay peat", "Coastal influence", "Smoky profiles"]
+    }
+  };
+
+  const defaultStyle = personality?.accent?.toLowerCase().includes('highland') ? 'highland' : 
+                      personality?.accent?.toLowerCase().includes('speyside') ? 'speyside' : 'islay';
+
+  const response = responses[defaultStyle];
+  return {
+    answer: personality?.catchphrase ? personality?.catchphrase + " " + response.answer : response.answer,
+    suggestedTopics: response.suggestedTopics
+  };
+};
 
 export async function generateConciergeName(preferences?: {
   style?: "funny" | "professional" | "casual";
@@ -312,17 +234,13 @@ export async function generateConciergeName(preferences?: {
     const prompt = `Generate a creative and ${preferences?.style || 'friendly'} name for a whisky concierge/expert. 
     ${preferences?.theme ? `Incorporate the theme: ${preferences.theme}` : ''}
     The name should be memorable, unique, and reflect expertise in whisky.
+    Format response as JSON with a "name" field.`;
 
-    Format as JSON: { "name": "generated name" }`;
-
-    const result = await makeOpenAIRequest(prompt);
+    const result = await processAIResponse(prompt);
     return result.name || "Whisky Pete";
   } catch (error) {
     console.error('Error generating concierge name:', error);
-    if (error instanceof WhiskyAIError) {
-      throw error;
-    }
-    return "Whisky Pete"; // Fallback name
+    return "Whisky Pete";
   }
 }
 
@@ -343,22 +261,9 @@ export async function generateConciergePersonality(
     6. Description of their voice
     7. A vivid description for their avatar
 
-    Make it whisky-themed and memorable. For example, they might be a retired master distiller, 
-    a wandering spirit guide, or a historical whisky figure.
+    Format response as JSON with fields: name, accent, background, personality, avatarDescription, voiceDescription, specialties (array), and catchphrase.`;
 
-    Format as JSON:
-    {
-      "name": string,
-      "accent": string (e.g., "Highland Scots", "Smooth Irish"),
-      "background": string (their origin story),
-      "personality": string (key traits),
-      "avatarDescription": string (appearance details),
-      "voiceDescription": string (how they sound),
-      "specialties": string[] (3-5 areas of expertise),
-      "catchphrase": string (their signature saying)
-    }`;
-
-    const result = await makeOpenAIRequest(prompt);
+    const result = await processAIResponse(prompt);
 
     if (!result.name || !result.accent || !result.background) {
       throw new WhiskyAIError(
@@ -370,11 +275,6 @@ export async function generateConciergePersonality(
     return result;
   } catch (error) {
     console.error('Error generating concierge personality:', error);
-    if (error instanceof WhiskyAIError) {
-      throw error;
-    }
-
-    // Enhanced default personalities for better fallback experience
     const fallbackPersonalities = [
       {
         name,
@@ -385,31 +285,10 @@ export async function generateConciergePersonality(
         voiceDescription: "Rich, resonant Highland accent with a melodic lilt",
         specialties: ["Highland Single Malts", "Whisky Maturation", "Cask Selection"],
         catchphrase: "Let the spirit guide us! Slàinte mhath!"
-      },
-      {
-        name,
-        accent: "Speyside Scots",
-        background: "Third-generation cooper from Dufftown, the malt whisky capital",
-        personality: "Detail-oriented craftsperson with a passion for tradition",
-        avatarDescription: "Robust figure in traditional cooper's apron with well-worn tools",
-        voiceDescription: "Gentle Speyside burr with technical precision",
-        specialties: ["Wood Influence", "Speyside Malts", "Traditional Craftsmanship"],
-        catchphrase: "In wood we trust, in spirit we flourish!"
-      },
-      {
-        name,
-        accent: "Islay Scots",
-        background: "Peat cutting expert turned distillery manager from Islay",
-        personality: "Bold and passionate about smoky whiskies",
-        avatarDescription: "Weather-worn face with bright eyes, wearing a Hebridean wool sweater",
-        voiceDescription: "Strong Islay accent with the rhythm of the sea",
-        specialties: ["Peated Whiskies", "Maritime Influence", "Island Distilleries"],
-        catchphrase: "From peat and sea comes wisdom!"
       }
     ];
 
-    // Return a random personality for variety
-    return fallbackPersonalities[Math.floor(Math.random() * fallbackPersonalities.length)];
+    return fallbackPersonalities[0];
   }
 }
 
@@ -436,7 +315,7 @@ export async function getWhiskyConciergeResponse(
     ]);
 
     // Check for quick responses first
-    for (const [pattern, response] of quickResponses) {
+    for (const [pattern, response] of quickResponses.entries()) {
       if (pattern.test(query.toLowerCase())) {
         return response;
       }
@@ -473,31 +352,16 @@ export async function getWhiskyConciergeResponse(
 
     Current query: "${query}"
 
-    Provide a response that:
-    1. Stays in character (use your accent and personality)
-    2. Directly answers their question
-    3. Includes educational content when relevant
-    4. Makes personalized recommendations based on their collection and preferences
-    5. Occasionally uses your catchphrase naturally in the conversation
+    Format the response as a JSON object with fields: answer (string), recommendations (optional), and suggestedTopics (string[] optional).`;
 
-    Format the response as a JSON object:
-    {
-      "answer": string,
-      "recommendations": [same format as recommendation function] (optional),
-      "suggestedTopics": string[] (optional)
-    }`;
-
-    return await makeOpenAIRequest(prompt, context);
+    try {
+      return await processAIResponse(prompt, context);
+    } catch (error) {
+      console.error('Error with whisky concierge:', error);
+      return getThemedResponse(context.personality);
+    }
   } catch (error) {
     console.error('Error with whisky concierge:', error);
-    return {
-      answer: "I apologize, but I'm experiencing a brief moment of contemplation. While I gather my thoughts, would you like to explore our curated whisky collection or learn about different whisky regions?",
-      suggestedTopics: [
-        "Browse popular whiskies",
-        "Explore whisky regions",
-        "View tasting guides",
-        "Check latest reviews"
-      ]
-    };
+    return getThemedResponse(context.personality);
   }
 }
