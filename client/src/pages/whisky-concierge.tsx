@@ -126,37 +126,49 @@ export default function WhiskyConcierge() {
         }
       };
 
-      try {
-        const response = await fetch("/api/whisky-concierge", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: 'include',
-          body: JSON.stringify(payload),
-        });
+      let attempts = 0;
+      const maxAttempts = 3;
+      const baseDelay = 5000; // 5 seconds
 
-        if (!response.ok) {
-          const error = await response.json();
-          console.error('Concierge response error:', error);
+      while (attempts < maxAttempts) {
+        try {
+          const response = await fetch("/api/whisky-concierge", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: 'include',
+            body: JSON.stringify(payload),
+          });
 
-          if (error.code === 'RATE_LIMIT_EXCEEDED') {
-            throw new Error("Our AI is a bit overwhelmed right now. Please try again in a few minutes.");
-          } else if (error.code === 'INVALID_API_KEY') {
-            throw new Error("There's a temporary issue with our AI service. We're working on it!");
-          } else if (error.message) {
-            throw new Error(error.message);
+          if (!response.ok) {
+            const error = await response.json();
+            console.error('Concierge response error:', error);
+
+            if (error.code === 'RATE_LIMIT_EXCEEDED') {
+              attempts++;
+              if (attempts < maxAttempts) {
+                const delay = baseDelay * Math.pow(2, attempts);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+              }
+              throw new Error("Our AI is busy. Please wait 30 seconds before trying again.");
+            }
+
+            throw new Error(error.message || "Unable to process request at this time.");
           }
-          throw new Error("Unable to process request at this time. Please try again later.");
-        }
 
-        const data = await response.json();
-        if (!data || (!data.answer && !data.recommendations)) {
-          throw new Error("Invalid response from concierge");
+          const data = await response.json();
+          if (!data || (!data.answer && !data.recommendations)) {
+            throw new Error("Invalid response from concierge");
+          }
+          return data as ConciergeResponse;
+        } catch (error: any) {
+          console.error('Concierge request error:', error);
+          if (attempts === maxAttempts - 1) throw error;
+          attempts++;
         }
-        return data as ConciergeResponse;
-      } catch (error: any) {
-        console.error('Concierge request error:', error);
-        throw error;
       }
+
+      throw new Error("Failed to get response after multiple attempts");
     },
     onSuccess: (data) => {
       if (data.answer) {
@@ -205,7 +217,7 @@ export default function WhiskyConcierge() {
 
     setConciergeName(name);
     setIsEditingName(false);
-    setCustomName(""); 
+    setCustomName("");
 
     toast({
       title: "Name Updated",
@@ -223,7 +235,7 @@ export default function WhiskyConcierge() {
   // Name generation mutation with improved error handling
   const generateNameMutation = useMutation({
     mutationFn: async (style: "funny" | "professional" | "casual") => {
-      console.log("Generating name with style:", style); 
+      console.log("Generating name with style:", style);
       const response = await fetch("/api/whisky-concierge/generate-name", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -237,7 +249,7 @@ export default function WhiskyConcierge() {
       }
 
       const data = await response.json();
-      console.log("Generated name:", data.name); 
+      console.log("Generated name:", data.name);
       return data.name;
     },
     onSuccess: (name) => {
@@ -276,12 +288,12 @@ export default function WhiskyConcierge() {
       </div>
 
       {/* Name Customization Dialog */}
-      <Dialog 
-        open={isEditingName} 
+      <Dialog
+        open={isEditingName}
         onOpenChange={(open) => {
           setIsEditingName(open);
           if (!open) {
-            setCustomName(""); 
+            setCustomName("");
           }
         }}
       >
@@ -378,7 +390,7 @@ export default function WhiskyConcierge() {
       </Dialog>
 
       {/* Chat Interface with reduced size */}
-      <Card className="max-w-2xl mx-auto"> 
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
@@ -394,7 +406,7 @@ export default function WhiskyConcierge() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[300px] pr-4"> 
+          <ScrollArea className="h-[300px] pr-4">
             <div className="space-y-4">
               {messages.map((msg, i) => (
                 <div

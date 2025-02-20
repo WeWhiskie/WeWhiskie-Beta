@@ -18,6 +18,102 @@ class WhiskyAIError extends Error {
   }
 }
 
+// Request queue to manage concurrent requests
+class RequestQueue {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private readonly MAX_CONCURRENT = 2;
+  private currentConcurrent = 0;
+
+  async add<T>(request: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await request();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      this.processQueue();
+    });
+  }
+
+  private async processQueue() {
+    if (this.processing || this.currentConcurrent >= this.MAX_CONCURRENT) return;
+    this.processing = true;
+
+    while (this.queue.length > 0 && this.currentConcurrent < this.MAX_CONCURRENT) {
+      const request = this.queue.shift();
+      if (request) {
+        this.currentConcurrent++;
+        try {
+          await request();
+        } catch (error) {
+          console.error('Error processing queued request:', error);
+        }
+        this.currentConcurrent--;
+      }
+    }
+
+    this.processing = false;
+    if (this.queue.length > 0) {
+      this.processQueue();
+    }
+  }
+}
+
+const requestQueue = new RequestQueue();
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 1000; // 1 second
+
+async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
+  return requestQueue.add(async () => {
+    try {
+      // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        response_format: { type: "json_object" }
+      });
+
+      if (!response.choices[0].message.content) {
+        throw new Error("Empty response from AI service");
+      }
+
+      return JSON.parse(response.choices[0].message.content);
+    } catch (error: any) {
+      if (error.status === 429) { // Rate limit error
+        if (retryCount < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+          console.log(`Rate limit hit, retrying in ${delay}ms...`);
+          await sleep(delay);
+          return makeOpenAIRequest(prompt, retryCount + 1);
+        }
+        throw new WhiskyAIError(
+          "We're experiencing high demand. Please wait 30 seconds before trying again.",
+          "RATE_LIMIT_EXCEEDED"
+        );
+      }
+
+      if (error.status === 401 || !process.env.OPENAI_API_KEY) {
+        throw new WhiskyAIError(
+          "AI service configuration error. Please contact support.",
+          "INVALID_API_KEY"
+        );
+      }
+
+      console.error('OpenAI request error:', error);
+      throw new WhiskyAIError(
+        "Unable to process request at this time. Please try again later.",
+        "AI_SERVICE_ERROR"
+      );
+    }
+  });
+}
+
 interface WhiskyRecommendation {
   whisky: Whisky;
   reason: string;
@@ -36,53 +132,23 @@ interface ConciergeResponse {
   suggestedTopics?: string[];
 }
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 1000; // 1 second
+interface WhiskyRecommendation {
+  whisky: Whisky;
+  reason: string;
+  confidence: number;
+  educationalContent?: {
+    history?: string;
+    production?: string;
+    tastingNotes?: string;
+    pairingAdvice?: string;
+  };
+}
 
-async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
-  try {
-    // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
-    });
-
-    if (!response.choices[0].message.content) {
-      throw new Error("Empty response from AI service");
-    }
-
-    return JSON.parse(response.choices[0].message.content);
-  } catch (error: any) {
-    if (error.status === 429) { // Rate limit error
-      if (retryCount < MAX_RETRIES) {
-        const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
-        console.log(`Rate limit hit, retrying in ${delay}ms...`);
-        await sleep(delay);
-        return makeOpenAIRequest(prompt, retryCount + 1);
-      }
-      throw new WhiskyAIError(
-        "We're experiencing high demand. Please try again in a few minutes.",
-        "RATE_LIMIT_EXCEEDED"
-      );
-    }
-
-    if (error.status === 401 || !process.env.OPENAI_API_KEY) {
-      throw new WhiskyAIError(
-        "AI service configuration error. Please contact support.",
-        "INVALID_API_KEY"
-      );
-    }
-
-    console.error('OpenAI request error:', error);
-    throw new WhiskyAIError(
-      "Unable to process request at this time. Please try again later.",
-      "AI_SERVICE_ERROR"
-    );
-  }
+interface ConciergeResponse {
+  recommendations?: WhiskyRecommendation[];
+  answer?: string;
+  suggestedTopics?: string[];
 }
 
 export async function getWhiskyRecommendations(
