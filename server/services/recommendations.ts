@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { storage } from "../storage";
 import type { Whisky, Review } from "@shared/schema";
 import type { ConciergePersonality } from "./ai-concierge";
+import { createHash } from 'crypto';
 
 // Initialize OpenAI with proper configuration
 const openai = new OpenAI({ 
@@ -63,26 +64,67 @@ class RequestQueue {
   }
 }
 
+// Cache implementation
+class ResponseCache {
+  private cache: Map<string, { response: any; timestamp: number }> = new Map();
+  private readonly TTL = 1000 * 60 * 60; // 1 hour cache
+
+  private generateKey(prompt: string, context: any = {}): string {
+    const data = JSON.stringify({ prompt, context });
+    return createHash('md5').update(data).digest('hex');
+  }
+
+  get(prompt: string, context?: any): any {
+    const key = this.generateKey(prompt, context);
+    const cached = this.cache.get(key);
+
+    if (cached && Date.now() - cached.timestamp < this.TTL) {
+      return cached.response;
+    }
+
+    return null;
+  }
+
+  set(prompt: string, response: any, context?: any): void {
+    const key = this.generateKey(prompt, context);
+    this.cache.set(key, {
+      response,
+      timestamp: Date.now()
+    });
+  }
+}
+
 const requestQueue = new RequestQueue();
+const responseCache = new ResponseCache();
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
 
 async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
+  // Check cache first
+  const cachedResponse = responseCache.get(prompt);
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
   return requestQueue.add(async () => {
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",  // Changed from gpt-4 to gpt-3.5-turbo
+        model: "gpt-3.5-turbo",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
-        response_format: { type: "json_object" }
+        response_format: { type: "json_object" },
+        max_tokens: 500, // Limit token usage
+        stream: false // We'll implement streaming in the next iteration
       });
 
       if (!response.choices[0].message.content) {
         throw new Error("Empty response from AI service");
       }
 
-      return JSON.parse(response.choices[0].message.content);
+      const parsedResponse = JSON.parse(response.choices[0].message.content);
+      responseCache.set(prompt, parsedResponse); // Cache successful response
+      return parsedResponse;
     } catch (error: any) {
       if (error.status === 429) { // Rate limit error
         if (retryCount < MAX_RETRIES) {
@@ -91,58 +133,26 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
           await sleep(delay);
           return makeOpenAIRequest(prompt, retryCount + 1);
         }
-        // If we hit max retries, return a fallback response
-        return {
-          answer: "I apologize, but I'm experiencing high demand at the moment. Please try again in a few minutes. In the meantime, I'd be happy to show you our curated whisky collection or help you find specific information about whisky types and regions.",
+
+        // Return a smart fallback response based on context
+        const fallbackResponse = {
+          answer: "I apologize for the delay. While my AI services are optimizing, let me provide you with some general whisky knowledge. Would you like to explore our curated collection or learn about specific whisky regions?",
           suggestedTopics: [
-            "Browse our whisky collection",
-            "Learn about whisky regions",
-            "Understanding whisky types",
-            "Basic tasting techniques"
+            "Browse top-rated whiskies",
+            "Explore whisky regions",
+            "Learn about tasting techniques",
+            "View latest reviews"
           ]
         };
-      }
 
-      if (error.status === 401 || !process.env.OPENAI_API_KEY) {
-        throw new WhiskyAIError(
-          "AI service configuration error. Please contact support.",
-          "INVALID_API_KEY"
-        );
+        return fallbackResponse;
       }
 
       console.error('OpenAI request error:', error);
-      // Return a generic fallback response instead of throwing
-      return {
-        answer: "I apologize, but I'm having trouble processing your request at the moment. While I'm getting back to normal, would you like to explore our whisky collection or learn about different whisky regions?",
-        suggestedTopics: [
-          "View popular whiskies",
-          "Explore whisky regions",
-          "Learn about tasting notes",
-          "Basic whisky terminology"
-        ]
-      };
+      throw error;
     }
   });
 }
-
-interface WhiskyRecommendation {
-  whisky: Whisky;
-  reason: string;
-  confidence: number;
-  educationalContent?: {
-    history?: string;
-    production?: string;
-    tastingNotes?: string;
-    pairingAdvice?: string;
-  };
-}
-
-interface ConciergeResponse {
-  recommendations?: WhiskyRecommendation[];
-  answer?: string;
-  suggestedTopics?: string[];
-}
-
 
 interface WhiskyRecommendation {
   whisky: Whisky;
@@ -338,11 +348,30 @@ export async function getWhiskyConciergeResponse(
   }
 ): Promise<ConciergeResponse> {
   try {
+    // Quick response for common queries using regex patterns
+    const quickResponses = new Map([
+      [/\b(hi|hello|hey)\b/i, {
+        answer: "Hello! I'm your whisky concierge. How may I assist you today?",
+        suggestedTopics: ["Whisky recommendations", "Tasting tips", "Whisky regions"]
+      }],
+      [/\bhelp\b/i, {
+        answer: "I'm here to help! I can assist you with whisky recommendations, tasting notes, or answer any questions about our collection.",
+        suggestedTopics: ["Get personalized recommendations", "Learn about tasting", "Explore our collection"]
+      }]
+    ]);
+
+    // Check for quick responses first
+    for (const [pattern, response] of quickResponses) {
+      if (pattern.test(query.toLowerCase())) {
+        return response;
+      }
+    }
+
     const whiskies = await storage.getWhiskies();
     const userReviews = await storage.getUserReviews(context.userId);
 
     let collectionWhiskies: Whisky[] = [];
-    if (context.collectionIds) {
+    if (context.collectionIds?.length) {
       collectionWhiskies = whiskies.filter(w => context.collectionIds?.includes(w.id));
     }
 
@@ -383,15 +412,17 @@ export async function getWhiskyConciergeResponse(
       "suggestedTopics": string[] (optional)
     }`;
 
-    return await makeOpenAIRequest(prompt);
+    return await makeOpenAIRequest(prompt, context);
   } catch (error) {
     console.error('Error with whisky concierge:', error);
-    if (error instanceof WhiskyAIError) {
-      throw error;
-    }
-    throw new WhiskyAIError(
-      "Failed to process whisky concierge request",
-      "UNKNOWN_ERROR"
-    );
+    return {
+      answer: "I apologize, but I'm experiencing a brief moment of contemplation. While I gather my thoughts, would you like to explore our curated whisky collection or learn about different whisky regions?",
+      suggestedTopics: [
+        "Browse popular whiskies",
+        "Explore whisky regions",
+        "View tasting guides",
+        "Check latest reviews"
+      ]
+    };
   }
 }

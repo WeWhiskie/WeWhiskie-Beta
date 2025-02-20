@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send } from "lucide-react";
+import { Send, RefreshCcw } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Whisky } from "@shared/schema";
@@ -36,10 +36,13 @@ const TypingIndicator = () => (
   </div>
 );
 
+const TIMEOUT_DURATION = 30000; // 30 seconds timeout
+
 export default function WhiskyConcierge() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(false);
+  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -61,6 +64,15 @@ export default function WhiskyConcierge() {
     scrollToBottom();
   }, [messages]);
 
+  // Clear timeout on component unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [timeoutId]);
+
   const conciergeQuery = useMutation({
     mutationFn: async (message: string) => {
       if (!user) {
@@ -73,6 +85,19 @@ export default function WhiskyConcierge() {
 
       setIsThinking(true);
       setRetryCount(0);
+
+      // Set timeout for response
+      const timeout = setTimeout(() => {
+        setIsThinking(false);
+        toast({
+          variant: "destructive",
+          title: "Response Timeout",
+          description: "The concierge is taking longer than expected. Please try again.",
+          duration: 5000,
+        });
+      }, TIMEOUT_DURATION);
+
+      setTimeoutId(timeout);
 
       const payload = {
         query: message,
@@ -103,15 +128,27 @@ export default function WhiskyConcierge() {
           return data;
         } catch (error: any) {
           if (attempt < maxRetries) {
-            const delay = 5000 * Math.pow(2, attempt);
+            const delay = 1000 * Math.pow(2, attempt); // Exponential backoff starting at 1 second
             await new Promise(resolve => setTimeout(resolve, delay));
+            setRetryCount(attempt + 1);
             return makeRequest(attempt + 1);
           }
           throw error;
         }
       };
 
-      return makeRequest(0);
+      try {
+        const result = await makeRequest(0);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        return result;
+      } catch (error) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        throw error;
+      }
     },
     onMutate: (message) => {
       setMessages((prev) => [
@@ -157,6 +194,15 @@ export default function WhiskyConcierge() {
     e.preventDefault();
     if (!query.trim() || isThinking) return;
     conciergeQuery.mutate(query);
+  };
+
+  const handleRetry = () => {
+    if (messages.length > 0) {
+      const lastUserMessage = messages.findLast(m => m.role === "user");
+      if (lastUserMessage) {
+        conciergeQuery.mutate(lastUserMessage.content);
+      }
+    }
   };
 
   if (!user) {
@@ -211,11 +257,16 @@ export default function WhiskyConcierge() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-start"
+              className="flex items-start gap-2"
             >
               <div className="bg-muted rounded-lg">
                 <TypingIndicator />
               </div>
+              {retryCount > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Retry attempt {retryCount}/{maxRetries}...
+                </span>
+              )}
             </motion.div>
           )}
           <div ref={messagesEndRef} />
@@ -241,6 +292,17 @@ export default function WhiskyConcierge() {
           >
             <Send className="h-4 w-4" />
           </Button>
+          {isThinking && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              className="px-2"
+            >
+              <RefreshCcw className="h-4 w-4" />
+            </Button>
+          )}
         </form>
       </div>
     </div>
