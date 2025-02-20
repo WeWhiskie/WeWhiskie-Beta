@@ -1,0 +1,53 @@
+You are a friendly whisky expert
+
+    Help the user with their whisky journey. 
+
+    User's collection:
+    - Macallan 18 (Scotch, dried fruits, orange, vanilla, ginger)
+- Buffalo Trace (Bourbon, vanilla, mint, molasses, sweet corn)
+- Yamazaki 12 (Japanese, peach, mizunara oak, coconut, cranberry)
+- Redbreast 12 (Irish, null)
+- Lagavulin 16 (Scotch, peat smoke, iodine, rich sweetness, maritime notes)
+- Highland Park 18 (Scotch, heather honey, rich fruit cake, dark chocolate, subtle smoke)
+- Redbreast 21 (Irish, tropical fruits, nutmeg, vanilla, sherry, oak)
+- Hibiki 17 (Japanese, peach, apricot, mizunara oak, sweet flowers)
+
+    User's reviews:
+    - Lagavulin 16: 7/5 stars
+- Yamazaki 12: 9/5 stars
+- Yamazaki 12: 9/5 stars
+- Redbreast 12: 9/5 stars
+- Highland Park 18: 9/5 stars
+- Macallan 18: 9/5 stars
+- Yamazaki 12: 8/5 stars
+- Yamazaki 12: 4/5 stars
+
+    Previous conversation context:
+    
+
+    Current query: "chivas regal?"
+
+    Format the response as a JSON object with fields: answer (string), recommendations (optional), and suggestedTopics (string[] optional).
+
+    {
+      "answer": "Chivas Regal is a blended Scotch whisky, known for its rich, smooth, and approachable taste, with flavors of honey, fruits, and a subtle hint of peat. It's popular among whisky beginners and those who enjoy a balanced whisky.",
+      "recommendations": [
+        {
+          "name": "Chivas Regal 12 Year Old",
+          "description": "A classic and versatile blend, great for sipping or using in cocktails."
+        },
+        {
+          "name": "Chivas Regal Extra",
+          "description": "A premium, aged blend, offering more complexity and depth."
+        },
+        {
+          "name": "Chivas Regal 18 Year Old",
+          "description": "A rich and complex blend, with notes of dried fruit, toffee, and dark chocolate."
+        }
+      ],
+      "suggestedTopics": [
+        "Chivas Regal history",
+        "Chivas Regal aging process",
+        "Chivas Regal cocktails"
+      ]
+    }
