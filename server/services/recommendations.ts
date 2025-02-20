@@ -3,7 +3,12 @@ import { storage } from "../storage";
 import type { Whisky, Review } from "@shared/schema";
 import type { ConciergePersonality } from "./ai-concierge";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Initialize OpenAI with proper configuration
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY,
+  maxRetries: 3,
+  timeout: 30000
+});
 
 // Add specific error types
 class WhiskyAIError extends Error {
