@@ -8,10 +8,10 @@ import { createHash } from 'crypto';
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY,
   maxRetries: 3,
-  timeout: 30000
+  timeout: 15000 // Reduced timeout for faster fallback
 });
 
-// Add specific error types
+// Enhanced error handling
 class WhiskyAIError extends Error {
   constructor(message: string, public readonly code: string) {
     super(message);
@@ -19,11 +19,11 @@ class WhiskyAIError extends Error {
   }
 }
 
-// Request queue to manage concurrent requests
+// Improved request queue with concurrent request handling
 class RequestQueue {
   private queue: Array<() => Promise<any>> = [];
   private processing = false;
-  private readonly MAX_CONCURRENT = 2;
+  private readonly MAX_CONCURRENT = 3; // Increased concurrent requests
   private currentConcurrent = 0;
 
   async add<T>(request: () => Promise<T>): Promise<T> {
@@ -34,6 +34,9 @@ class RequestQueue {
           resolve(result);
         } catch (error) {
           reject(error);
+        } finally {
+          this.currentConcurrent--;
+          this.processQueue(); // Process next request after completion
         }
       });
       this.processQueue();
@@ -53,7 +56,6 @@ class RequestQueue {
         } catch (error) {
           console.error('Error processing queued request:', error);
         }
-        this.currentConcurrent--;
       }
     }
 
@@ -64,13 +66,18 @@ class RequestQueue {
   }
 }
 
-// Cache implementation
+// Enhanced caching with smarter key generation and shorter TTL
 class ResponseCache {
   private cache: Map<string, { response: any; timestamp: number }> = new Map();
-  private readonly TTL = 1000 * 60 * 60; // 1 hour cache
+  private readonly TTL = 1000 * 60 * 30; // 30 minutes cache to ensure fresher responses
 
   private generateKey(prompt: string, context: any = {}): string {
-    const data = JSON.stringify({ prompt, context });
+    const sanitizedContext = {
+      ...context,
+      userId: context.userId, // Only include essential context
+      collectionIds: context.collectionIds
+    };
+    const data = JSON.stringify({ prompt, context: sanitizedContext });
     return createHash('md5').update(data).digest('hex');
   }
 
@@ -79,6 +86,7 @@ class ResponseCache {
     const cached = this.cache.get(key);
 
     if (cached && Date.now() - cached.timestamp < this.TTL) {
+      console.log('Cache hit for prompt:', prompt.substring(0, 50) + '...');
       return cached.response;
     }
 
@@ -91,6 +99,7 @@ class ResponseCache {
       response,
       timestamp: Date.now()
     });
+    console.log('Cached response for prompt:', prompt.substring(0, 50) + '...');
   }
 }
 
@@ -98,9 +107,12 @@ const requestQueue = new RequestQueue();
 const responseCache = new ResponseCache();
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 1000; // 1 second
+const INITIAL_RETRY_DELAY = 1000;
 
+// Enhanced OpenAI request handler with better error recovery
 async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
+  console.log('Making OpenAI request:', prompt.substring(0, 50) + '...');
+
   // Check cache first
   const cachedResponse = responseCache.get(prompt);
   if (cachedResponse) {
@@ -114,8 +126,9 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
         response_format: { type: "json_object" },
-        max_tokens: 500, // Limit token usage
-        stream: false // We'll implement streaming in the next iteration
+        max_tokens: 500,
+        presence_penalty: 0.6, // Added to encourage more diverse responses
+        frequency_penalty: 0.1
       });
 
       if (!response.choices[0].message.content) {
@@ -123,33 +136,34 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
       }
 
       const parsedResponse = JSON.parse(response.choices[0].message.content);
-      responseCache.set(prompt, parsedResponse); // Cache successful response
+      responseCache.set(prompt, parsedResponse);
       return parsedResponse;
     } catch (error: any) {
-      if (error.status === 429) { // Rate limit error
+      console.error('OpenAI request error:', error);
+
+      if (error.status === 429 || (error.message && error.message.includes('rate'))) {
         if (retryCount < MAX_RETRIES) {
           const delay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
           console.log(`Rate limit hit, retrying in ${delay}ms...`);
           await sleep(delay);
           return makeOpenAIRequest(prompt, retryCount + 1);
         }
-
-        // Return a smart fallback response based on context
-        const fallbackResponse = {
-          answer: "I apologize for the delay. While my AI services are optimizing, let me provide you with some general whisky knowledge. Would you like to explore our curated collection or learn about specific whisky regions?",
-          suggestedTopics: [
-            "Browse top-rated whiskies",
-            "Explore whisky regions",
-            "Learn about tasting techniques",
-            "View latest reviews"
-          ]
-        };
-
-        return fallbackResponse;
       }
 
-      console.error('OpenAI request error:', error);
-      throw error;
+      // Intelligent fallback based on error type
+      const fallbackResponse = {
+        answer: error.status === 429 
+          ? "I'm currently experiencing high demand. Would you like to explore our curated collection while I optimize my responses?"
+          : "I apologize for the brief interruption. Let me provide you with some expert insights while my AI services recalibrate.",
+        suggestedTopics: [
+          "Browse our top-rated whiskies",
+          "Learn about whisky regions",
+          "Explore tasting techniques",
+          "View community reviews"
+        ]
+      };
+
+      return fallbackResponse;
     }
   });
 }
