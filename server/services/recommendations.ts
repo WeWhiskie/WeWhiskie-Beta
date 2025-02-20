@@ -125,12 +125,34 @@ async function processAIResponse(prompt: string, requestContext?: any): Promise<
     }
 
     const response = await requestQueue.add(async () => {
-      const generatedText = await huggingFaceClient.generateResponse(prompt);
+      const formattedPrompt = `${prompt}\n\nPlease format your response as a JSON object with the following structure:
+{
+  "answer": "Your response text here",
+  "recommendations": [optional array of whisky recommendations],
+  "suggestedTopics": [optional array of suggested topics]
+}`;
+
+      const generatedText = await huggingFaceClient.generateResponse(formattedPrompt);
       try {
-        return JSON.parse(generatedText);
+        // Try to extract JSON from the response if it's embedded in other text
+        const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const jsonStr = jsonMatch[0];
+          return JSON.parse(jsonStr);
+        }
+
+        // If no JSON found, return a formatted response
+        return {
+          answer: generatedText,
+          suggestedTopics: ["General whisky discussion", "Whisky recommendations", "Tasting notes"]
+        };
       } catch (error) {
         console.error('Error parsing AI response:', error);
-        return { answer: generatedText };
+        // Return a fallback response
+        return {
+          answer: generatedText,
+          suggestedTopics: ["General whisky discussion", "Whisky recommendations", "Tasting notes"]
+        };
       }
     });
 
@@ -216,7 +238,7 @@ const getThemedResponse = (personality?: ConciergePersonality) => {
     }
   };
 
-  const defaultStyle = personality?.accent?.toLowerCase().includes('highland') ? 'highland' : 
+  const defaultStyle = personality?.accent?.toLowerCase().includes('highland') ? 'highland' :
                       personality?.accent?.toLowerCase().includes('speyside') ? 'speyside' : 'islay';
 
   const response = responses[defaultStyle];
@@ -309,8 +331,8 @@ export async function getWhiskyConciergeResponse(
         suggestedTopics: ["Whisky recommendations", "Tasting tips", "Whisky regions"]
       }],
       [/\bhelp\b/i, {
-        answer: "I'm here to help! I can assist you with whisky recommendations, tasting notes, or answer any questions about our collection.",
-        suggestedTopics: ["Get personalized recommendations", "Learn about tasting", "Explore our collection"]
+        answer: "I'm here to help! I can assist you with whisky recommendations, tasting notes, or answer any questions about whisky.",
+        suggestedTopics: ["Get personalized recommendations", "Learn about tasting", "Explore whisky types"]
       }]
     ]);
 
@@ -329,7 +351,7 @@ export async function getWhiskyConciergeResponse(
       collectionWhiskies = whiskies.filter(w => context.collectionIds?.includes(w.id));
     }
 
-    const personalityContext = context.personality 
+    const personalityContext = context.personality
       ? `You are ${context.personality.name}, speaking with a ${context.personality.accent} accent. 
          Your background: ${context.personality.background}
          Your personality: ${context.personality.personality}
@@ -337,22 +359,15 @@ export async function getWhiskyConciergeResponse(
          Stay in character and occasionally use your catchphrase.`
       : "You are a friendly whisky expert";
 
-    const prompt = `${personalityContext}
+    const prompt = `As a whisky concierge, help answer this query: "${query}"
 
-    Help the user with their whisky journey. 
+Collection information:
+${collectionWhiskies.map(w => `- ${w.name} (${w.type}, ${w.tastingNotes})`).join('\n')}
 
-    User's collection:
-    ${collectionWhiskies.map(w => `- ${w.name} (${w.type}, ${w.tastingNotes})`).join('\n')}
+User's previous ratings:
+${userReviews.map(review => `- ${review.whisky.name}: ${review.rating}/5 stars`).join('\n')}
 
-    User's reviews:
-    ${userReviews.map(review => `- ${review.whisky.name}: ${review.rating}/5 stars`).join('\n')}
-
-    Previous conversation context:
-    ${context.previousInteractions?.map(int => `User: ${int.query}\nConcierge: ${int.response}`).join('\n')}
-
-    Current query: "${query}"
-
-    Format the response as a JSON object with fields: answer (string), recommendations (optional), and suggestedTopics (string[] optional).`;
+${personalityContext}`;
 
     try {
       return await processAIResponse(prompt, context);
