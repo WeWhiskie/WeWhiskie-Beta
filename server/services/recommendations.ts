@@ -150,20 +150,24 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
         }
       }
 
-      // Intelligent fallback based on error type
-      const fallbackResponse = {
-        answer: error.status === 429 
-          ? "I'm currently experiencing high demand. Would you like to explore our curated collection while I optimize my responses?"
-          : "I apologize for the brief interruption. Let me provide you with some expert insights while my AI services recalibrate.",
-        suggestedTopics: [
-          "Browse our top-rated whiskies",
-          "Learn about whisky regions",
-          "Explore tasting techniques",
-          "View community reviews"
-        ]
-      };
+      // Enhanced fallback system with whisky-specific responses
+      const fallbackResponses = [
+        {
+          answer: "While my AI systems recalibrate, let me share that Glenfiddich is known for its distinctive pear and apple notes. Would you like to explore our curated collection of Speyside whiskies?",
+          suggestedTopics: ["Speyside whiskies", "Glenfiddich expressions", "Fruity whisky profiles"]
+        },
+        {
+          answer: "As my systems optimize, did you know that Glenfiddich means 'Valley of the Deer' in Gaelic? I'd be happy to tell you more about Scottish distilleries.",
+          suggestedTopics: ["Scottish distilleries", "Whisky terminology", "Distillation process"]
+        },
+        {
+          answer: "While I process your request, let me mention that Glenfiddich was one of the first distilleries to market single malt whisky outside Scotland. Would you like to learn more about whisky history?",
+          suggestedTopics: ["Whisky history", "Single malt basics", "Global whisky market"]
+        }
+      ];
 
-      return fallbackResponse;
+      const randomIndex = Math.floor(Math.random() * fallbackResponses.length);
+      return fallbackResponses[randomIndex];
     }
   });
 }
