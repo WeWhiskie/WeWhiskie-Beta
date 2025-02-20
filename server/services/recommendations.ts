@@ -7,9 +7,26 @@ import { createHash } from 'crypto';
 // Initialize OpenAI with proper configuration
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY,
-  maxRetries: 3,
-  timeout: 15000 // Reduced timeout for faster fallback
+  maxRetries: 2,
+  timeout: 12000, // Reduced timeout for faster fallback
+  defaultHeaders: { 'Whisky-Bot-Version': '1.0' },
+  defaultQuery: { stream: false }
 });
+
+// Add connection checking
+const checkOpenAIConnection = async () => {
+  try {
+    await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: "test" }],
+      max_tokens: 5
+    });
+    return true;
+  } catch (error) {
+    console.error('OpenAI connection test failed:', error);
+    return false;
+  }
+};
 
 // Enhanced error handling
 class WhiskyAIError extends Error {
@@ -150,21 +167,36 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
         }
       }
 
-      // Enhanced fallback system with whisky-specific responses
-      const fallbackResponses = [
-        {
-          answer: "While my AI systems recalibrate, let me share that Glenfiddich is known for its distinctive pear and apple notes. Would you like to explore our curated collection of Speyside whiskies?",
-          suggestedTopics: ["Speyside whiskies", "Glenfiddich expressions", "Fruity whisky profiles"]
-        },
-        {
-          answer: "As my systems optimize, did you know that Glenfiddich means 'Valley of the Deer' in Gaelic? I'd be happy to tell you more about Scottish distilleries.",
-          suggestedTopics: ["Scottish distilleries", "Whisky terminology", "Distillation process"]
-        },
-        {
-          answer: "While I process your request, let me mention that Glenfiddich was one of the first distilleries to market single malt whisky outside Scotland. Would you like to learn more about whisky history?",
-          suggestedTopics: ["Whisky history", "Single malt basics", "Global whisky market"]
-        }
-      ];
+      // Enhanced themed conversation handlers with personality-driven responses
+      const getThemedResponse = (personality?: ConciergePersonality) => {
+        const responses = [
+          {
+            highland: {
+              answer: "Ach, let me gather my thoughts while I nose this dram. In my 40 years at Highland Park, I learned that patience reveals the finest notes. Speaking of which, shall we explore the noble Highland malts?",
+              suggestedTopics: ["Highland whisky characteristics", "Age statements", "Cask influence"]
+            },
+            speyside: {
+              answer: "While I check my notes, let me tell you about the magic of Speyside. As we say in Dufftown, 'Rome was built on seven hills, but Dufftown stands on seven stills!' Shall we explore these legendary distilleries?",
+              suggestedTopics: ["Speyside distilleries", "Water influence", "Fruity notes"]
+            },
+            islay: {
+              answer: "By the roar of the Atlantic! While I gather my thoughts, let's talk about how the sea shapes our island's mighty drams. Have you experienced the maritime magic of Islay malts?",
+              suggestedTopics: ["Islay peat", "Coastal influence", "Smoky profiles"]
+            }
+          }
+        ];
+
+        const defaultStyle = personality?.accent?.toLowerCase().includes('highland') ? 'highland' : 
+                           personality?.accent?.toLowerCase().includes('speyside') ? 'speyside' : 'islay';
+        
+        const response = responses[Math.floor(Math.random() * responses.length)][defaultStyle];
+        return {
+          answer: personality?.catchphrase + " " + response.answer,
+          suggestedTopics: response.suggestedTopics
+        };
+      };
+
+      const fallbackResponses = getThemedResponse(context?.personality);
 
       const randomIndex = Math.floor(Math.random() * fallbackResponses.length);
       return fallbackResponses[randomIndex];
@@ -342,17 +374,42 @@ export async function generateConciergePersonality(
       throw error;
     }
 
-    // Return a default personality if generation fails
-    return {
-      name,
-      accent: "Classic Scottish",
-      background: "A traditional whisky expert with years of experience",
-      personality: "Knowledgeable and friendly",
-      avatarDescription: "A distinguished figure in traditional Scottish attire",
-      voiceDescription: "Warm and welcoming with a gentle brogue",
-      specialties: ["Single Malts", "Whisky History", "Tasting Techniques"],
-      catchphrase: "Slàinte mhath! (To your good health!)"
-    };
+    // Enhanced default personalities for better fallback experience
+    const fallbackPersonalities = [
+      {
+        name,
+        accent: "Highland Scots",
+        background: "Former master distiller at Highland Park with 40 years of experience",
+        personality: "Warm, witty, and full of spirited tales from the distilleries",
+        avatarDescription: "Silver-haired gentleman in a tweed jacket with a thistle pin",
+        voiceDescription: "Rich, resonant Highland accent with a melodic lilt",
+        specialties: ["Highland Single Malts", "Whisky Maturation", "Cask Selection"],
+        catchphrase: "Let the spirit guide us! Slàinte mhath!"
+      },
+      {
+        name,
+        accent: "Speyside Scots",
+        background: "Third-generation cooper from Dufftown, the malt whisky capital",
+        personality: "Detail-oriented craftsperson with a passion for tradition",
+        avatarDescription: "Robust figure in traditional cooper's apron with well-worn tools",
+        voiceDescription: "Gentle Speyside burr with technical precision",
+        specialties: ["Wood Influence", "Speyside Malts", "Traditional Craftsmanship"],
+        catchphrase: "In wood we trust, in spirit we flourish!"
+      },
+      {
+        name,
+        accent: "Islay Scots",
+        background: "Peat cutting expert turned distillery manager from Islay",
+        personality: "Bold and passionate about smoky whiskies",
+        avatarDescription: "Weather-worn face with bright eyes, wearing a Hebridean wool sweater",
+        voiceDescription: "Strong Islay accent with the rhythm of the sea",
+        specialties: ["Peated Whiskies", "Maritime Influence", "Island Distilleries"],
+        catchphrase: "From peat and sea comes wisdom!"
+      }
+    ];
+
+    // Return a random personality for variety
+    return fallbackPersonalities[Math.floor(Math.random() * fallbackPersonalities.length)];
   }
 }
 
