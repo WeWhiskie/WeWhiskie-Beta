@@ -47,11 +47,11 @@ app.use((req, res, next) => {
       log(`Error: ${message}`, 'error');
     });
 
-    // Use port 5000 to match workflow expectations
-    const PORT = 5000;
-
-    // Improved server start function with more robust error handling
-    const startServer = () => {
+    // Try ports in sequence if primary port is in use
+    const tryPorts = [5000, 5001, 5002, 5003];
+    
+    const startServer = async () => {
+      for (const PORT of tryPorts) {
       return new Promise((resolve, reject) => {
         try {
           log('Starting server...', 'express');
@@ -63,8 +63,9 @@ app.use((req, res, next) => {
 
           serverInstance.on('error', (error: NodeJS.ErrnoException) => {
             if (error.code === 'EADDRINUSE') {
-              log(`Port ${PORT} is in use. Please check if another instance is running.`, 'error');
-              reject(new Error(`Port ${PORT} is in use`));
+              log(`Port ${PORT} is in use, trying next port...`, 'error');
+              serverInstance.close();
+              continue;
             } else {
               log(`Server error: ${error.message}`, 'error');
               reject(error);
