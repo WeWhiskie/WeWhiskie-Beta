@@ -1,27 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Book, Lightbulb, GraduationCap, Edit2, Wand2, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, motion as m } from "framer-motion";
 import type { Whisky } from "@shared/schema";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 // Whisky-themed concierge names
 const DEFAULT_NAMES = [
@@ -72,23 +59,8 @@ interface ConciergeResponse {
 
 const STORAGE_KEY = 'whiskyConcierge.name';
 
-const ChatBubble = motion(({ children, isUser }: { children: React.ReactNode; isUser: boolean }) => (
-  <div
-    className={`flex items-start gap-3 ${
-      isUser ? "flex-row-reverse" : "flex-row"
-    }`}
-  >
-    <div
-      className={`rounded-lg p-3 max-w-[80%] ${
-        isUser
-          ? "bg-primary text-primary-foreground ml-auto"
-          : "bg-muted"
-      }`}
-    >
-      {children}
-    </div>
-  </div>
-));
+// Create a proper motion component using motion.create()
+const ChatBubble = m.div;
 
 const TypingIndicator = () => (
   <div className="flex items-center gap-1 p-2">
@@ -319,146 +291,17 @@ export default function WhiskyConcierge() {
 
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 space-y-8">
-      <div className="text-center space-y-4">
-        <div className="flex items-center justify-center gap-2">
-          <h1 className="text-4xl font-bold flex items-center gap-2">
-            {conciergeName}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsEditingName(true)}
-              className="hover:bg-accent"
-            >
-              <Edit2 className="h-4 w-4" />
-            </Button>
-          </h1>
-        </div>
-        <p className="text-muted-foreground text-lg">
-          Your Personal Whisky Guide
-        </p>
+    <div className="h-full flex flex-col space-y-2">
+      {/* Minimize the header to save space */}
+      <div className="text-center py-2">
+        <h1 className="text-lg font-semibold">{conciergeName}</h1>
+        <p className="text-xs text-muted-foreground">Your Personal Whisky Guide</p>
       </div>
 
-      {/* Name Customization Dialog */}
-      <Dialog
-        open={isEditingName}
-        onOpenChange={(open) => {
-          setIsEditingName(open);
-          if (!open) {
-            setCustomName("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Customize Your Concierge</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-            {/* Quick Select Section */}
-            <div className="space-y-2">
-              <h4 className="font-medium text-lg">Featured Names</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {DEFAULT_NAMES.slice(0, 6).map((name) => (
-                  <Button
-                    key={name}
-                    variant="outline"
-                    className={`justify-start hover:bg-accent transition-colors ${
-                      name === conciergeName ? "bg-accent" : ""
-                    }`}
-                    onClick={() => handleNameSelect(name)}
-                  >
-                    {name}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Browse All Names */}
-            <div className="space-y-2">
-              <h4 className="font-medium text-lg">Browse All Names</h4>
-              <ScrollArea className="h-[200px] rounded-md border p-4">
-                <div className="grid grid-cols-2 gap-2">
-                  {DEFAULT_NAMES.map((name) => (
-                    <Button
-                      key={name}
-                      variant="ghost"
-                      className={`justify-start hover:bg-accent transition-colors ${
-                        name === conciergeName ? "bg-accent" : ""
-                      }`}
-                      onClick={() => handleNameSelect(name)}
-                    >
-                      {name}
-                    </Button>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-
-            {/* Custom Name Input */}
-            <div className="space-y-2">
-              <h4 className="font-medium text-lg">Create Your Own</h4>
-              <form onSubmit={handleCustomNameSubmit} className="flex gap-2">
-                <Input
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="Enter a custom name..."
-                  className="flex-1"
-                />
-                <Button type="submit" disabled={!customName.trim()}>
-                  Save
-                </Button>
-              </form>
-            </div>
-
-            {/* AI Name Generator */}
-            <div className="space-y-2">
-              <h4 className="font-medium text-lg">AI Name Generator</h4>
-              <div className="flex gap-2">
-                <Select
-                  value={nameStyle}
-                  onValueChange={(value) => setNameStyle(value as any)}
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select style" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="funny">Funny</SelectItem>
-                    <SelectItem value="professional">Professional</SelectItem>
-                    <SelectItem value="casual">Casual</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  onClick={() => generateNameMutation.mutate(nameStyle)}
-                  disabled={generateNameMutation.isPending}
-                  className="flex-1"
-                >
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  {generateNameMutation.isPending ? "Generating..." : "Generate AI Name"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Enhanced Chat Interface */}
-      <Card className="max-w-2xl mx-auto">
-        <CardHeader className="py-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <MessageSquare className="h-4 w-4" />
-            Chat with {conciergeName}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsEditingName(true)}
-              className="ml-2 hover:bg-accent"
-            >
-              <Edit2 className="h-3 w-3" />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3">
-          <ScrollArea className="h-[180px] pr-2">
+      {/* Chat interface */}
+      <Card className="flex-1 flex flex-col">
+        <CardContent className="p-2 flex-1 flex flex-col">
+          <ScrollArea className="flex-1 pr-2">
             <AnimatePresence>
               {messages.map((msg, i) => (
                 <motion.div
@@ -469,8 +312,20 @@ export default function WhiskyConcierge() {
                   transition={{ duration: 0.3 }}
                   className="mb-2"
                 >
-                  <ChatBubble isUser={msg.role === "user"}>
-                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                  <ChatBubble
+                    className={`flex items-start gap-3 ${
+                      msg.role === "user" ? "flex-row-reverse" : "flex-row"
+                    }`}
+                  >
+                    <div
+                      className={`rounded-lg p-3 max-w-[80%] ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground ml-auto"
+                          : "bg-muted"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap text-xs">{msg.content}</p>
+                    </div>
                   </ChatBubble>
                 </motion.div>
               ))}
@@ -519,45 +374,6 @@ export default function WhiskyConcierge() {
           </form>
         </CardContent>
       </Card>
-
-      {/* Quick Access Cards */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <Card className="cursor-pointer hover:bg-accent transition-colors">
-          <CardContent className="pt-6">
-            <div className="text-center space-y-2">
-              <Book className="h-8 w-8 mx-auto" />
-              <h3 className="font-semibold">Whisky Encyclopedia</h3>
-              <p className="text-sm text-muted-foreground">
-                Explore detailed information about whisky types and regions
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:bg-accent transition-colors">
-          <CardContent className="pt-6">
-            <div className="text-center space-y-2">
-              <GraduationCap className="h-8 w-8 mx-auto" />
-              <h3 className="font-semibold">Learning Path</h3>
-              <p className="text-sm text-muted-foreground">
-                Track your whisky knowledge progress
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:bg-accent transition-colors">
-          <CardContent className="pt-6">
-            <div className="text-center space-y-2">
-              <Lightbulb className="h-8 w-8 mx-auto" />
-              <h3 className="font-semibold">Personalized Tips</h3>
-              <p className="text-sm text-muted-foreground">
-                Get custom recommendations based on your taste
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
