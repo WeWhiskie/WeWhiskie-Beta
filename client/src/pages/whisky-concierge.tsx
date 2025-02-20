@@ -74,6 +74,7 @@ const STORAGE_KEY = 'whiskyConcierge.name';
 export default function WhiskyConcierge() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
   const [conciergeName, setConciergeName] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEY) || "Whisky Pete";
   });
@@ -116,6 +117,8 @@ export default function WhiskyConcierge() {
       if (!message.trim()) {
         throw new Error("Please enter a message");
       }
+
+      setIsThinking(true);
 
       const payload = {
         query: message,
@@ -171,18 +174,20 @@ export default function WhiskyConcierge() {
       throw new Error("Failed to get response after multiple attempts");
     },
     onSuccess: (data) => {
-      if (data.answer) {
+      setIsThinking(false);
+      if (data.answer && typeof data.answer === 'string') {
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
             content: data.answer,
             timestamp: new Date().toISOString(),
-          },
+          } as Message,
         ]);
       }
     },
     onError: (error: Error) => {
+      setIsThinking(false);
       console.error('Concierge query error:', error);
       toast({
         variant: "destructive",
@@ -428,9 +433,10 @@ export default function WhiskyConcierge() {
                   </div>
                 </div>
               ))}
-              {conciergeQuery.isPending && (
+              {isThinking && (
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <div className="animate-pulse">Thinking...</div>
+                  <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
+                  <div>Thinking...</div>
                 </div>
               )}
             </div>
@@ -441,9 +447,9 @@ export default function WhiskyConcierge() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Ask ${conciergeName} about whisky...`}
-              disabled={conciergeQuery.isPending}
+              disabled={isThinking}
             />
-            <Button type="submit" disabled={conciergeQuery.isPending}>
+            <Button type="submit" disabled={isThinking}>
               Send
             </Button>
           </form>
