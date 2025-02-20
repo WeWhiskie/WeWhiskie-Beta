@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Book, Lightbulb, GraduationCap, Edit2, Wand2 } from "lucide-react";
+import { MessageSquare, Book, Lightbulb, GraduationCap, Edit2, Wand2, Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { motion, AnimatePresence } from "framer-motion";
 import type { Whisky } from "@shared/schema";
 import {
   Dialog,
@@ -71,10 +72,52 @@ interface ConciergeResponse {
 
 const STORAGE_KEY = 'whiskyConcierge.name';
 
+const ChatBubble = motion(({ children, isUser }: { children: React.ReactNode; isUser: boolean }) => (
+  <div
+    className={`flex items-start gap-3 ${
+      isUser ? "flex-row-reverse" : "flex-row"
+    }`}
+  >
+    <div
+      className={`rounded-lg p-3 max-w-[80%] ${
+        isUser
+          ? "bg-primary text-primary-foreground ml-auto"
+          : "bg-muted"
+      }`}
+    >
+      {children}
+    </div>
+  </div>
+));
+
+const TypingIndicator = () => (
+  <div className="flex items-center gap-1 p-2">
+    <motion.div
+      className="w-2 h-2 bg-primary rounded-full"
+      animate={{ scale: [1, 1.2, 1] }}
+      transition={{ duration: 1, repeat: Infinity, repeatDelay: 0.2 }}
+    />
+    <motion.div
+      className="w-2 h-2 bg-primary rounded-full"
+      animate={{ scale: [1, 1.2, 1] }}
+      transition={{ duration: 1, repeat: Infinity, repeatDelay: 0.3 }}
+    />
+    <motion.div
+      className="w-2 h-2 bg-primary rounded-full"
+      animate={{ scale: [1, 1.2, 1] }}
+      transition={{ duration: 1, repeat: Infinity, repeatDelay: 0.4 }}
+    />
+  </div>
+);
+
 export default function WhiskyConcierge() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
   const [conciergeName, setConciergeName] = useState<string>(() => {
     return localStorage.getItem(STORAGE_KEY) || "Whisky Pete";
   });
@@ -112,6 +155,14 @@ export default function WhiskyConcierge() {
     localStorage.setItem(STORAGE_KEY, conciergeName);
   }, [conciergeName]);
 
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   const conciergeQuery = useMutation({
     mutationFn: async (message: string) => {
       if (!message.trim()) {
@@ -119,6 +170,7 @@ export default function WhiskyConcierge() {
       }
 
       setIsThinking(true);
+      setRetryCount(0);
 
       const payload = {
         query: message,
@@ -129,11 +181,7 @@ export default function WhiskyConcierge() {
         }
       };
 
-      let attempts = 0;
-      const maxAttempts = 3;
-      const baseDelay = 5000; // 5 seconds
-
-      while (attempts < maxAttempts) {
+      const makeRequest = async (attempt: number): Promise<ConciergeResponse> => {
         try {
           const response = await fetch("/api/whisky-concierge", {
             method: "POST",
@@ -144,16 +192,11 @@ export default function WhiskyConcierge() {
 
           if (!response.ok) {
             const error = await response.json();
-            console.error('Concierge response error:', error);
 
-            if (error.code === 'RATE_LIMIT_EXCEEDED') {
-              attempts++;
-              if (attempts < maxAttempts) {
-                const delay = baseDelay * Math.pow(2, attempts);
-                await new Promise(resolve => setTimeout(resolve, delay));
-                continue;
-              }
-              throw new Error("Our AI is busy. Please wait 30 seconds before trying again.");
+            if (error.code === 'RATE_LIMIT_EXCEEDED' && attempt < maxRetries) {
+              const delay = 5000 * Math.pow(2, attempt);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              return makeRequest(attempt + 1);
             }
 
             throw new Error(error.message || "Unable to process request at this time.");
@@ -163,18 +206,35 @@ export default function WhiskyConcierge() {
           if (!data || (!data.answer && !data.recommendations)) {
             throw new Error("Invalid response from concierge");
           }
-          return data as ConciergeResponse;
+          return data;
         } catch (error: any) {
-          console.error('Concierge request error:', error);
-          if (attempts === maxAttempts - 1) throw error;
-          attempts++;
+          if (attempt < maxRetries) {
+            return makeRequest(attempt + 1);
+          }
+          throw error;
         }
-      }
+      };
 
-      throw new Error("Failed to get response after multiple attempts");
+      return makeRequest(0);
+    },
+    onMutate: (message) => {
+      // Optimistically add user message
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "user",
+          content: message,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+      setQuery("");
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
     },
     onSuccess: (data) => {
       setIsThinking(false);
+      setRetryCount(0);
       if (data.answer && typeof data.answer === 'string') {
         setMessages((prev) => [
           ...prev,
@@ -200,21 +260,8 @@ export default function WhiskyConcierge() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
-
-    // Add user message first
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content: query,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
-
-    // Send query to concierge
+    if (!query.trim() || isThinking) return;
     conciergeQuery.mutate(query);
-    setQuery("");
   };
 
   const handleNameSelect = (name: string) => {
@@ -394,7 +441,7 @@ export default function WhiskyConcierge() {
         </DialogContent>
       </Dialog>
 
-      {/* Chat Interface with reduced size */}
+      {/* Enhanced Chat Interface */}
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -411,46 +458,62 @@ export default function WhiskyConcierge() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[300px] pr-4">
-            <div className="space-y-4">
+          <ScrollArea className="h-[400px] pr-4">
+            <AnimatePresence>
               {messages.map((msg, i) => (
-                <div
+                <motion.div
                   key={i}
-                  className={`flex items-start gap-3 ${
-                    msg.role === "assistant"
-                      ? "flex-row"
-                      : "flex-row-reverse"
-                  }`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="mb-4"
                 >
-                  <div
-                    className={`rounded-lg p-3 max-w-[80%] ${
-                      msg.role === "assistant"
-                        ? "bg-muted"
-                        : "bg-primary text-primary-foreground ml-auto"
-                    }`}
-                  >
+                  <ChatBubble isUser={msg.role === "user"}>
                     <p className="whitespace-pre-wrap">{msg.content}</p>
-                  </div>
-                </div>
+                  </ChatBubble>
+                </motion.div>
               ))}
               {isThinking && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
-                  <div>Thinking...</div>
-                </div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-start gap-3"
+                >
+                  <div className="bg-muted rounded-lg p-3">
+                    <TypingIndicator />
+                  </div>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
+            <div ref={messagesEndRef} />
           </ScrollArea>
 
           <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
             <Input
+              ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Ask ${conciergeName} about whisky...`}
               disabled={isThinking}
+              className="flex-1"
             />
-            <Button type="submit" disabled={isThinking}>
-              Send
+            <Button 
+              type="submit" 
+              disabled={isThinking || !query.trim()}
+              className="px-6"
+            >
+              {isThinking ? (
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                >
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+                </motion.div>
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </form>
         </CardContent>
