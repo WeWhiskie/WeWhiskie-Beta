@@ -10,7 +10,7 @@ export function FloatingChatButton() {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {isOpen ? (
-        <Card className="w-[293px] h-[390px] shadow-lg overflow-hidden">
+        <Card className="w-[400px] h-[520px] shadow-lg overflow-hidden">
           <Button
             variant="ghost"
             size="sm"

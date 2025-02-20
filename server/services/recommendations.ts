@@ -72,7 +72,7 @@ async function makeOpenAIRequest(prompt: string, retryCount = 0): Promise<any> {
   return requestQueue.add(async () => {
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
         response_format: { type: "json_object" }

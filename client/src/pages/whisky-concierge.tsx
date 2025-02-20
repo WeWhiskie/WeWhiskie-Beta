@@ -46,7 +46,6 @@ export default function WhiskyConcierge() {
   const { user } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
-  const [conciergeName, setConciergeName] = useState<string>("Whisky Pete");
 
   // Get user's collection
   const { data: collection } = useQuery({
@@ -64,6 +63,10 @@ export default function WhiskyConcierge() {
 
   const conciergeQuery = useMutation({
     mutationFn: async (message: string) => {
+      if (!user) {
+        throw new Error("Please sign in to chat with the concierge");
+      }
+
       if (!message.trim()) {
         throw new Error("Please enter a message");
       }
@@ -74,7 +77,7 @@ export default function WhiskyConcierge() {
       const payload = {
         query: message,
         context: {
-          userId: user?.id,
+          userId: user.id,
           collectionIds: collection?.map((w: Whisky) => w.id) || []
         }
       };
@@ -156,60 +159,68 @@ export default function WhiskyConcierge() {
     conciergeQuery.mutate(query);
   };
 
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-4">
+        <p className="text-sm text-center text-muted-foreground">
+          Please sign in to chat with our whisky concierge
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="text-center p-2 border-b">
-        <h1 className="text-lg font-semibold">{conciergeName}</h1>
+        <h1 className="text-lg font-semibold">Whisky Concierge</h1>
         <p className="text-xs text-muted-foreground">Your Personal Guide</p>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full px-2">
-          <div className="space-y-2 py-2">
-            <AnimatePresence>
-              {messages.map((msg, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
+      <ScrollArea className="flex-1 px-2">
+        <div className="space-y-2 py-2">
+          <AnimatePresence>
+            {messages.map((msg, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div
+                  className={`flex items-start gap-2 ${
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  }`}
                 >
                   <div
-                    className={`flex items-start gap-2 ${
-                      msg.role === "user" ? "justify-end" : "justify-start"
+                    className={`rounded-lg p-2 max-w-[85%] ${
+                      msg.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted"
                     }`}
                   >
-                    <div
-                      className={`rounded-lg p-2 max-w-[85%] ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      }`}
-                    >
-                      <p className="text-xs whitespace-pre-wrap">{msg.content}</p>
-                    </div>
+                    <p className="text-xs whitespace-pre-wrap">{msg.content}</p>
                   </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-            {isThinking && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-start"
-              >
-                <div className="bg-muted rounded-lg">
-                  <TypingIndicator />
                 </div>
               </motion.div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
-      </div>
+            ))}
+          </AnimatePresence>
+          {isThinking && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-start"
+            >
+              <div className="bg-muted rounded-lg">
+                <TypingIndicator />
+              </div>
+            </motion.div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </ScrollArea>
 
       {/* Input Area */}
       <div className="p-2 border-t mt-auto">
@@ -220,13 +231,13 @@ export default function WhiskyConcierge() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ask about whisky..."
             disabled={isThinking}
-            className="flex-1 h-8 text-sm"
+            className="flex-1 text-sm"
           />
           <Button 
             type="submit" 
             disabled={isThinking || !query.trim()}
             size="sm"
-            className="h-8 px-2"
+            className="px-2"
           >
             <Send className="h-4 w-4" />
           </Button>
