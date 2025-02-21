@@ -12,6 +12,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+type FormData = Pick<InsertUser, "username" | "password" | "email">;
+
 export function AuthForm({
   type,
   onSubmit,
@@ -21,25 +23,26 @@ export function AuthForm({
   onSubmit: (data: InsertUser) => void;
   isLoading: boolean;
 }) {
-  const form = useForm<InsertUser>({
-    resolver: zodResolver(
-      type === "login"
-        ? insertUserSchema.pick({ username: true, password: true })
-        : insertUserSchema
-    ),
+  const registrationSchema = type === "login"
+    ? insertUserSchema.pick({ username: true, password: true })
+    : insertUserSchema.pick({ username: true, password: true, email: true });
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(registrationSchema),
     defaultValues: {
       username: "",
       password: "",
+      email: type === "register" ? "" : undefined,
+    }
+  });
+
+  const handleSubmit = (data: FormData) => {
+    const fullData: InsertUser = {
+      ...data,
+      inviteCode: "BETA2024",
       bio: "",
       avatarUrl: "",
       location: "",
-      isExpert: false,
-      email: "",
-      followerCount: 0,
-      followingCount: 0,
-      isVerified: false,
-      socialLinks: [],
-      expertiseAreas: [],
       level: 1,
       experiencePoints: 0,
       dailyStreak: 0,
@@ -48,16 +51,22 @@ export function AuthForm({
       contributionScore: 0,
       unlockedFeatures: [],
       achievementBadges: [],
+      followerCount: 0,
+      followingCount: 0,
+      isVerified: false,
+      isPremium: false,
+      socialLinks: {},
+      expertiseAreas: [],
       inviteCount: 0,
       engagementScore: 0,
-      masterclassParticipation: [],
-      isPremium: false
-    },
-  });
+      masterclassParticipation: []
+    };
+    onSubmit(fullData);
+  };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="username"
@@ -84,6 +93,21 @@ export function AuthForm({
             </FormItem>
           )}
         />
+        {type === "register" && (
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input type="email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <Button type="submit" className="w-full" disabled={isLoading}>
           {type === "login" ? "Sign In" : "Create Account"}
         </Button>

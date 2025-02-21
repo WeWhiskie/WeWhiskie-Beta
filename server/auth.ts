@@ -101,7 +101,20 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res) => {
     try {
-      console.log('Registration attempt for username:', req.body.username);
+      console.log('Registration attempt - Request body:', {
+        username: req.body.username,
+        email: req.body.email,
+        // Don't log password for security
+      });
+
+      if (!req.body.username || !req.body.password || !req.body.email) {
+        console.log('Missing required fields:', {
+          hasUsername: !!req.body.username,
+          hasPassword: !!req.body.password,
+          hasEmail: !!req.body.email
+        });
+        return res.status(400).json({ message: "Missing required fields" });
+      }
 
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
@@ -109,15 +122,34 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Username already exists" });
       }
 
+      const existingEmail = await storage.getUserByEmail(req.body.email);
+      if (existingEmail) {
+        console.log('Email already exists:', req.body.email);
+        return res.status(400).json({ message: "Email already exists" });
+      }
+
       const hashedPassword = await hashPassword(req.body.password);
-      console.log('Creating new user:', req.body.username);
+      console.log('Creating new user:', {
+        username: req.body.username,
+        email: req.body.email
+      });
 
       const user = await storage.createUser({
         ...req.body,
         password: hashedPassword,
+        inviteCode: req.body.inviteCode || 'BETA2024',
+        isVerified: false,
+        isPremium: false,
+        level: 1,
+        experiencePoints: 0,
+        inviteCount: 0,
+        engagementScore: 0
       });
 
-      console.log('User created successfully:', user.username);
+      console.log('User created successfully:', {
+        id: user.id,
+        username: user.username
+      });
 
       req.login(user, (err) => {
         if (err) {
@@ -128,7 +160,7 @@ export function setupAuth(app: Express) {
       });
     } catch (error) {
       console.error('Registration error:', error);
-      res.status(500).json({ message: "Registration failed" });
+      res.status(500).json({ message: "Registration failed", error: error.message });
     }
   });
 
