@@ -449,6 +449,27 @@ export const insertMasterclassEventSchema = createInsertSchema(masterclassEvents
 export const insertMasterclassParticipantSchema = createInsertSchema(masterclassParticipants);
 
 
+// Whisky collection table (many-to-many relationship)
+export const userWhiskyCollection = pgTable("user_whisky_collection", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  whiskyId: integer("whisky_id")
+    .notNull()
+    .references(() => whiskies.id),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+  notes: text("notes"),
+  rating: doublePrecision("rating"),
+  isFavorite: boolean("is_favorite").default(false),
+});
+
+// Create insert schema for whisky collection
+export const insertWhiskyCollectionSchema = createInsertSchema(userWhiskyCollection).extend({
+  rating: z.number().min(0).max(10).optional(),
+  notes: z.string().optional(),
+});
+
 // AI Concierge Chat System
 export const chatConversations = pgTable("chat_conversations", {
   id: serial("id").primaryKey(),
@@ -528,6 +549,8 @@ export type MasterclassParticipant = typeof masterclassParticipants.$inferSelect
 export type InsertMasterclassParticipant = z.infer<typeof insertMasterclassParticipantSchema>;
 
 // Add new type exports from edited code
+export type UserWhiskyCollection = typeof userWhiskyCollection.$inferSelect;
+export type InsertUserWhiskyCollection = z.infer<typeof insertWhiskyCollectionSchema>;
 export type ChatConversation = typeof chatConversations.$inferSelect;
 export type InsertChatConversation = z.infer<typeof insertChatConversationSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;

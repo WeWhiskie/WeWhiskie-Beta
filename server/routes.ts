@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
@@ -480,17 +481,21 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         return res.status(401).json({ message: "Authentication required" });
       }
 
-      const { query, context } = req.body;
+      const { query, conversationId } = req.body;
 
       if (!query) {
         return res.status(400).json({ message: "Query is required" });
       }
 
+      // Get user's collection for context
+      const userWhiskies = await storage.getUserWhiskies(req.user!.id);
+
       const response = await whiskyConcierge.getResponse(
         req.user!.id,
         query,
         {
-          ...context,
+          conversationId,
+          collection: userWhiskies,
           userId: req.user!.id
         }
       );

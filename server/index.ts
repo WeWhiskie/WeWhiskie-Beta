@@ -48,7 +48,7 @@ app.use((req, res, next) => {
     });
 
     // Try ports in sequence if primary port is in use
-    const tryPorts = [5001, 5002, 5003, 5004];
+    const tryPorts = [5000, 5001, 5002, 5003, 5004];
 
     const startServer = async () => {
       for (const PORT of tryPorts) {

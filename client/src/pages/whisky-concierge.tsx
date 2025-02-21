@@ -7,13 +7,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, RefreshCcw } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Whisky } from "@shared/schema";
+import type { ChatMessage, ChatConversation } from "@shared/schema";
+import { queryClient } from "@/lib/queryClient";
 
-// Message interface
+// Message interface for local state
 interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  citations?: string[];
 }
 
 const TypingIndicator = () => (
@@ -43,6 +45,7 @@ export default function WhiskyConcierge() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -50,8 +53,8 @@ export default function WhiskyConcierge() {
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
 
-  // Get user's collection with proper typing
-  const { data: collection = [] } = useQuery<Whisky[]>({
+  // Get user's collection
+  const { data: collection = [] } = useQuery({
     queryKey: ["/api/whiskies", "collection"],
     enabled: !!user?.id,
   });
@@ -101,10 +104,7 @@ export default function WhiskyConcierge() {
 
       const payload = {
         query: message,
-        context: {
-          userId: user.id,
-          collectionIds: collection.map(w => w.id)
-        }
+        conversationId: currentConversationId
       };
 
       const makeRequest = async (attempt: number) => {
@@ -122,13 +122,13 @@ export default function WhiskyConcierge() {
           }
 
           const data = await response.json();
-          if (!data || (!data.answer && !data.recommendations)) {
+          if (!data || !data.answer) {
             throw new Error("Invalid response from concierge");
           }
           return data;
         } catch (error: any) {
           if (attempt < maxRetries) {
-            const delay = 1000 * Math.pow(2, attempt); // Exponential backoff starting at 1 second
+            const delay = 1000 * Math.pow(2, attempt); // Exponential backoff
             await new Promise(resolve => setTimeout(resolve, delay));
             setRetryCount(attempt + 1);
             return makeRequest(attempt + 1);
@@ -167,15 +167,21 @@ export default function WhiskyConcierge() {
     onSuccess: (data) => {
       setIsThinking(false);
       setRetryCount(0);
-      if (data.answer && typeof data.answer === 'string') {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: data.answer,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
+      setCurrentConversationId(data.conversationId);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: data.answer,
+          timestamp: new Date().toISOString(),
+          citations: data.citations
+        },
+      ]);
+
+      // Invalidate chat history queries
+      if (currentConversationId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/chat', currentConversationId] });
       }
     },
     onError: (error: Error) => {
@@ -218,14 +224,16 @@ export default function WhiskyConcierge() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="text-center p-2 border-b">
-        <h1 className="text-lg font-semibold">Whisky Concierge</h1>
-        <p className="text-xs text-muted-foreground">Your Personal Guide</p>
+      <div className="text-center p-4 border-b">
+        <h1 className="text-2xl font-semibold">Whisky Concierge</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Your personal whisky expert powered by advanced AI
+        </p>
       </div>
 
       {/* Messages Area */}
-      <ScrollArea className="flex-1 px-2">
-        <div className="space-y-2 py-2">
+      <ScrollArea className="flex-1 px-4">
+        <div className="space-y-4 py-4">
           <AnimatePresence>
             {messages.map((msg, i) => (
               <motion.div
@@ -241,13 +249,32 @@ export default function WhiskyConcierge() {
                   }`}
                 >
                   <div
-                    className={`rounded-lg p-2 max-w-[85%] ${
+                    className={`rounded-lg p-4 max-w-[85%] ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted"
                     }`}
                   >
-                    <p className="text-xs whitespace-pre-wrap">{msg.content}</p>
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    {msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        <p className="font-semibold">Sources:</p>
+                        <ul className="list-disc list-inside">
+                          {msg.citations.map((citation, idx) => (
+                            <li key={idx}>
+                              <a 
+                                href={citation}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline"
+                              >
+                                {new URL(citation).hostname}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -274,7 +301,7 @@ export default function WhiskyConcierge() {
       </ScrollArea>
 
       {/* Input Area */}
-      <div className="p-2 border-t mt-auto">
+      <div className="p-4 border-t mt-auto">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             ref={inputRef}
@@ -282,13 +309,12 @@ export default function WhiskyConcierge() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ask about whisky..."
             disabled={isThinking}
-            className="flex-1 text-sm"
+            className="flex-1"
           />
           <Button
             type="submit"
             disabled={isThinking || !query.trim()}
-            size="sm"
-            className="px-2"
+            size="icon"
           >
             <Send className="h-4 w-4" />
           </Button>
@@ -296,9 +322,8 @@ export default function WhiskyConcierge() {
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={handleRetry}
-              className="px-2"
             >
               <RefreshCcw className="h-4 w-4" />
             </Button>
@@ -308,21 +333,3 @@ export default function WhiskyConcierge() {
     </div>
   );
 }
-
-interface ConciergeResponse {
-  answer?: string;
-  recommendations?: Array<{
-    whisky: Whisky;
-    reason: string;
-    confidence: number;
-    educationalContent?: {
-      history?: string;
-      production?: string;
-      tastingNotes?: string;
-      pairingAdvice?: string;
-    };
-  }>;
-  suggestedTopics?: string[];
-}
-
-const STORAGE_KEY = 'whiskyConcierge.name';

@@ -16,6 +16,7 @@ import {
   invites, Invite, InsertInvite,
   masterclassEvents, MasterclassEvent,
   masterclassParticipants, MasterclassParticipant,
+  userWhiskyCollection 
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -146,6 +147,9 @@ export interface IStorage {
   getEventParticipants(eventId: number): Promise<User[]>;
   getUserMasterclasses(userId: number): Promise<MasterclassEvent[]>;
   getTopMasterCooperUsers(limit: number): Promise<User[]>;
+
+  // Whisky collection methods
+  getUserWhiskies(userId: number): Promise<Whisky[]>;
 }
 
 type ReviewWithRelations = {
@@ -871,14 +875,18 @@ export class DatabaseStorage implements IStorage {
       ) as DailyTask[];
   }
 
+  // Fix the updateTaskProgress method
   async updateTaskProgress(taskId: number, progress: number): Promise<DailyTask> {
     const [task] = await db
       .update(dailyTasks)
       .set({ 
         progress,
-        completed: sql`CASE WHEN ${progress} >= ${dailyTasks.required} THEN true ELSE false END`
+        completed: sql`CASE 
+          WHEN ${progress} >= ${dailyTasks.required} THEN true 
+          ELSE false 
+        END`
       })
-            .where(eq(dailyTasks.id, taskId))
+      .where(eq(dailyTasks.id, taskId))
       .returning() as [DailyTask];
     return task;
   }
@@ -971,13 +979,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Invite methods implementation
+  // Fix the createInvite method
   async createInvite(invite: InsertInvite): Promise<Invite> {
     const [newInvite] = await db.insert(invites).values(invite).returning() as [Invite];
     await db
       .update(users)
       .set({ 
         inviteCount: sql`COALESCE(${users.inviteCount}, 0) + 1`,
-        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + 50` // Bonus points for sending invite
+        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + 50`
       })
       .where(eq(users.id, invite.inviterUserId));
     return newInvite;
@@ -1080,7 +1089,7 @@ export class DatabaseStorage implements IStorage {
           status: 'registered',
           joinedAt: new Date().toISOString()
         })}`,
-        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + 100` // Bonus for joining masterclass
+        experiencePoints: sql`COALESCE(${users.experiencePoints}, 0) + 100` 
       })
       .where(eq(users.id, userId));
   }
@@ -1113,9 +1122,27 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(users)
-      .where(eq(users.level, 5)) // Master Cooper level
+      .where(eq(users.level, 5)) 
       .orderBy(sql`COALESCE(${users.engagementScore}, 0) DESC`)
       .limit(limit) as User[];
+  }
+
+  // Get whisky collection for a user
+  // Fix getUserWhiskies implementation
+  async getUserWhiskies(userId: number): Promise<Whisky[]> {
+    const result = await db
+      .select({
+        whisky: whiskies
+      })
+      .from(whiskies)
+      .innerJoin(
+        userWhiskyCollection,
+        eq(userWhiskyCollection.whiskyId, whiskies.id)
+      )
+      .where(eq(userWhiskyCollection.userId, userId))
+      .orderBy(whiskies.name) as { whisky: Whisky }[];
+
+    return result.map(row => row.whisky);
   }
 }
 
