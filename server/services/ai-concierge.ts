@@ -1,19 +1,6 @@
 import { z } from 'zod';
 import { storage } from '../storage';
-
-// Enhanced concierge personality schema
-const conciergePersonalitySchema = z.object({
-  name: z.string(),
-  accent: z.string(),
-  background: z.string(),
-  personality: z.string(),
-  avatarDescription: z.string(),
-  voiceDescription: z.string(),
-  specialties: z.array(z.string()),
-  catchphrase: z.string()
-});
-
-export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;
+import { conciergePersonalitySchema, type ConciergePersonality } from '@shared/schema';
 
 // Validate whisky concierge requests
 const whiskyConciergeSchema = z.object({
@@ -144,8 +131,19 @@ export async function generateConciergePersonality(
     if (line.includes('Catchphrase:')) personality.catchphrase = line.split('Catchphrase:')[1].trim();
   }
 
-  // Validate and return the personality
-  return conciergePersonalitySchema.parse(personality);
+  // Validate and provide defaults for missing fields
+  const validatedPersonality: ConciergePersonality = {
+    name: personality.name || name,
+    accent: personality.accent || 'Standard English',
+    background: personality.background || 'Experienced whisky connoisseur',
+    personality: personality.personality || 'Friendly and knowledgeable',
+    avatarDescription: personality.avatarDescription || 'Professional whisky expert',
+    voiceDescription: personality.voiceDescription || 'Clear and articulate',
+    specialties: personality.specialties?.length ? personality.specialties : ['Whisky tasting', 'Spirit education'],
+    catchphrase: personality.catchphrase || 'Let\'s explore the world of whisky together!'
+  };
+
+  return conciergePersonalitySchema.parse(validatedPersonality);
 }
 
 export class WhiskyConcierge {
@@ -153,8 +151,6 @@ export class WhiskyConcierge {
   private personalities: Map<string, ConciergePersonality> = new Map();
 
   async getResponse(userId: number, query: string, context?: z.infer<typeof whiskyConciergeSchema>['context']) {
-    console.log('Received request:', { userId, query, context });
-
     try {
       const validation = whiskyConciergeSchema.safeParse({ 
         query, 
@@ -171,13 +167,6 @@ export class WhiskyConcierge {
 
       // Get previous interactions for this user
       const previousInteractions = this.conversationHistory.get(userId) || [];
-
-      console.log('Getting concierge response with:', {
-        query,
-        userId,
-        collectionIds: context?.collectionIds,
-        personality: context?.conciergePersonality
-      });
 
       // Construct personality-aware prompt
       let systemPrompt = `You are an expert whisky concierge. Help users explore and appreciate whisky through detailed, accurate information and personalized recommendations.`;
@@ -220,7 +209,11 @@ export class WhiskyConcierge {
         );
       }
 
-      return { answer, citations: result.citations || [] };
+      return { 
+        answer, 
+        citations: result.citations || [],
+        conversationId: Date.now() 
+      };
     } catch (error) {
       console.error('Error in getResponse:', error);
       throw error;

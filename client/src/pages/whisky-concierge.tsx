@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ChatMessage, ChatConversation, ConciergePersonality } from "@shared/schema";
+import type { ConciergePersonality } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
 
 // Message interface for local state
@@ -76,7 +76,7 @@ export default function WhiskyConcierge() {
   });
 
   // Get concierge personality
-  const { data: personality } = useQuery({
+  const { data: personality, refetch: refetchPersonality } = useQuery({
     queryKey: ["/api/whisky-concierge/personality", selectedStyle],
     enabled: !!selectedStyle,
   });
@@ -89,6 +89,11 @@ export default function WhiskyConcierge() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ style: selectedStyle }),
       });
+
+      if (!nameResponse.ok) {
+        throw new Error("Failed to generate name");
+      }
+
       const { name } = await nameResponse.json();
 
       const personalityResponse = await fetch("/api/whisky-concierge/personality", {
@@ -96,7 +101,13 @@ export default function WhiskyConcierge() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, style: selectedStyle }),
       });
-      return personalityResponse.json();
+
+      if (!personalityResponse.ok) {
+        throw new Error("Failed to generate personality");
+      }
+
+      const data = await personalityResponse.json();
+      return data as ConciergePersonality;
     },
     onSuccess: (data) => {
       setCurrentPersonality(data);
@@ -106,13 +117,14 @@ export default function WhiskyConcierge() {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to generate personality",
+        description: error instanceof Error ? error.message : "Failed to generate personality",
       });
     },
   });
 
+  // Update personality when style changes
   useEffect(() => {
-    if (personality && !currentPersonality) {
+    if (personality) {
       setCurrentPersonality(personality);
     }
   }, [personality]);
@@ -170,14 +182,17 @@ export default function WhiskyConcierge() {
         try {
           const response = await fetch("/api/whisky-concierge", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Accept": "application/json"
+            },
             credentials: 'include',
             body: JSON.stringify(payload),
           });
 
           if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || "Unable to process request at this time.");
+            const errorData = await response.json();
+            throw new Error(errorData.message || "Unable to process request at this time.");
           }
 
           const data = await response.json();
@@ -291,6 +306,7 @@ export default function WhiskyConcierge() {
             onValueChange={(value) => {
               setSelectedStyle(value);
               setCurrentPersonality(null);
+              refetchPersonality();
             }}
           >
             <SelectTrigger className="w-[200px]">
