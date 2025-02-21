@@ -30,6 +30,28 @@ export function AuthForm({
     defaultValues: {
       username: "",
       password: "",
+      bio: "",
+      avatarUrl: "",
+      location: "",
+      isExpert: false,
+      email: "",
+      followerCount: 0,
+      followingCount: 0,
+      isVerified: false,
+      socialLinks: [],
+      expertiseAreas: [],
+      level: 1,
+      experiencePoints: 0,
+      dailyStreak: 0,
+      totalReviews: 0,
+      totalTastings: 0,
+      contributionScore: 0,
+      unlockedFeatures: [],
+      achievementBadges: [],
+      inviteCount: 0,
+      engagementScore: 0,
+      masterclassParticipation: [],
+      isPremium: false
     },
   });
 
@@ -43,7 +65,7 @@ export function AuthForm({
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input type="text" {...field} />
+                <Input {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
