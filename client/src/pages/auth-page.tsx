@@ -2,6 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { AuthForm } from "@/components/auth-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Redirect } from "wouter";
+import type { InsertUser } from "@shared/schema";
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -22,14 +23,17 @@ export default function AuthPage() {
             <TabsContent value="login">
               <AuthForm
                 type="login"
-                onSubmit={(data) => loginMutation.mutate(data)}
+                onSubmit={(data: InsertUser) => {
+                  const { username, password } = data;
+                  loginMutation.mutate({ username, password });
+                }}
                 isLoading={loginMutation.isPending}
               />
             </TabsContent>
             <TabsContent value="register">
               <AuthForm
                 type="register"
-                onSubmit={(data) => registerMutation.mutate(data)}
+                onSubmit={(data: InsertUser) => registerMutation.mutate(data)}
                 isLoading={registerMutation.isPending}
               />
             </TabsContent>

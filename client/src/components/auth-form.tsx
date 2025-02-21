@@ -22,7 +22,11 @@ export function AuthForm({
   isLoading: boolean;
 }) {
   const form = useForm<InsertUser>({
-    resolver: zodResolver(insertUserSchema),
+    resolver: zodResolver(
+      type === "login"
+        ? insertUserSchema.pick({ username: true, password: true })
+        : insertUserSchema
+    ),
     defaultValues: {
       username: "",
       password: "",
@@ -39,7 +43,7 @@ export function AuthForm({
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input {...field} />
+                <Input type="text" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
