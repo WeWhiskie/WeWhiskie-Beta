@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { db } from "../db";
 import { chatConversations, chatMessages, whiskies } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { whiskyConcierge, generateConciergeName, generateConciergePersonality } from "../services/ai-concierge";
 
 const SYSTEM_PROMPT = `You are a whisky expert concierge with deep knowledge of distilleries, tasting notes, and whisky culture. Help users explore and appreciate whisky through detailed, accurate information and personalized recommendations.
 
@@ -13,11 +14,13 @@ Key responsibilities:
 5. Explain whisky terminology and concepts
 6. Consider user's existing collection when making recommendations
 
-Always be precise and educational while maintaining an engaging, conversational tone.`;
+Always be precise and educational while maintaining an engaging, conversational tone.
+
+Additional personality context will be provided to customize your responses.`;
 
 export async function handleWhiskyConciergeChat(req: Request, res: Response) {
   try {
-    const { query, conversationId } = req.body;
+    const { query, conversationId, personality } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -47,7 +50,15 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
           userId,
           title: "Whisky Consultation",
           status: "active",
-          context: { collectionSize: userCollection.length }
+          context: { collectionSize: userCollection.length },
+          personalitySettings: personality ? {
+            style: personality.accent?.toLowerCase().includes('highland') ? 'highland' :
+                   personality.accent?.toLowerCase().includes('speyside') ? 'speyside' :
+                   personality.accent?.toLowerCase().includes('bourbon') ? 'bourbon' : 'islay',
+            accent: personality.accent,
+            name: personality.name,
+            specialties: personality.specialties
+          } : undefined
         })
         .returning()
         .then(rows => rows[0]);
@@ -60,6 +71,15 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
       content: query,
     });
 
+    // Construct personality-aware system prompt
+    const personalityPrompt = personality ? `
+    You are ${personality.name}, a whisky expert with a ${personality.accent} accent.
+    Background: ${personality.background}
+    Personality traits: ${personality.personality}
+    Your catchphrase: "${personality.catchphrase}"
+    Maintain this persona consistently in your responses.
+    ` : "";
+
     // Call Perplexity API
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
@@ -70,7 +90,7 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
       body: JSON.stringify({
         model: "llama-3.1-sonar-small-128k-online",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: SYSTEM_PROMPT + "\n" + personalityPrompt },
           { role: "user", content: `Context: User has ${userCollection.length} whiskies in their collection.\nQuery: ${query}` }
         ],
         temperature: 0.2,
@@ -87,7 +107,7 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
     const result = await response.json();
     const aiResponse = result.choices[0].message.content;
 
-    // Store AI response
+    // Store AI response with personality
     await db.insert(chatMessages).values({
       conversationId: conversation.id,
       role: "assistant",
@@ -95,7 +115,8 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
       metadata: {
         citations: result.citations || [],
         model: result.model
-      }
+      },
+      personality: personality || undefined
     });
 
     // Update conversation last message timestamp
@@ -115,6 +136,33 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
     console.error("Whisky concierge error:", error);
     return res.status(500).json({
       message: error instanceof Error ? error.message : "Internal server error"
+    });
+  }
+}
+
+// Add new route handlers
+export async function handleGenerateName(req: Request, res: Response) {
+  try {
+    const { style } = req.body;
+    const name = await generateConciergeName({ style });
+    return res.json({ name });
+  } catch (error) {
+    console.error("Error generating name:", error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : "Failed to generate name"
+    });
+  }
+}
+
+export async function handleGeneratePersonality(req: Request, res: Response) {
+  try {
+    const { name, style } = req.body;
+    const personality = await generateConciergePersonality(name, style);
+    return res.json(personality);
+  } catch (error) {
+    console.error("Error generating personality:", error);
+    return res.status(500).json({
+      message: error instanceof Error ? error.message : "Failed to generate personality"
     });
   }
 }

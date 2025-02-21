@@ -4,10 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, RefreshCcw } from "lucide-react";
+import { Send, RefreshCcw, UserCircle2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
-import type { ChatMessage, ChatConversation } from "@shared/schema";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { ChatMessage, ChatConversation, ConciergePersonality } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
 
 // Message interface for local state
@@ -40,12 +47,21 @@ const TypingIndicator = () => (
 
 const TIMEOUT_DURATION = 30000; // 30 seconds timeout
 
+const PERSONALITY_STYLES = [
+  { id: "highland", name: "Highland Expert", accent: "Scottish Highland" },
+  { id: "speyside", name: "Speyside Scholar", accent: "Speyside Scottish" },
+  { id: "bourbon", name: "Bourbon Master", accent: "Kentucky American" },
+  { id: "islay", name: "Islay Sage", accent: "Islay Scottish" },
+];
+
 export default function WhiskyConcierge() {
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState("highland");
+  const [currentPersonality, setCurrentPersonality] = useState<ConciergePersonality | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -58,6 +74,48 @@ export default function WhiskyConcierge() {
     queryKey: ["/api/whiskies", "collection"],
     enabled: !!user?.id,
   });
+
+  // Get concierge personality
+  const { data: personality } = useQuery({
+    queryKey: ["/api/whisky-concierge/personality", selectedStyle],
+    enabled: !!selectedStyle,
+  });
+
+  // Generate new personality
+  const generatePersonality = useMutation({
+    mutationFn: async () => {
+      const nameResponse = await fetch("/api/whisky-concierge/generate-name", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ style: selectedStyle }),
+      });
+      const { name } = await nameResponse.json();
+
+      const personalityResponse = await fetch("/api/whisky-concierge/personality", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, style: selectedStyle }),
+      });
+      return personalityResponse.json();
+    },
+    onSuccess: (data) => {
+      setCurrentPersonality(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/whisky-concierge/personality", selectedStyle] });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to generate personality",
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (personality && !currentPersonality) {
+      setCurrentPersonality(personality);
+    }
+  }, [personality]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -104,7 +162,8 @@ export default function WhiskyConcierge() {
 
       const payload = {
         query: message,
-        conversationId: currentConversationId
+        conversationId: currentConversationId,
+        personality: currentPersonality
       };
 
       const makeRequest = async (attempt: number) => {
@@ -223,12 +282,49 @@ export default function WhiskyConcierge() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="text-center p-4 border-b">
+      {/* Header with Personality Selection */}
+      <div className="text-center p-4 border-b space-y-4">
         <h1 className="text-2xl font-semibold">Whisky Concierge</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Your personal whisky expert powered by advanced AI
-        </p>
+        <div className="flex items-center justify-center gap-4">
+          <Select
+            value={selectedStyle}
+            onValueChange={(value) => {
+              setSelectedStyle(value);
+              setCurrentPersonality(null);
+            }}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Select personality" />
+            </SelectTrigger>
+            <SelectContent>
+              {PERSONALITY_STYLES.map((style) => (
+                <SelectItem key={style.id} value={style.id}>
+                  {style.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            onClick={() => generatePersonality.mutate()}
+            disabled={generatePersonality.isPending}
+          >
+            Generate New Personality
+          </Button>
+        </div>
+        {currentPersonality && (
+          <div className="flex items-center justify-center gap-4 p-2 bg-muted rounded-lg">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <UserCircle2 className="w-8 h-8 text-primary" />
+            </div>
+            <div className="text-left">
+              <p className="font-medium">{currentPersonality.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {currentPersonality.accent} • {currentPersonality.specialties?.[0]}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Messages Area */}
@@ -248,6 +344,11 @@ export default function WhiskyConcierge() {
                     msg.role === "user" ? "justify-end" : "justify-start"
                   }`}
                 >
+                  {msg.role === "assistant" && currentPersonality && (
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <UserCircle2 className="w-6 h-6 text-primary" />
+                    </div>
+                  )}
                   <div
                     className={`rounded-lg p-4 max-w-[85%] ${
                       msg.role === "user"
@@ -307,7 +408,7 @@ export default function WhiskyConcierge() {
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask about whisky..."
+            placeholder={`Ask ${currentPersonality?.name || 'your whisky concierge'}...`}
             disabled={isThinking}
             className="flex-1"
           />

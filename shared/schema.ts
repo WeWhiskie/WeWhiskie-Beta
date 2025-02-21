@@ -482,6 +482,8 @@ export const chatConversations = pgTable("chat_conversations", {
   lastMessageAt: timestamp("last_message_at"),
   status: text("status").default("active"),
   context: jsonb("context").default({}),
+  personalityId: text("personality_id"),
+  personalitySettings: jsonb("personality_settings").default({}),
 });
 
 export const chatMessages = pgTable("chat_messages", {
@@ -493,18 +495,35 @@ export const chatMessages = pgTable("chat_messages", {
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   metadata: jsonb("metadata").default({}),
+  personality: jsonb("personality").default({}),
 });
 
 // Add new insert schemas
 export const insertChatConversationSchema = createInsertSchema(chatConversations).extend({
   title: z.string().optional(),
   context: z.record(z.unknown()).optional(),
+  personalitySettings: z.object({
+    style: z.enum(["highland", "speyside", "bourbon", "islay"]).optional(),
+    accent: z.string().optional(),
+    name: z.string().optional(),
+    specialties: z.array(z.string()).optional(),
+  }).optional(),
 });
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).extend({
   role: z.enum(["user", "assistant"]),
   content: z.string().min(1),
   metadata: z.record(z.unknown()).optional(),
+  personality: z.object({
+    name: z.string().optional(),
+    accent: z.string().optional(),
+    background: z.string().optional(),
+    personality: z.string().optional(),
+    avatarDescription: z.string().optional(),
+    voiceDescription: z.string().optional(),
+    specialties: z.array(z.string()).optional(),
+    catchphrase: z.string().optional(),
+  }).optional(),
 });
 
 // ============= Type Exports =============

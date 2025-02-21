@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 import { insertActivitySchema, type InsertActivity } from "@shared/schema";
 import { whiskyConcierge } from "./services/ai-concierge";
 import { generateConciergeName, getWhiskyRecommendations } from "./services/recommendations";
+import { handleWhiskyConciergeChat, handleGenerateName, handleGeneratePersonality } from "./routes/whisky-concierge";
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -472,72 +473,18 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     }
   });
 
-  // Whisky Concierge route
+  // Whisky Concierge routes
   app.post("/api/whisky-concierge", async (req, res) => {
-    try {
-      console.log('Received whisky concierge request:', req.body);
-
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
-      const { query, conversationId } = req.body;
-
-      if (!query) {
-        return res.status(400).json({ message: "Query is required" });
-      }
-
-      // Get user's collection for context
-      const userWhiskies = await storage.getUserWhiskies(req.user!.id);
-
-      const response = await whiskyConcierge.getResponse(
-        req.user!.id,
-        query,
-        {
-          conversationId,
-          collection: userWhiskies,
-          userId: req.user!.id
-        }
-      );
-
-      console.log('Sending whisky concierge response:', response);
-      res.json(response);
-    } catch (error) {
-      console.error("Error with whisky concierge:", error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Failed to process whisky concierge request" 
-      });
-    }
+    await handleWhiskyConciergeChat(req, res);
   });
 
-  // Whisky Concierge name generation
+  // Add new personality generation routes
   app.post("/api/whisky-concierge/generate-name", async (req, res) => {
-    try {
-      const { style, theme } = req.body;
-      console.log("Generating name with style:", style, "theme:", theme);
-      const name = await generateConciergeName({ style, theme });
-      console.log("Generated name:", name);
-      res.json({ name });
-    } catch (error) {
-      console.error("Error generating concierge name:", error);
-      res.status(500).json({ message: "Failed to generate concierge name" });
-    }
+    await handleGenerateName(req, res);
   });
 
-  // New endpoint for generating/retrieving concierge personality
   app.post("/api/whisky-concierge/personality", async (req, res) => {
-    try {
-      const { name, style } = req.body;
-      if (!name) {
-        return res.status(400).json({ message: "Name is required" });
-      }
-
-      const personality = await whiskyConcierge.generatePersonality(name, style);
-      res.json(personality);
-    } catch (error) {
-      console.error("Error generating concierge personality:", error);
-      res.status(500).json({ message: "Failed to generate concierge personality" });
-    }
+    await handleGeneratePersonality(req, res);
   });
 
   // Get existing personality
