@@ -28,10 +28,8 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-// Add the verify function to check session validity
 export async function verify(sessionId: string): Promise<SelectUser | null> {
   try {
-    // Get session from storage
     const session = await new Promise<any>((resolve) => {
       storage.sessionStore.get(sessionId, (err, session) => {
         if (err) resolve(null);
@@ -41,7 +39,6 @@ export async function verify(sessionId: string): Promise<SelectUser | null> {
 
     if (!session?.passport?.user) return null;
 
-    // Get user from storage
     const user = await storage.getUser(session.passport.user);
     return user || null;
   } catch (error) {
@@ -64,12 +61,25 @@ export function setupAuth(app: Express) {
   app.use(passport.session());
 
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
+    new LocalStrategy(async (username: string, password: string, done) => {
       try {
+        console.log('Attempting login for username:', username);
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
+
+        if (!user) {
+          console.log('User not found:', username);
           return done(null, false, { message: "Invalid username or password" });
         }
+
+        console.log('User found, comparing passwords');
+        const passwordsMatch = await comparePasswords(password, user.password);
+
+        if (!passwordsMatch) {
+          console.log('Password mismatch for user:', username);
+          return done(null, false, { message: "Invalid username or password" });
+        }
+
+        console.log('Login successful for user:', username);
         return done(null, user);
       } catch (error) {
         console.error('Authentication error:', error);
@@ -91,15 +101,23 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res) => {
     try {
+      console.log('Registration attempt for username:', req.body.username);
+
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
+        console.log('Username already exists:', req.body.username);
         return res.status(400).json({ message: "Username already exists" });
       }
 
+      const hashedPassword = await hashPassword(req.body.password);
+      console.log('Creating new user:', req.body.username);
+
       const user = await storage.createUser({
         ...req.body,
-        password: await hashPassword(req.body.password),
+        password: hashedPassword,
       });
+
+      console.log('User created successfully:', user.username);
 
       req.login(user, (err) => {
         if (err) {
@@ -115,12 +133,15 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
+    console.log('Login attempt for:', req.body.username);
+
+    passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) {
         console.error('Login error:', err);
         return res.status(500).json({ message: "Login failed" });
       }
       if (!user) {
+        console.log('Login failed:', info?.message);
         return res.status(401).json({ message: info?.message || "Invalid credentials" });
       }
       req.login(user, (err) => {
@@ -128,17 +149,22 @@ export function setupAuth(app: Express) {
           console.error('Session creation error:', err);
           return res.status(500).json({ message: "Error creating session" });
         }
+        console.log('Login successful for user:', user.username);
         res.json(user);
       });
     })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
+    const username = req.user?.username;
+    console.log('Logout attempt for user:', username);
+
     req.logout((err) => {
       if (err) {
         console.error('Logout error:', err);
         return next(err);
       }
+      console.log('Logout successful for user:', username);
       res.sendStatus(200);
     });
   });
