@@ -2,7 +2,7 @@ import { pgTable, text, serial, integer, timestamp, doublePrecision, boolean, js
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users and Authentication - Add new fields for invite system
+// Users and Authentication
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -369,19 +369,6 @@ export const insertUserSchema = createInsertSchema(users).extend({
   inviteCode: z.string().min(6),
   expertiseAreas: z.array(z.string()).optional(),
   socialLinks: z.record(z.string().url()).optional(),
-  level: z.number().min(1).default(1),
-  experiencePoints: z.number().min(0).default(0),
-  unlockedFeatures: z.array(z.string()).default([]),
-  achievementBadges: z.array(z.object({
-    id: z.number(),
-    name: z.string(),
-    unlockedAt: z.string(),
-  })).default([]),
-  masterclassParticipation: z.array(z.object({
-    eventId: z.number(),
-    status: z.string(),
-    joinedAt: z.string(),
-  })).default([]),
 });
 
 export const insertWhiskySchema = createInsertSchema(whiskies).extend({
@@ -461,6 +448,44 @@ export const insertInviteSchema = createInsertSchema(invites);
 export const insertMasterclassEventSchema = createInsertSchema(masterclassEvents);
 export const insertMasterclassParticipantSchema = createInsertSchema(masterclassParticipants);
 
+
+// AI Concierge Chat System
+export const chatConversations = pgTable("chat_conversations", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  title: text("title"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  lastMessageAt: timestamp("last_message_at"),
+  status: text("status").default("active"),
+  context: jsonb("context").default({}),
+});
+
+export const chatMessages = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id")
+    .notNull()
+    .references(() => chatConversations.id),
+  role: text("role").notNull(), // 'user' or 'assistant'
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  metadata: jsonb("metadata").default({}),
+});
+
+// Add new insert schemas
+export const insertChatConversationSchema = createInsertSchema(chatConversations).extend({
+  title: z.string().optional(),
+  context: z.record(z.unknown()).optional(),
+});
+
+export const insertChatMessageSchema = createInsertSchema(chatMessages).extend({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1),
+  metadata: z.record(z.unknown()).optional(),
+});
+
 // ============= Type Exports =============
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -501,3 +526,9 @@ export type MasterclassEvent = typeof masterclassEvents.$inferSelect;
 export type InsertMasterclassEvent = z.infer<typeof insertMasterclassEventSchema>;
 export type MasterclassParticipant = typeof masterclassParticipants.$inferSelect;
 export type InsertMasterclassParticipant = z.infer<typeof insertMasterclassParticipantSchema>;
+
+// Add new type exports from edited code
+export type ChatConversation = typeof chatConversations.$inferSelect;
+export type InsertChatConversation = z.infer<typeof insertChatConversationSchema>;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
