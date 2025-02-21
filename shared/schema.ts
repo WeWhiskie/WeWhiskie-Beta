@@ -1,15 +1,29 @@
-import { pgTable, text, serial, integer, timestamp, doublePrecision, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, doublePrecision, boolean, jsonb, PgTable } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Define concierge personality schema
+export const conciergePersonalitySchema = z.object({
+  name: z.string(),
+  accent: z.string(),
+  background: z.string(),
+  personality: z.string(),
+  avatarDescription: z.string(),
+  voiceDescription: z.string(),
+  specialties: z.array(z.string()),
+  catchphrase: z.string()
+});
+
+export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;
+
 // Users and Authentication
-export const users = pgTable("users", {
+export const users: PgTable = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   email: text("email").notNull().unique(),
   inviteCode: text("invite_code").notNull().unique(),
-  invitedBy: integer("invited_by").references(() => users.id),
+  invitedBy: integer("invited_by").references((): any => users.id),
   inviteCount: integer("invite_count").default(0),
   lastActive: timestamp("last_active"),
   engagementScore: integer("engagement_score").default(0),
@@ -574,3 +588,4 @@ export type ChatConversation = typeof chatConversations.$inferSelect;
 export type InsertChatConversation = z.infer<typeof insertChatConversationSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;

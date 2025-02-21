@@ -139,7 +139,7 @@ export async function generateConciergePersonality(
     if (line.includes('Voice:')) personality.voiceDescription = line.split('Voice:')[1].trim();
     if (line.includes('Specialties:')) {
       const specialtiesText = line.split('Specialties:')[1].trim();
-      personality.specialties = specialtiesText.split(',').map(s => s.trim());
+      personality.specialties = specialtiesText.split(',').map((s: string) => s.trim());
     }
     if (line.includes('Catchphrase:')) personality.catchphrase = line.split('Catchphrase:')[1].trim();
   }
