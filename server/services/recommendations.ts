@@ -125,32 +125,40 @@ async function processAIResponse(prompt: string, requestContext?: any): Promise<
     }
 
     const response = await requestQueue.add(async () => {
-      const formattedPrompt = `${prompt}\n\nPlease format your response as a JSON object with the following structure:
-{
-  "answer": "Your response text here",
-  "recommendations": [optional array of whisky recommendations],
-  "suggestedTopics": [optional array of suggested topics]
-}`;
+      const formattedPrompt = `${prompt}\n\nFormat the response as a JSON object with fields: answer (string), recommendations (optional), and suggestedTopics (string[] optional).`;
 
       const generatedText = await huggingFaceClient.generateResponse(formattedPrompt);
       try {
-        // Try to extract JSON from the response if it's embedded in other text
+        // Enhanced JSON extraction with better error handling
         const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const jsonStr = jsonMatch[0];
-          return JSON.parse(jsonStr);
+          try {
+            const parsed = JSON.parse(jsonStr);
+            // Validate response structure
+            if (!parsed.answer && !parsed.recommendations) {
+              throw new Error("Invalid response structure");
+            }
+            return parsed;
+          } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            // Fallback: Convert text response to proper JSON format
+            return {
+              answer: generatedText.trim(),
+              suggestedTopics: ["General whisky discussion", "Whisky recommendations", "Tasting notes"]
+            };
+          }
         }
 
-        // If no JSON found, return a formatted response
+        // If no JSON found, format the text response
         return {
-          answer: generatedText,
+          answer: generatedText.trim(),
           suggestedTopics: ["General whisky discussion", "Whisky recommendations", "Tasting notes"]
         };
       } catch (error) {
-        console.error('Error parsing AI response:', error);
-        // Return a fallback response
+        console.error('Error processing AI response:', error);
         return {
-          answer: generatedText,
+          answer: "I apologize, but I'm having trouble processing your request at the moment. Could you please try again?",
           suggestedTopics: ["General whisky discussion", "Whisky recommendations", "Tasting notes"]
         };
       }
@@ -160,7 +168,10 @@ async function processAIResponse(prompt: string, requestContext?: any): Promise<
     return response;
   } catch (error) {
     console.error('Error in processAIResponse:', error);
-    throw error;
+    throw new WhiskyAIError(
+      "Failed to process AI response",
+      "PROCESSING_ERROR"
+    );
   }
 }
 
