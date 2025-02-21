@@ -365,7 +365,7 @@ export const cdnConfigs = pgTable("cdn_configs", {
 
 export const insertUserSchema = createInsertSchema(users).extend({
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(3),
   inviteCode: z.string().min(6),
   expertiseAreas: z.array(z.string()).optional(),
   socialLinks: z.record(z.string().url()).optional(),
