@@ -47,16 +47,6 @@ export class LiveStreamingServer {
     log('WebSocket server initialized and ready for connections', 'websocket');
   }
 
-  private findHostClient(sessionId: number): Client | undefined {
-    const clientEntries = Array.from(this.clients.entries());
-    for (const [, client] of clientEntries) {
-      if (client.sessionId === sessionId && client.isHost) {
-        return client;
-      }
-    }
-    return undefined;
-  }
-
   private async verifyClient(
     info: { origin: string; secure: boolean; req: IncomingMessage },
     callback: (res: boolean, code?: number, message?: string) => void
@@ -65,24 +55,23 @@ export class LiveStreamingServer {
       const cookies = parse(info.req.headers.cookie || '');
       const sessionId = cookies['connect.sid'];
 
-      // If no session cookie, reject the connection
       if (!sessionId) {
         log('WebSocket connection rejected: No session cookie', 'websocket');
-        callback(false, 401, 'Unauthorized');
+        callback(false, 401, 'Unauthorized - No session cookie');
         return;
       }
 
-      // Verify the session
       const user = await verify(sessionId);
       if (!user) {
         log('WebSocket connection rejected: Invalid session', 'websocket');
-        callback(false, 401, 'Unauthorized');
+        callback(false, 401, 'Unauthorized - Invalid session');
         return;
       }
 
       log(`WebSocket connection authorized for user ${user.id}`, 'websocket');
       callback(true);
     } catch (error) {
+      console.error('WebSocket verification error:', error);
       log(`WebSocket verification error: ${error}`, 'websocket');
       callback(false, 500, 'Internal Server Error');
     }
@@ -102,7 +91,6 @@ export class LiveStreamingServer {
 
         log(`New WebSocket connection established for user ${user.id}`, 'websocket');
 
-        // Initialize client metrics
         this.clients.set(ws, {
           ws,
           userId: user.id,
@@ -110,6 +98,16 @@ export class LiveStreamingServer {
           bytesTransferred: 0,
         });
 
+        // Send initial connection success message
+        ws.send(JSON.stringify({ 
+          type: 'connection-established',
+          payload: { 
+            userId: user.id,
+            timestamp: Date.now() 
+          }
+        }));
+
+        // Set up event handlers
         ws.on('message', async (message: string) => {
           try {
             if (this.isRateLimited(ws)) {
@@ -130,6 +128,7 @@ export class LiveStreamingServer {
               client.bytesTransferred += message.length;
             }
           } catch (error) {
+            console.error('Error handling message:', error);
             log(`Error handling message: ${error}`, 'websocket');
             ws.send(JSON.stringify({ 
               type: 'error', 
@@ -153,21 +152,22 @@ export class LiveStreamingServer {
           this.handleConnectionError(ws);
         });
 
-        // Send initial connection success message
-        ws.send(JSON.stringify({ 
-          type: 'connection-established',
-          payload: { 
-            userId: user.id,
-            timestamp: Date.now() 
-          }
-        }));
-
         this.sendHeartbeat(ws);
       } catch (error) {
+        console.error('Error handling WebSocket connection:', error);
         log(`Error handling WebSocket connection: ${error}`, 'websocket');
         ws.close(1011, 'Internal Server Error');
       }
     });
+  }
+  private findHostClient(sessionId: number): Client | undefined {
+    const clientEntries = Array.from(this.clients.entries());
+    for (const [, client] of clientEntries) {
+      if (client.sessionId === sessionId && client.isHost) {
+        return client;
+      }
+    }
+    return undefined;
   }
 
   private isRateLimited(ws: WebSocket): boolean {
