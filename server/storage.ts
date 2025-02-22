@@ -268,12 +268,29 @@ export class DatabaseStorage implements IStorage {
 
   // Whisky methods
   async getWhiskies(): Promise<Whisky[]> {
-    return await db.select().from(whiskies) as Whisky[];
+    try {
+      const result = await db
+        .select()
+        .from(whiskies)
+        .orderBy(whiskies.name);
+      return result;
+    } catch (error) {
+      console.error('Error fetching whiskies:', error);
+      return [];
+    }
   }
 
   async getWhisky(id: number): Promise<Whisky | undefined> {
-    const [whisky] = await db.select().from(whiskies).where(eq(whiskies.id, id)) as [Whisky | undefined];
-    return whisky;
+    try {
+      const [whisky] = await db
+        .select()
+        .from(whiskies)
+        .where(eq(whiskies.id, id));
+      return whisky;
+    } catch (error) {
+      console.error('Error fetching whisky:', error);
+      return undefined;
+    }
   }
 
   // Review methods
@@ -877,8 +894,7 @@ export class DatabaseStorage implements IStorage {
           eq(dailyTasks.userId, userId),
           sql`DATE(${dailyTasks.date}) = CURRENT_DATE`
         )
-      ) as DailyTask[];
-  }
+      ) as DailyTask[];  }
 
   // Fix the updateTaskProgress method
   async updateTaskProgress(taskId: number, progress: number): Promise<DailyTask> {
