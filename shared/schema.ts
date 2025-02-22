@@ -143,7 +143,7 @@ export const follows = pgTable("follows", {
 // Whiskies catalog
 export const whiskies = pgTable("whiskies", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id),
+  user_id: integer("user_id").references(() => users.id),
   name: text("name").notNull(),
   distillery: text("distillery").notNull(),
   type: text("type").notNull(),
@@ -151,18 +151,18 @@ export const whiskies = pgTable("whiskies", {
   age: integer("age"),
   abv: doublePrecision("abv"),
   price: doublePrecision("price"),
-  imageUrl: text("image_url").notNull(),
+  image_url: text("image_url").notNull(),
   description: text("description"),
-  tastingNotes: text("tasting_notes"),
-  caskType: text("cask_type"),
+  tasting_notes: text("tasting_notes"),
+  cask_type: text("cask_type"),
   limited: integer("limited").default(0),
   vintage: text("vintage"),
   aroma: text("aroma"),
   palate: text("palate"),
   finish: text("finish"),
   founded: text("founded"),
-  waterSource: text("water_source"),
-  distilleryHistory: text("distillery_history"),
+  water_source: text("water_source"),
+  distillery_history: text("distillery_history"),
   awards: jsonb("awards").default([]).notNull(),
 });
 
@@ -387,10 +387,11 @@ export const insertUserSchema = createInsertSchema(users).extend({
 });
 
 export const insertWhiskySchema = createInsertSchema(whiskies).extend({
+  user_id: z.number().optional(),
   abv: z.number().min(0).max(100),
   price: z.number().min(0).optional(),
   age: z.number().min(0).optional(),
-  tastingNotes: z.string().min(1),
+  tasting_notes: z.string().min(1),
   description: z.string().min(10),
   region: z.string().min(1),
   aroma: z.string().optional(),
@@ -401,8 +402,8 @@ export const insertWhiskySchema = createInsertSchema(whiskies).extend({
     description: z.string(),
   })).default([]),
   founded: z.string().optional(),
-  waterSource: z.string().optional(),
-  distilleryHistory: z.string().optional(),
+  water_source: z.string().optional(),
+  distillery_history: z.string().optional(),
 });
 
 export const insertReviewSchema = createInsertSchema(reviews).extend({
