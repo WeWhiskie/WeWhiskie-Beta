@@ -1,6 +1,7 @@
-import { pgTable, text, serial, integer, timestamp, doublePrecision, boolean, jsonb, PgTable } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, doublePrecision, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import type { InferModel } from 'drizzle-orm';
 
 // Define concierge personality schema
 export const conciergePersonalitySchema = z.object({
@@ -17,13 +18,13 @@ export const conciergePersonalitySchema = z.object({
 export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;
 
 // Users and Authentication
-export const users: PgTable = pgTable("users", {
+export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   email: text("email").notNull().unique(),
   inviteCode: text("invite_code").notNull().unique(),
-  invitedBy: integer("invited_by").references((): any => users.id),
+  invitedBy: integer("invited_by").references(() => users.id),
   inviteCount: integer("invite_count").default(0),
   lastActive: timestamp("last_active"),
   engagementScore: integer("engagement_score").default(0),
@@ -142,6 +143,7 @@ export const follows = pgTable("follows", {
 // Whiskies catalog
 export const whiskies = pgTable("whiskies", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
   name: text("name").notNull(),
   distillery: text("distillery").notNull(),
   type: text("type").notNull(),
@@ -155,7 +157,6 @@ export const whiskies = pgTable("whiskies", {
   caskType: text("cask_type"),
   limited: integer("limited").default(0),
   vintage: text("vintage"),
-  // Add new fields for detailed tasting profile
   aroma: text("aroma"),
   palate: text("palate"),
   finish: text("finish"),
@@ -462,7 +463,6 @@ export const insertInviteSchema = createInsertSchema(invites);
 export const insertMasterclassEventSchema = createInsertSchema(masterclassEvents);
 export const insertMasterclassParticipantSchema = createInsertSchema(masterclassParticipants);
 
-
 // Whisky collection table (many-to-many relationship)
 export const userWhiskyCollection = pgTable("user_whisky_collection", {
   id: serial("id").primaryKey(),
@@ -490,14 +490,14 @@ export const chatConversations = pgTable("chat_conversations", {
   userId: integer("user_id")
     .notNull()
     .references(() => users.id),
-  title: text("title"),
+  title: text("title").default("Whisky Consultation").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  lastMessageAt: timestamp("last_message_at"),
-  status: text("status").default("active"),
-  context: jsonb("context").default({}),
+  lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+  status: text("status").default("active").notNull(),
+  context: jsonb("context").default({}).notNull(),
   personalityId: text("personality_id"),
-  personalitySettings: jsonb("personality_settings").default({}),
+  personalitySettings: jsonb("personality_settings").default({}).notNull()
 });
 
 export const chatMessages = pgTable("chat_messages", {
@@ -505,87 +505,71 @@ export const chatMessages = pgTable("chat_messages", {
   conversationId: integer("conversation_id")
     .notNull()
     .references(() => chatConversations.id),
-  role: text("role").notNull(), // 'user' or 'assistant'
+  role: text("role").notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  metadata: jsonb("metadata").default({}),
-  personality: jsonb("personality").default({}),
+  metadata: jsonb("metadata").default({}).notNull(),
+  personality: jsonb("personality").default({}).notNull()
 });
 
 // Add new insert schemas
 export const insertChatConversationSchema = createInsertSchema(chatConversations).extend({
-  title: z.string().optional(),
-  context: z.record(z.unknown()).optional(),
-  personalitySettings: z.object({
-    style: z.enum(["highland", "speyside", "bourbon", "islay"]).optional(),
-    accent: z.string().optional(),
-    name: z.string().optional(),
-    specialties: z.array(z.string()).optional(),
-  }).optional(),
+  personalitySettings: z.record(z.unknown()).default({})
 });
 
 export const insertChatMessageSchema = createInsertSchema(chatMessages).extend({
   role: z.enum(["user", "assistant"]),
   content: z.string().min(1),
-  metadata: z.record(z.unknown()).optional(),
-  personality: z.object({
-    name: z.string().optional(),
-    accent: z.string().optional(),
-    background: z.string().optional(),
-    personality: z.string().optional(),
-    avatarDescription: z.string().optional(),
-    voiceDescription: z.string().optional(),
-    specialties: z.array(z.string()).optional(),
-    catchphrase: z.string().optional(),
-  }).optional(),
+  metadata: z.record(z.unknown()).default({}),
+  personality: conciergePersonalitySchema.partial().optional()
 });
 
 // ============= Type Exports =============
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
-export type Whisky = typeof whiskies.$inferSelect;
-export type Review = typeof reviews.$inferSelect;
-export type TastingSession = typeof tastingSessions.$inferSelect;
-export type ShippingAddress = typeof shippingAddresses.$inferSelect;
-export type SessionParticipant = typeof sessionParticipants.$inferSelect;
-export type ShareTrack = typeof shares.$inferSelect;
+export type User = InferModel<typeof users>;
+export type Whisky = InferModel<typeof whiskies>;
+export type Review = InferModel<typeof reviews>;
+export type TastingSession = InferModel<typeof tastingSessions>;
+export type ShippingAddress = InferModel<typeof shippingAddresses>;
+export type SessionParticipant = InferModel<typeof sessionParticipants>;
+export type ShareTrack = InferModel<typeof shares>;
 export type InsertShareTrack = z.infer<typeof insertShareSchema>;
-export type Like = typeof likes.$inferSelect;
+export type Like = InferModel<typeof likes>;
 export type InsertLike = z.infer<typeof insertLikeSchema>;
-export type TastingGroup = typeof tastingGroups.$inferSelect;
-export type GroupMember = typeof groupMembers.$inferSelect;
-export type GroupAchievement = typeof groupAchievements.$inferSelect;
+export type TastingGroup = InferModel<typeof tastingGroups>;
+export type GroupMember = InferModel<typeof groupMembers>;
+export type GroupAchievement = InferModel<typeof groupAchievements>;
 export type InsertTastingGroup = z.infer<typeof insertTastingGroupSchema>;
 export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
 export type InsertGroupAchievement = z.infer<typeof insertGroupAchievementSchema>;
-export type StreamConfiguration = typeof streamConfigurations.$inferSelect;
-export type StreamStats = typeof streamStats.$inferSelect;
-export type ViewerAnalytics = typeof viewerAnalytics.$inferSelect;
-export type CdnConfig = typeof cdnConfigs.$inferSelect;
+export type StreamConfiguration = InferModel<typeof streamConfigurations>;
+export type StreamStats = InferModel<typeof streamStats>;
+export type ViewerAnalytics = InferModel<typeof viewerAnalytics>;
+export type CdnConfig = InferModel<typeof cdnConfigs>;
 export type InsertStreamConfig = z.infer<typeof insertStreamConfigSchema>;
 export type InsertStreamStats = z.infer<typeof insertStreamStatsSchema>;
 export type InsertViewerAnalytics = z.infer<typeof insertViewerAnalyticsSchema>;
 export type InsertCdnConfig = z.infer<typeof insertCdnConfigSchema>;
-export type ActivityFeed = typeof activityFeed.$inferSelect;
+export type ActivityFeed = InferModel<typeof activityFeed>;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
-export type DailyTask = typeof dailyTasks.$inferSelect;
-export type WeeklyTask = typeof weeklyTasks.$inferSelect;
-export type Achievement = typeof achievements.$inferSelect;
+export type DailyTask = InferModel<typeof dailyTasks>;
+export type WeeklyTask = InferModel<typeof weeklyTasks>;
+export type Achievement = InferModel<typeof achievements>;
 
 // Add new type exports
-export type Invite = typeof invites.$inferSelect;
+export type Invite = InferModel<typeof invites>;
 export type InsertInvite = z.infer<typeof insertInviteSchema>;
-export type MasterclassEvent = typeof masterclassEvents.$inferSelect;
+export type MasterclassEvent = InferModel<typeof masterclassEvents>;
 export type InsertMasterclassEvent = z.infer<typeof insertMasterclassEventSchema>;
-export type MasterclassParticipant = typeof masterclassParticipants.$inferSelect;
+export type MasterclassParticipant = InferModel<typeof masterclassParticipants>;
 export type InsertMasterclassParticipant = z.infer<typeof insertMasterclassParticipantSchema>;
 
 // Add new type exports from edited code
-export type UserWhiskyCollection = typeof userWhiskyCollection.$inferSelect;
+export type UserWhiskyCollection = InferModel<typeof userWhiskyCollection>;
 export type InsertUserWhiskyCollection = z.infer<typeof insertWhiskyCollectionSchema>;
-export type ChatConversation = typeof chatConversations.$inferSelect;
+export type ChatConversation = InferModel<typeof chatConversations>;
 export type InsertChatConversation = z.infer<typeof insertChatConversationSchema>;
-export type ChatMessage = typeof chatMessages.$inferSelect;
+export type ChatMessage = InferModel<typeof chatMessages>;
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;

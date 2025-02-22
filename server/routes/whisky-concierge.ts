@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { db } from "../db";
-import { chatConversations, chatMessages, whiskies } from "@shared/schema";
+import { chatConversations, chatMessages, whiskies, userWhiskyCollection } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { whiskyConcierge, generateConciergeName, generateConciergePersonality } from "../services/ai-concierge";
 
@@ -32,8 +32,12 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
     }
 
     // Get user's whisky collection for context
-    const userCollection = await db.select().from(whiskies)
-      .where(eq(whiskies.userId, userId));
+    const userCollection = await db.query.userWhiskyCollection.findMany({
+      where: eq(userWhiskyCollection.userId, userId),
+      with: {
+        whisky: true
+      }
+    });
 
     // Create or retrieve conversation
     let conversation;
@@ -45,21 +49,23 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
         return res.status(404).json({ message: "Conversation not found" });
       }
     } else {
+      const newConversation = {
+        userId,
+        title: "Whisky Consultation",
+        status: "active",
+        context: { collectionSize: userCollection.length },
+        personalitySettings: personality ? {
+          style: personality.accent?.toLowerCase().includes('highland') ? 'highland' :
+                 personality.accent?.toLowerCase().includes('speyside') ? 'speyside' :
+                 personality.accent?.toLowerCase().includes('bourbon') ? 'bourbon' : 'islay',
+          accent: personality.accent,
+          name: personality.name,
+          specialties: personality.specialties
+        } : {}
+      };
+
       conversation = await db.insert(chatConversations)
-        .values({
-          userId,
-          title: "Whisky Consultation",
-          status: "active",
-          context: { collectionSize: userCollection.length },
-          personalitySettings: personality ? {
-            style: personality.accent?.toLowerCase().includes('highland') ? 'highland' :
-                   personality.accent?.toLowerCase().includes('speyside') ? 'speyside' :
-                   personality.accent?.toLowerCase().includes('bourbon') ? 'bourbon' : 'islay',
-            accent: personality.accent,
-            name: personality.name,
-            specialties: personality.specialties
-          } : undefined
-        })
+        .values(newConversation)
         .returning()
         .then(rows => rows[0]);
     }
@@ -116,7 +122,7 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
         citations: result.citations || [],
         model: result.model
       },
-      personality: personality || undefined
+      personality: personality || {}
     });
 
     // Update conversation last message timestamp

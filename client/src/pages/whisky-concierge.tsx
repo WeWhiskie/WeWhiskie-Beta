@@ -124,8 +124,8 @@ export default function WhiskyConcierge() {
 
   // Update personality when style changes
   useEffect(() => {
-    if (personality) {
-      setCurrentPersonality(personality);
+    if (personality && typeof personality === 'object') {
+      setCurrentPersonality(personality as ConciergePersonality);
     }
   }, [personality]);
 
