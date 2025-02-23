@@ -63,7 +63,7 @@ export class LiveStreamingServer {
     try {
       log('Verifying WebSocket client connection...', 'websocket');
       const cookies = parse(info.req.headers.cookie || '');
-      const sessionId = cookies['connect.sid'];
+      const sessionId = cookies['whisky.session.id'];
 
       if (!sessionId) {
         log('WebSocket connection rejected: No session cookie', 'websocket');
@@ -91,8 +91,9 @@ export class LiveStreamingServer {
   private setupWebSocketServer() {
     this.wss.on('connection', async (ws: WebSocket, request: IncomingMessage) => {
       try {
+        log('New WebSocket connection attempt...', 'websocket');
         const cookies = parse(request.headers.cookie || '');
-        const user = await verify(cookies['connect.sid']);
+        const user = await verify(cookies['whisky.session.id']);
 
         if (!user) {
           log('Connection rejected: User not authenticated', 'websocket');
@@ -134,7 +135,7 @@ export class LiveStreamingServer {
             timestamp: Date.now(),
             sessionInfo: {
               isAuthenticated: true,
-              sessionId: cookies['connect.sid']
+              sessionId: cookies['whisky.session.id']
             }
           }
         }));

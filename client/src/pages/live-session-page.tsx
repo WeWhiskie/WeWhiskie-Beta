@@ -78,16 +78,16 @@ export default function LiveSessionPage() {
   useEffect(() => {
     if (!session || !user || !sessionId) return;
 
+    // Store cleanup function
     const cleanupFn = connectToSocket(sessionId, user.id);
 
     // Cleanup on unmount
     return () => {
-      cleanupFn();
+      if (cleanupFn) cleanupFn();
       cleanup();
     };
   }, [session, user, sessionId, connectToSocket, cleanup]);
 
-  // Handle received WebSocket messages for chat
   const handleSendMessage = useCallback((message: string) => {
     if (!user) return;
 
@@ -106,7 +106,6 @@ export default function LiveSessionPage() {
     });
   }, [user, sendMessage]);
 
-  // Loading state
   if (isLoadingSession) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
