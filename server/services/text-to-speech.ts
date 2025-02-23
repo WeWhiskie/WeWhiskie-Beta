@@ -63,9 +63,45 @@ class TextToSpeechService {
         };
       }
 
-      // For now, return a mock URL - we'll implement actual TTS later
+      // Create a fallback audio file with a simple tone
+      const sampleRate = 44100;
+      const duration = 1; // 1 second
+      const frequency = 440; // A4 note
+      const numSamples = sampleRate * duration;
+
+      const audioData = new Float32Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        audioData[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate);
+      }
+
+      // Convert to WAV format
+      const wavBuffer = Buffer.alloc(44 + numSamples * 2);
+
+      // Write WAV header
+      wavBuffer.write('RIFF', 0);
+      wavBuffer.writeUInt32LE(36 + numSamples * 2, 4);
+      wavBuffer.write('WAVE', 8);
+      wavBuffer.write('fmt ', 12);
+      wavBuffer.writeUInt32LE(16, 16);
+      wavBuffer.writeUInt16LE(1, 20);
+      wavBuffer.writeUInt16LE(1, 22);
+      wavBuffer.writeUInt32LE(sampleRate, 24);
+      wavBuffer.writeUInt32LE(sampleRate * 2, 28);
+      wavBuffer.writeUInt16LE(2, 32);
+      wavBuffer.writeUInt16LE(16, 34);
+      wavBuffer.write('data', 36);
+      wavBuffer.writeUInt32LE(numSamples * 2, 40);
+
+      // Write audio data
+      for (let i = 0; i < numSamples; i++) {
+        const sample = Math.floor(audioData[i] * 32767);
+        wavBuffer.writeInt16LE(sample, 44 + i * 2);
+      }
+
+      await this.saveToCache(cacheKey, wavBuffer);
+
       return {
-        audioUrl: '/attached_assets/tts-cache/default.mp3'
+        audioUrl: `/attached_assets/tts-cache/${cacheKey}.mp3`
       };
     } catch (error) {
       console.error('Error synthesizing speech:', error);

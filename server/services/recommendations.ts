@@ -1,7 +1,7 @@
 import { huggingFaceClient } from "./huggingface-client";
 import { storage } from "../storage";
 import type { Whisky, Review } from "@shared/schema";
-import type { ConciergePersonality } from "./ai-concierge";
+import { type ConciergePersonality } from "@shared/schema";
 import { createHash } from 'crypto';
 
 // Enhanced error handling
