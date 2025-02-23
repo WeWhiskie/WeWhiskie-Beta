@@ -172,7 +172,7 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
 
 // Helper function to get user preferences
 async function getUserPreferences(userId: number) {
-  const reviews = await db.query.reviews.findMany({
+  const userReviews = await db.query.reviews.findMany({
     where: eq(reviews.userId, userId),
     with: {
       whisky: true
@@ -184,10 +184,10 @@ async function getUserPreferences(userId: number) {
     favoriteTypes: new Set<string>(),
     preferredFlavors: new Set<string>(),
     averageRating: 0,
-    totalReviews: reviews.length
+    totalReviews: userReviews.length
   };
 
-  reviews.forEach(review => {
+  userReviews.forEach(review => {
     if (review.whisky) {
       preferences.favoriteTypes.add(review.whisky.type);
       if (review.whisky.tasting_notes) {
@@ -199,8 +199,8 @@ async function getUserPreferences(userId: number) {
     }
   });
 
-  if (reviews.length > 0) {
-    preferences.averageRating /= reviews.length;
+  if (userReviews.length > 0) {
+    preferences.averageRating /= userReviews.length;
   }
 
   return {
