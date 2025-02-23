@@ -34,7 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: async () => {
       try {
         const response = await fetch("/api/user", {
-          credentials: "include"
+          credentials: "include",
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+          }
         });
 
         // Handle 401 gracefully
@@ -53,9 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    // Prevent unnecessary refetches
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    retry: false,
+    // Prevent unnecessary refetches but allow for quick updates
+    staleTime: 1000 * 30, // 30 seconds
+    cacheTime: 1000 * 60 * 5, // 5 minutes
+    retry: 1,
   });
 
   // Show auth-related toasts only on initial load
@@ -78,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
         body: JSON.stringify(credentials),
         credentials: "include",
@@ -92,7 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      // Invalidate all queries to refresh data
+      queryClient.invalidateQueries();
     },
     onError: (error: Error) => {
       toast({
@@ -109,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
         body: JSON.stringify(credentials),
         credentials: "include",
@@ -123,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries();
       toast({
         title: "Success",
         description: "Account created successfully!",
@@ -143,6 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await fetch("/api/logout", {
         method: "POST",
         credentials: "include",
+        headers: {
+          "Accept": "application/json",
+        },
       });
 
       if (!response.ok) {

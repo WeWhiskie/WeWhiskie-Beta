@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertReviewSchema } from "@shared/schema";
+import { z } from "zod";
 import {
   Form,
   FormControl,
@@ -53,7 +54,7 @@ export function ReviewForm() {
     resolver: zodResolver(
       insertReviewSchema.omit({ userId: true, likes: true }).extend({
         whiskyId: insertReviewSchema.shape.whiskyId.transform(String),
-        imageFile: insertReviewSchema.shape.imageUrl.optional(),
+        imageFile: z.instanceof(FileList).optional(),
       })
     ),
     defaultValues: {
