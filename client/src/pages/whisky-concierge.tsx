@@ -66,6 +66,7 @@ export default function WhiskyConcierge() {
   const [selectedStyle, setSelectedStyle] = useState("highland");
   const [currentPersonality, setCurrentPersonality] = useState<ConciergePersonality | null>(null);
   const [isPersonalityChanging, setIsPersonalityChanging] = useState(false);
+  const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -141,16 +142,26 @@ export default function WhiskyConcierge() {
   // Update personality when style changes
   useEffect(() => {
     if (personality && typeof personality === 'object') {
+      console.log("[WhiskyConcierge] Setting new personality:", personality);
       setCurrentPersonality(personality as ConciergePersonality);
+
       // Add a welcome message when personality changes
-      setMessages(prev => [
-        ...prev,
-        {
-          role: "assistant",
+      setMessages(prev => {
+        const welcomeMessage = {
+          role: "assistant" as const,
           content: `${(personality as ConciergePersonality).catchphrase} I'm ${(personality as ConciergePersonality).name}, and I'm here to guide you through the world of whisky with my ${(personality as ConciergePersonality).accent} expertise.`,
           timestamp: new Date().toISOString(),
+        };
+
+        // Only add welcome message if it's different from the last message
+        const lastMessage = prev[prev.length - 1];
+        if (!lastMessage || lastMessage.content !== welcomeMessage.content) {
+          return [...prev, welcomeMessage];
         }
-      ]);
+        return prev;
+      });
+    } else {
+      console.log("[WhiskyConcierge] No personality data received");
     }
   }, [personality]);
 
@@ -417,14 +428,29 @@ export default function WhiskyConcierge() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
               transition={{ duration: 0.3 }}
+              className="relative"
             >
+              {isAvatarLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/50">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              )}
               <AvatarComponent
                 personality={currentPersonality}
                 isListening={isListening}
-                onStartListening={startListening}
-                onStopListening={stopListening}
+                onStartListening={() => {
+                  console.log("[WhiskyConcierge] Starting listening");
+                  startListening();
+                }}
+                onStopListening={() => {
+                  console.log("[WhiskyConcierge] Stopping listening");
+                  stopListening();
+                }}
                 isMuted={isMuted}
-                onToggleMute={toggleMute}
+                onToggleMute={() => {
+                  console.log("[WhiskyConcierge] Toggling mute");
+                  toggleMute();
+                }}
                 customAvatarUrl={currentPersonality.avatarUrl}
               />
             </motion.div>
