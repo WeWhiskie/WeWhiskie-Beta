@@ -77,15 +77,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid var(--whisky-gold);
 }
 
 .mic-button:hover {
   transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .mic-button.listening {
-  background: #dc2626;
-  animation: pulse 2s infinite;
+  background: rgba(220, 38, 38, 0.2);
+  border-color: #dc2626;
+  animation: pulseButton 2s infinite;
 }
 
 .mic-button.listening::before {
@@ -95,7 +99,7 @@
   height: 100%;
   border-radius: 50%;
   background: var(--mic-pulse-color);
-  animation: pulse 2s infinite;
+  animation: pulseRing 2s infinite;
 }
 
 .volume-control {
@@ -176,15 +180,30 @@
   font-style: italic;
 }
 
-@keyframes pulse {
+@keyframes pulseButton {
   0% {
-    box-shadow: 0 0 0 0 var(--mic-pulse-color);
+    transform: scale(1);
   }
-  70% {
-    box-shadow: 0 0 0 20px rgba(220, 38, 38, 0);
+  50% {
+    transform: scale(1.05);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
   }
 }
 

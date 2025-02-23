@@ -3,7 +3,7 @@ import type { ConciergePersonality } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { Mic, VolumeX, Volume2, Loader2 } from "lucide-react";
+import { Mic, VolumeX, Volume2, Loader2, Activity, StopCircle } from "lucide-react";
 import { AvatarComponent } from "./avatar/AvatarComponent";
 import "./AIConcierge.css";
 
@@ -24,6 +24,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
   const { toast } = useToast();
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const [isProcessingMicPermission, setIsProcessingMicPermission] = useState(false);
 
   // Initialize Web Audio API for better audio processing
   useEffect(() => {
@@ -59,7 +60,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
     };
   }, []);
 
-  // Speech Recognition initialization with enhanced error handling
+  // Initialize speech recognition with better error handling
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window)) {
       toast({
@@ -79,8 +80,8 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       recognition.onstart = () => {
         setIsListening(true);
         toast({
-          title: "Listening",
-          description: "Speak now...",
+          title: "Listening Active",
+          description: "I'm listening... Speak clearly into your microphone.",
         });
       };
 
@@ -95,7 +96,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         const lastResult = event.results[event.results.length - 1];
         if (lastResult.isFinal) {
           setIsProcessing(true);
-
           if (onMessage) {
             onMessage(transcript);
             // Simulated AI response (replace with actual AI response handling)
@@ -112,14 +112,15 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       recognition.onerror = (event: any) => {
         console.error("Speech recognition error:", event.error);
         setIsListening(false);
+        setIsProcessingMicPermission(false);
 
         const errorMessages: Record<string, string> = {
-          'network': 'Network error occurred. Please check your connection.',
-          'no-speech': 'No speech detected. Please try again.',
-          'not-allowed': 'Please allow microphone access in your browser settings.',
-          'aborted': 'Listening stopped.',
-          'audio-capture': 'No microphone was found. Ensure it is plugged in and allowed.',
-          'service-not-allowed': 'Speech service not allowed. Please try again.',
+          'network': 'Network error. Please check your internet connection and try again.',
+          'no-speech': 'No speech detected. Please speak clearly into your microphone.',
+          'not-allowed': 'Microphone access denied. Please enable it in your browser settings (click the camera icon in the address bar).',
+          'aborted': 'Listening stopped. Click the microphone icon to start again.',
+          'audio-capture': 'No microphone found. Please ensure your microphone is properly connected.',
+          'service-not-allowed': 'Speech service not available. Please try again in a moment.',
         };
 
         toast({
@@ -130,7 +131,17 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       };
 
       recognition.onend = () => {
-        setIsListening(false);
+        if (isListening) {
+          // Only restart if we haven't manually stopped
+          try {
+            recognition.start();
+          } catch (error) {
+            console.error("Error restarting recognition:", error);
+            setIsListening(false);
+          }
+        } else {
+          setIsListening(false);
+        }
       };
 
       recognitionRef.current = recognition;
@@ -138,7 +149,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       console.error("Error initializing speech recognition:", error);
       toast({
         title: "Speech Recognition Error",
-        description: "Failed to initialize speech recognition",
+        description: "Failed to initialize speech recognition. Please refresh the page.",
         variant: "destructive"
       });
     }
@@ -183,6 +194,8 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       return;
     }
 
+    setIsProcessingMicPermission(true);
+
     if (!isListening) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -202,15 +215,20 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         console.error("Error accessing microphone:", error);
         toast({
           title: "Microphone Access Error",
-          description: "Please allow microphone access in your browser settings.",
+          description: "Please allow microphone access in your browser settings (click the camera icon in the address bar).",
           variant: "destructive"
         });
+      } finally {
+        setIsProcessingMicPermission(false);
       }
     } else {
       try {
         recognitionRef.current.stop();
+        setIsListening(false);
       } catch (error) {
         console.error("Error stopping speech recognition:", error);
+      } finally {
+        setIsProcessingMicPermission(false);
       }
     }
   };
@@ -259,8 +277,18 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
           size="lg"
           onClick={toggleListening}
           className={`mic-button ${isListening ? 'listening' : ''}`}
+          disabled={isProcessingMicPermission}
         >
-          <Mic className="h-6 w-6" />
+          {isProcessingMicPermission ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : isListening ? (
+            <>
+              <Activity className="h-6 w-6 animate-pulse" />
+              <StopCircle className="h-4 w-4 absolute top-1 right-1" />
+            </>
+          ) : (
+            <Mic className="h-6 w-6" />
+          )}
         </Button>
 
         {/* Volume Controls */}
