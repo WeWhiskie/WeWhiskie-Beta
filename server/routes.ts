@@ -14,6 +14,7 @@ import { whiskyConcierge } from "./services/ai-concierge";
 import { generateConciergeName, getWhiskyRecommendations } from "./services/recommendations";
 import { handleWhiskyConciergeChat, handleGenerateName, handleGeneratePersonality } from "./routes/whisky-concierge";
 import { textToSpeechService } from './services/text-to-speech';
+import { WebSocketServer } from 'ws';
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -51,7 +52,76 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   // Create HTTP server
   const server = createServer(app);
 
-  // Initialize WebSocket server
+  // Initialize WebSocket server for AI Concierge
+  const wss = new WebSocketServer({ server, path: '/ai-concierge' });
+
+  wss.on('connection', async (ws, req) => {
+    // Extract session ID from cookies
+    const cookies = req.headers.cookie?.split(';')
+      .reduce((acc: Record<string, string>, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        acc[key] = value;
+        return acc;
+      }, {});
+
+    const sessionId = cookies?.['whisky.session.id'];
+    if (!sessionId) {
+      ws.close(1008, 'Authentication required');
+      return;
+    }
+
+    // Handle incoming messages
+    ws.on('message', async (message: string) => {
+      try {
+        const data = JSON.parse(message);
+
+        switch (data.type) {
+          case 'SPEECH_INPUT':
+            // Handle speech input
+            const response = await handleWhiskyConciergeChat({
+              ...req,
+              body: { message: data.text }
+            }, {
+              json: (data: any) => {
+                ws.send(JSON.stringify({
+                  type: 'AI_RESPONSE',
+                  data
+                }));
+              }
+            });
+            break;
+
+          case 'GET_PERSONALITY':
+            // Get personality details
+            const personality = whiskyConcierge.getPersonality(data.name);
+            ws.send(JSON.stringify({
+              type: 'PERSONALITY_DATA',
+              data: personality
+            }));
+            break;
+
+          default:
+            ws.send(JSON.stringify({
+              type: 'ERROR',
+              error: 'Unknown message type'
+            }));
+        }
+      } catch (error) {
+        console.error('WebSocket message handling error:', error);
+        ws.send(JSON.stringify({
+          type: 'ERROR',
+          error: 'Failed to process message'
+        }));
+      }
+    });
+
+    // Handle connection close
+    ws.on('close', () => {
+      console.log('Client disconnected from AI Concierge');
+    });
+  });
+
+  // Initialize WebSocket server for live streaming
   const liveStreamingServer = new LiveStreamingServer(server);
 
   // Get user profile

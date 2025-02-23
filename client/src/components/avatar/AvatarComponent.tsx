@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Lottie from "lottie-react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { MessageSquare, VolumeX, Volume2, StopCircle } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import defaultAnimation from "./animations/talking.json";
@@ -129,6 +129,9 @@ export function AvatarComponent({
     <div className="relative flex flex-col items-center space-y-3">
       <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden shadow-lg">
         {renderAvatar()}
+        {isListening && (
+          <div className="absolute inset-0 bg-red-500/10 animate-pulse rounded-full" />
+        )}
       </div>
 
       <div className="flex items-center gap-2">
@@ -155,9 +158,12 @@ export function AvatarComponent({
           title={!hasMicPermission ? "Microphone access required" : isListening ? "Stop listening" : "Start listening"}
         >
           {isListening ? (
-            <MicOff className="h-4 w-4" />
+            <>
+              <MessageSquare className="h-4 w-4 text-red-500" />
+              <StopCircle className="h-3 w-3 absolute top-0.5 right-0.5" />
+            </>
           ) : (
-            <Mic className="h-4 w-4" />
+            <MessageSquare className="h-4 w-4" />
           )}
         </Button>
 

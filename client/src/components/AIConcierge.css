@@ -95,21 +95,10 @@
   animation: wave 1s ease-in-out infinite;
 }
 
-.waveform-animation span:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.waveform-animation span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.waveform-animation span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-.waveform-animation span:nth-child(4) {
-  animation-delay: 0.6s;
-}
+.waveform-animation span:nth-child(1) { animation-delay: 0s; }
+.waveform-animation span:nth-child(2) { animation-delay: 0.2s; }
+.waveform-animation span:nth-child(3) { animation-delay: 0.4s; }
+.waveform-animation span:nth-child(4) { animation-delay: 0.6s; }
 
 
 .mic-button {
