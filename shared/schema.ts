@@ -500,14 +500,23 @@ export const usersRelations = relations(users, ({ many }) => ({
 }));
 
 export const whiskiesRelations = relations(whiskies, ({ one, many }) => ({
-  owner: one(users),
+  owner: one(users, {
+    fields: [whiskies.user_id],
+    references: [users.id],
+  }),
   reviews: many(reviews),
   inCollections: many(userWhiskyCollection)
 }));
 
 export const reviewsRelations = relations(reviews, ({ one }) => ({
-  user: one(users),
-  whisky: one(whiskies)
+  user: one(users, {
+    fields: [reviews.userId],
+    references: [users.id],
+  }),
+  whisky: one(whiskies, {
+    fields: [reviews.whiskyId],
+    references: [whiskies.id],
+  })
 }));
 
 export const userWhiskyCollectionRelations = relations(userWhiskyCollection, ({ one }) => ({
