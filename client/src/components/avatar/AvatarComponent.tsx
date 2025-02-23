@@ -6,6 +6,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import defaultAnimation from "./animations/talking.json";
 import type { ConciergePersonality } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 interface AvatarComponentProps {
   personality: ConciergePersonality | null;
@@ -30,7 +31,8 @@ export function AvatarComponent({
   const [avatarError, setAvatarError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMicPermission, setHasMicPermission] = useState(false);
-  const lottieRef = useRef(null);
+  const lottieRef = useRef<any>(null);
+  const { toast } = useToast();
 
   // Check microphone permissions on mount
   useEffect(() => {
@@ -38,14 +40,20 @@ export function AvatarComponent({
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setHasMicPermission(true);
+        // Clean up the stream after checking permissions
         stream.getTracks().forEach(track => track.stop());
       } catch (err) {
         console.error("[AvatarComponent] Microphone access error:", err);
         setHasMicPermission(false);
+        toast({
+          title: "Microphone Access Required",
+          description: "Please enable microphone access to use voice features.",
+          variant: "destructive",
+        });
       }
     };
     checkMicPermissions();
-  }, []);
+  }, [toast]);
 
   // Handle avatar loading and URL changes
   useEffect(() => {
@@ -60,9 +68,14 @@ export function AvatarComponent({
       img.onerror = () => {
         setAvatarError(true);
         setIsLoading(false);
+        toast({
+          title: "Avatar Load Error",
+          description: "Failed to load avatar image. Using default animation.",
+          variant: "destructive",
+        });
       };
     }
-  }, [customAvatarUrl]);
+  }, [customAvatarUrl, toast]);
 
   // Handle animation state
   useEffect(() => {
@@ -128,7 +141,14 @@ export function AvatarComponent({
             isListening && "animate-pulse"
           )}
           onClick={() => {
-            if (!hasMicPermission) return;
+            if (!hasMicPermission) {
+              toast({
+                title: "Microphone Access Required",
+                description: "Please enable microphone access to use voice features.",
+                variant: "destructive",
+              });
+              return;
+            }
             isListening ? onStopListening() : onStartListening();
           }}
           disabled={!hasMicPermission}
