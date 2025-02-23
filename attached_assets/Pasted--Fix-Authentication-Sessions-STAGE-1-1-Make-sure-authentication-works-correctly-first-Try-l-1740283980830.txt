@@ -1,0 +1,81 @@
+🔹 Fix Authentication & Sessions (STAGE 1)
+1️⃣ Make sure authentication works correctly first
+
+Try logging in and refreshing → Does it keep you logged in?
+Open Developer Console (F12 > Application > Cookies) → Check if the session is stored.
+If not, fix express-session:
+js
+Copy
+Edit
+app.use(
+  session({
+    secret: "whisky_secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false },
+  })
+);
+If req.isAuthenticated() still doesn’t work, debug with:
+js
+Copy
+Edit
+console.log("Session:", req.session);
+console.log("User:", req.user);
+2️⃣ Make sure API calls don’t return errors
+
+Run npm run dev and check the logs.
+Open /api/user in the browser. Does it return a valid user object?
+3️⃣ Test messaging in the AI Concierge
+
+If messages don’t send, check network logs in DevTools.
+If it crashes, fix error handling (try/catch in concierge.js).
+🔹 AFTER Authentication is Fixed (STAGE 2)
+Once authentication 100% works, move to UI/Feature fixes:
+
+1️⃣ Fix Avatar Rendering
+
+Add a default avatar image (public/avatars/default.png).
+In AIConcierge.tsx, set a fallback avatar:
+js
+Copy
+Edit
+const [avatar, setAvatar] = useState("/avatars/default.png");
+2️⃣ Fix Microphone & Volume Buttons
+
+Make sure react-speech-recognition is installed:
+sh
+Copy
+Edit
+npm install react-speech-recognition speech-synthesis
+Update AIConcierge.tsx:
+js
+Copy
+Edit
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+3️⃣ Improve UI Spacing
+
+Adjust .concierge-container in AIConcierge.css:
+css
+Copy
+Edit
+.concierge-container {
+    max-width: 90%;
+    padding: 20px;
+    font-size: 16px;
+}
+4️⃣ How to Keep This Efficient & Cost-Effective
+🚀 Test each fix individually before moving to the next issue.
+🚀 Keep Replit logs open (npm run dev) to catch errors immediately.
+🚀 Only work on one category at a time (avoid mixing authentication fixes with UI changes).
+🚀 Use console.log() to verify each fix before assuming it works.
+5️⃣ Final Expected Timeline
+If followed correctly, this structured plan should:
+
+Fix authentication within 30 minutes ⏳
+Fix backend API issues within 15 minutes ⏳
+Restore full concierge features (avatars, voice, UI) within 60 minutes ⏳
+🔥 After This, You Should Have:
+✅ A fully working authentication system
+✅ Stable concierge chat with working API calls
+✅ A polished, mobile-friendly AI Concierge
+✅ Reliable avatars, microphone, and voice responses
