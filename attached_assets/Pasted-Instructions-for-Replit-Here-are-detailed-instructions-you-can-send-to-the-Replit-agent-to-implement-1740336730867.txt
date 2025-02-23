@@ -1,0 +1,86 @@
+Instructions for Replit
+Here are detailed instructions you can send to the Replit agent to implement these changes and move toward long-term stability with the hybrid architecture. These build on our previous work and focus on fixing the WebSocket while preparing for the cloud transition:
+Please help me stabilize the WebSocket connection for WeWhiskie in Replit and set up a hybrid architecture for long-term robustness. Follow these steps:
+
+1. Open `server/websocket.ts` and simplify the WebSocket server to use the following minimal code, removing authentication and metrics collection temporarily:
+   ```typescript
+   import { WebSocketServer } from 'ws';
+
+   const wss = new WebSocketServer({ port: 8080 });
+
+   wss.on('connection', (ws) => {
+     console.log('WebSocket connected');
+     ws.on('message', (message) => {
+       console.log('Received:', message);
+       ws.send('Echo: ' + message);
+     });
+     ws.on('close', () => console.log('WebSocket disconnected'));
+     ws.on('error', (error) => console.error('WebSocket error:', error));
+
+     // Add heartbeat to prevent timeouts
+     const heartbeat = setInterval(() => {
+       if (ws.readyState === WebSocket.OPEN) {
+         ws.ping();
+       }
+     }, 30000);
+
+     ws.on('close', () => clearInterval(heartbeat));
+   });
+
+   console.log('WebSocket server started on port 8080');
+   Test this manually using a WebSocket client (e.g., WebSocket King) connecting to wss://your-repl-name.replit.dev:8080, sending a test message like “Test message” and verifying the echo response.
+Update the frontend (e.g., public/index.html or a JavaScript file) to connect to this WebSocket and test the connection as suggested by the agent:
+javascript
+const ws = new WebSocket('wss://your-repl-name.replit.dev:8080');
+
+ws.onopen = () => {
+  console.log('Connected to WebSocket');
+  ws.send('Test message');
+};
+
+ws.onmessage = (event) => {
+  console.log('Echo response:', event.data);
+};
+
+ws.onclose = () => console.log('Connection lost, retrying...');
+ws.onerror = (error) => console.error('WebSocket error:', error);
+Check the Replit console for connection confirmation and echo responses.
+If the connection still fails, investigate the Replit console logs for specific errors (e.g., timeout, authentication, or network issues). Reserve the Replit instance if using the free tier to avoid timeouts, and add detailed logging to server/websocket.ts to track connection attempts and failures.
+Begin setting up a hybrid architecture by creating RESTful APIs in server/routes.ts for session management and whisky data:
+typescript
+import express from 'express';
+const router = express.Router();
+
+router.get('/session', (req, res) => {
+  const sessionId = req.cookies.sid || req.headers.authorization;
+  if (!sessionId) return res.status(401).json({ error: 'No session ID' });
+  res.json({ hasSession: true, userId: 2, username: 'bobbob.com' });
+});
+
+router.get('/whisky/recommend', (req, res) => {
+  const userPrefs = req.query.prefs;
+  res.json({ recommendation: 'Glenfiddich 18', region: 'Highland' });
+});
+
+export default router;
+Update server/index.ts to use these routes with Express.js, ensuring the server runs on port 3000:
+typescript
+import express from 'express';
+import routes from './routes';
+
+const app = express();
+app.use(express.json());
+app.use('/api', routes);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+Plan for cloud integration by offloading AI and voice processing (e.g., voice-to-text, recommendations) to a service like Azure Cognitive Services or OpenAI. Update the frontend to send data via REST APIs or WebSockets to the cloud, keeping Replit as a prototyping environment.
+Test the simplified WebSocket and new REST APIs in Replit, then prepare for deployment to a cloud platform (e.g., Vercel, AWS) for long-term scalability. Provide code suggestions, test results, and any issues encountered during implementation.
+Focus on ensuring a stable WebSocket for real-time features (voice and 3D avatars) while building REST fallbacks for session and data management, aligning with the hybrid architecture for WeWhiskie’s long-term success.
+
+---
+
+### Moving Forward
+This approach should stabilize the WebSocket in Replit for immediate testing while setting up the hybrid architecture for long-term robustness. If the WebSocket still fails, we can pivot further—e.g., deploying to a cloud platform immediately or refining the client-side reconnection logic. I’m happy to provide additional code, test specific components, or explore creative enhancements (e.g., AR/VR for tastings) as we progress.
+
+Let me know how the Replit agent responds or if you encounter any new issues, and we’ll refine this plan to get WeWhiskie back on track and thriving!
