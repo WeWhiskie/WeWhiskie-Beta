@@ -54,7 +54,7 @@ const Router = memo(function Router() {
           <ProtectedRoute path="/concierge" component={WhiskyConcierge} />
           <ProtectedRoute path="/review" component={ReviewPage} />
           <ProtectedRoute path="/review/:id" component={ReviewPage} />
-          <Route path="/sessions" component={SessionsPage} />
+          <ProtectedRoute path="/sessions" component={SessionsPage} />
           <ProtectedRoute path="/sessions/:id" component={LiveSessionPage} />
           <ProtectedRoute path="/recommendations" component={RecommendationsPage} />
           <ProtectedRoute path="/groups" component={TastingGroups} />
