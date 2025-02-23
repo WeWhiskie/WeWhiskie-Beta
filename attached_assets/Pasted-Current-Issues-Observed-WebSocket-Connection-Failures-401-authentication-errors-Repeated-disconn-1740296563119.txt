@@ -1,0 +1,58 @@
+Current Issues Observed:
+WebSocket Connection Failures:
+
+401 authentication errors.
+Repeated disconnections and failure to reconnect.
+"Connection Lost" and "Failed to connect after multiple attempts" errors persist.
+Speech Recognition Not Functioning Properly:
+
+The microphone button does not recognize speech when clicked.
+No transcription or live recognition feedback displayed.
+The AI does not process or respond to speech input.
+User Interface Issues:
+
+The icon for enabling speech recognition is still a microphone instead of a talking user icon.
+No real-time animation indicating the system is actively listening.
+No AI-generated voice responses.
+No visual avatar to indicate which AI personality is active.
+Instructions to Fix the AI Concierge:
+1️⃣ Fix WebSocket Connection & Authentication Issues
+Ensure WebSocket authentication works correctly.
+Verify WebSocket stability (no more dropped connections).
+Check token authentication flow—it should request a fresh authentication token if expired.
+If WebSocket fails, implement a graceful fallback (retry with backoff mechanism).
+Confirm console logs show: "Connected to AI Concierge WebSocket" when successful.
+2️⃣ Fix Speech Recognition Issues
+Replace the microphone icon with a talking user icon to clearly differentiate its function.
+Ensure clicking the icon enables speech recognition.
+Prompt users for microphone permissions if needed.
+If the mic is disabled, show a clear error message.
+Display live transcription as the user speaks.
+Words should appear in real-time as detected.
+Ensure the AI responds to voice input with text and speech output.
+Implement a waveform animation to indicate active listening.
+No premature "Voice Recognition Stopped" errors unless manually stopped.
+3️⃣ Ensure AI Voice Responses Work
+Verify the AI is capable of responding with voice.
+Use Text-to-Speech (TTS) API to generate a spoken response.
+Implement volume controls for voice output.
+AI response should include both text and audio.
+4️⃣ Fix Avatar Selection & AI Personality Display
+Ensure a 3D avatar appears that matches the selected AI personality.
+The avatar should have subtle motion to indicate engagement.
+When speaking, the avatar should animate (mouth movement, head nod, etc.).
+Allow users to select from multiple AI avatars.
+5️⃣ UI & Error Handling Improvements
+Improve all error messages to be more user-friendly.
+Ensure the UI clearly indicates the AI's state (Listening, Thinking, Responding).
+Fix any transparent or misplaced UI elements.
+Test across different devices and browsers to ensure full compatibility.
+✅ Expected Outcome:
+✅ WebSocket authentication works flawlessly with no disconnects.
+✅ Speech recognition properly captures and transcribes voice input.
+✅ AI processes and responds with both text and voice output.
+✅ 3D avatars are working and animate based on interaction.
+✅ Clear user interface with proper icons, animations, and error handling.
+💡 Once these are fixed, please verify everything works correctly before deploying.
+If any issues persist, provide detailed console logs and error messages for further debugging.
+
