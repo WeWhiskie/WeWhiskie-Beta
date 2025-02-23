@@ -1,0 +1,61 @@
+Objective:
+Fix the AI Concierge to properly recognize speech, provide a visual response, and allow for avatar customization.
+
+Issues Identified:
+Speech Recognition Not Working:
+
+Mic activates but does not capture or process speech.
+No confirmation that speech is being recognized.
+Error: "Speech Recognition Error – Listening stopped."
+AI Response Missing:
+
+AI does not generate text responses based on user input.
+AI does not provide voice feedback.
+Clear Box Issue:
+
+When the microphone is active, an unclear, difficult-to-read box appears.
+The "Listening" indicator is poorly styled and overlaps with other UI elements.
+Avatar Selection Missing:
+
+No available avatars to choose from.
+No animation or facial expressions based on AI response.
+Fixes & Enhancements Needed:
+1. Speech Recognition Fixes
+✅ Implement Web Speech API or Whisper API for speech recognition.
+✅ Ensure microphone permissions are requested properly and handled gracefully.
+✅ Display real-time transcription when the user speaks.
+✅ Improve error handling:
+
+If the network fails, provide a retry button.
+If speech is not detected, give feedback (e.g., "Couldn’t hear you, try again").
+2. AI Response Handling
+✅ Ensure that AI processes user speech input and generates a response.
+✅ AI should reply with text output in the chat window and speak aloud using Text-to-Speech (TTS).
+✅ Allow users to mute/unmute AI voice with a toggle button.
+
+3. UI & Accessibility Fixes
+✅ Remove the clear/transparent box issue and properly format the "Listening" indicator.
+✅ Ensure the microphone button pulses only when listening and stops when speech input ends.
+✅ Add a loading animation when AI processes a response.
+
+4. Avatar Selection & 3D AI Enhancements
+✅ Add 3D avatar options to choose from (e.g., realistic faces, animated personas).
+✅ Ensure the selected avatar updates the display dynamically.
+✅ Animate avatar mouth movements and expressions when AI speaks.
+✅ Use WebGL / Three.js to render smooth, interactive avatars.
+
+Expected User Flow After Fixes:
+User clicks the mic → Pulsing animation starts
+"Listening..." appears in a clearly styled indicator
+User speaks → Text appears in real time as speech is transcribed
+AI processes input → AI avatar animates & responds with text and voice
+User hears AI response (with volume control option)
+User can select a different avatar from a dropdown or carousel menu
+All components work without errors or visual glitches
+Priority Fix Order for Maximum Success
+1️⃣ Fix speech recognition & live transcription
+2️⃣ Ensure AI generates text & voice responses
+3️⃣ Fix UI (clear box, mic animation, loading states)
+4️⃣ Add 3D avatars & animations
+
+Let’s implement these step-by-step to ensure stability. 🚀
