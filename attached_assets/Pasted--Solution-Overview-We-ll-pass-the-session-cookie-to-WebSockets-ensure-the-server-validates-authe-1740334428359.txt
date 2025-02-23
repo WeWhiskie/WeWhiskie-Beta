@@ -1,0 +1,131 @@
+🌟 Solution Overview:
+We'll pass the session cookie to WebSockets, ensure the server validates authentication, and implement a secure reconnection strategy.
+
+🚀 Step 1: Modify WebSocket Client to Send Auth Token
+Your frontend WebSocket connection is likely missing the authentication header. Instead of the basic connection:
+
+javascript
+Copy
+Edit
+const socket = new WebSocket("wss://your-replit-url");
+Use this:
+
+javascript
+Copy
+Edit
+const socket = new WebSocket(`wss://your-replit-url?token=${document.cookie}`);
+✅ This appends session cookies as a query parameter.
+
+🚀 Step 2: Update WebSocket Server to Extract Authentication
+Modify your server/routes.ts to extract the authentication token:
+
+typescript
+Copy
+Edit
+import { Server } from "socket.io";
+import cookie from "cookie";
+import session from "express-session";
+
+const io = new Server(3001, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+io.use((socket, next) => {
+    try {
+        const cookies = cookie.parse(socket.handshake.headers.cookie || "");
+        if (!cookies["whisky.session.id"]) {
+            console.log("❌ No session cookie found!");
+            return next(new Error("Unauthorized"));
+        }
+        console.log("✅ WebSocket Authenticated:", cookies["whisky.session.id"]);
+        next();
+    } catch (err) {
+        next(new Error("Authentication Error"));
+    }
+});
+
+io.on("connection", (socket) => {
+    console.log(`🔗 New WebSocket Client: ${socket.id}`);
+
+    socket.on("disconnect", () => {
+        console.log(`❌ Client Disconnected: ${socket.id}`);
+    });
+
+    socket.on("message", (data) => {
+        console.log(`📩 Message received: ${data}`);
+        socket.send("Message received!");
+    });
+});
+✅ This ensures WebSockets authenticate using session cookies.
+
+🚀 Step 3: Fix CORS for WebSocket Authentication
+Modify your Express session settings in server/routes.ts to explicitly allow cookies for WebSockets:
+
+typescript
+Copy
+Edit
+app.use(
+    session({
+        secret: "your-secret-key",
+        resave: false,
+        saveUninitialized: true,
+        cookie: {
+            secure: false,  // Set to true if using HTTPS
+            httpOnly: false, // Allow WebSocket access
+            sameSite: "lax"
+        }
+    })
+);
+✅ This allows session cookies to be accessible to WebSockets.
+
+🚀 Step 4: Implement Auto-Reconnection in Frontend
+If authentication fails or the WebSocket drops, implement automatic reconnection:
+
+javascript
+Copy
+Edit
+let socket;
+function connectWebSocket() {
+    socket = new WebSocket(`wss://your-replit-url?token=${document.cookie}`);
+
+    socket.onopen = () => {
+        console.log("✅ WebSocket connected");
+    };
+
+    socket.onerror = (error) => {
+        console.error("❌ WebSocket error:", error);
+    };
+
+    socket.onclose = (event) => {
+        console.warn("⚠️ WebSocket closed, reconnecting in 5 seconds...");
+        setTimeout(connectWebSocket, 5000);
+    };
+}
+
+connectWebSocket();
+✅ This ensures WebSocket reconnects when it disconnects.
+
+🚀 Step 5: Debug WebSocket Connection
+Once you deploy the changes:
+
+1️⃣ Check the Server Logs
+Run this in Replit’s Shell to monitor WebSocket logs:
+
+sh
+Copy
+Edit
+npm run dev
+You should see 🔗 WebSocket Authenticated: with session details.
+
+2️⃣ Inspect Browser Console
+
+Open Developer Tools (F12 → Console & Network → WS tab).
+Look for any WebSocket authentication errors.
+🎯 Final Debugging Checklist
+✅ Frontend WebSocket URL includes session token (?token=${document.cookie}).
+✅ WebSocket server extracts session cookies (socket.handshake.headers.cookie).
+✅ Express session settings allow WebSocket authentication.
+✅ Auto-reconnection handles connection drops.
