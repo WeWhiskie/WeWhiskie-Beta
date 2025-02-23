@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const configuration: RTCConfiguration = {
   iceServers: [
-    { 
+    {
       urls: [
         'stun:stun1.l.google.com:19302',
         'stun:stun2.l.google.com:19302',
@@ -144,6 +144,7 @@ export function useWebRTC(isHost: boolean) {
           }
         } catch (err) {
           console.error('Failed to initialize host media stream:', err);
+          setError(err instanceof Error ? err : new Error('Failed to initialize media stream'));
         }
       }
     };
@@ -151,6 +152,8 @@ export function useWebRTC(isHost: boolean) {
     socket.onclose = (event) => {
       console.log('WebSocket closed:', event.code, event.reason);
       setConnectionState('disconnected');
+
+      // Don't attempt to reconnect if it was a normal closure
       if (event.code !== 1000) {
         attemptReconnect(sessionId, userId);
       }
@@ -160,6 +163,8 @@ export function useWebRTC(isHost: boolean) {
       console.error('WebSocket error:', error);
       setError(new Error('WebSocket connection failed'));
       setConnectionState('failed');
+
+      // Attempt to reconnect on error
       attemptReconnect(sessionId, userId);
     };
 
@@ -183,10 +188,13 @@ export function useWebRTC(isHost: boolean) {
     setIsReconnecting(true);
     reconnectAttempts.current += 1;
 
+    const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
+    console.log(`Attempting to reconnect in ${backoffTime}ms (Attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
+
     reconnectTimeout.current = setTimeout(() => {
-      console.log(`Attempting to reconnect (${reconnectAttempts.current}/${maxReconnectAttempts})`);
+      console.log(`Reconnection attempt ${reconnectAttempts.current}`);
       connectToSocket(sessionId, userId);
-    }, Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000));
+    }, backoffTime);
   };
 
   const sendMessage = (type: WebRTCMessage['type'], payload: WebRTCPayload) => {
@@ -344,7 +352,7 @@ export function useWebRTC(isHost: boolean) {
   const changeQuality = (quality: string) => {
     const [width, height] = quality.split('x').map(Number);
     if (width && height && socketRef.current?.readyState === WebSocket.OPEN) {
-      sendMessage('quality-change', { 
+      sendMessage('quality-change', {
         userId: parseInt(socketRef.current.url.split('/').pop() || '0'),
         quality: `${width}x${height}`
       });

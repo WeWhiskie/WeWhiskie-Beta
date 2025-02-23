@@ -64,7 +64,10 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     path: '/ws/ai-concierge',
     verifyClient: async (info, callback) => {
       try {
-        console.log('WebSocket connection attempt - Verifying client...');
+        console.log('WebSocket connection attempt - Verifying client...', {
+          cookies: info.req.headers.cookie,
+          sessionStore: !!sessionStore
+        });
 
         const extendedReq = info.req as ExtendedIncomingMessage;
         extendedReq.sessionStore = sessionStore;
@@ -72,39 +75,32 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         // Parse cookies with better error handling
         const cookieHeader = info.req.headers.cookie;
         if (!cookieHeader) {
-          console.log('No cookies found in request');
+          console.log('WebSocket connection rejected: No cookies found');
           callback(false, 401, 'No session cookie found');
           return;
         }
 
-        const cookies = cookieHeader.split(';')
-          .reduce((acc: Record<string, string>, cookie) => {
-            const [key, value] = cookie.trim().split('=');
-            acc[key] = value;
-            return acc;
-          }, {});
-
-        // Check for session ID in multiple possible cookie names
+        // Get session ID from cookie
+        const cookies = parse(cookieHeader); // Assuming parse function is defined elsewhere
         const sessionId = cookies['whisky.session.id'] || 
                          cookies['connect.sid'] || 
                          cookies['whisky.sid'];
 
         if (!sessionId) {
-          console.log('No valid session cookie found');
+          console.log('WebSocket connection rejected: No valid session cookie found');
           callback(false, 401, 'No valid session found');
           return;
         }
 
-        // Get session store from request
-        if (!extendedReq.sessionStore) {
-          console.error('Session store not available - this should not happen');
-          callback(false, 500, 'Internal server error');
-          return;
-        }
-
-        // Verify session exists and is valid
+        // Get session from store
         const session = await new Promise<SessionData | null>((resolve, reject) => {
-          extendedReq.sessionStore!.get(sessionId, (err, session) => {
+          if (!sessionStore) {
+            console.error('Session store not available');
+            reject(new Error('Session store not available'));
+            return;
+          }
+
+          sessionStore.get(sessionId, (err, session) => {
             if (err) {
               console.error('Error fetching session:', err);
               reject(err);
@@ -112,26 +108,21 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
               resolve(session);
             }
           });
-        }).catch(err => {
-          console.error('Session verification failed:', err);
-          return null;
         });
 
         if (!session) {
-          console.log('Session not found or invalid');
-          callback(false, 401, 'Invalid session');
+          console.log('WebSocket connection rejected: Invalid or expired session');
+          callback(false, 401, 'Invalid or expired session');
           return;
         }
 
         // Store session in request for later use
         extendedReq.session = session;
-
-        // Session is valid
-        console.log('Session verified successfully');
+        console.log('WebSocket client authenticated successfully');
         callback(true);
 
       } catch (error) {
-        console.error('Error in WebSocket client verification:', error);
+        console.error('WebSocket verification error:', error);
         callback(false, 500, 'Internal Server Error');
       }
     }
@@ -143,6 +134,7 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     sessionId: string | undefined; 
     lastPingTime?: number;
     userId?: number;
+    reconnectAttempts: number;
   }>();
 
   // Set up heartbeat interval
@@ -168,16 +160,15 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
       clients.set(ws, { 
         connectedAt: new Date(),
         sessionId: req.headers.cookie,
-        lastPingTime: Date.now()
+        lastPingTime: Date.now(),
+        reconnectAttempts: 0
       });
 
       // Send initial connection confirmation
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'CONNECTED',
-          message: 'Successfully connected to AI Concierge'
-        }));
-      }
+      ws.send(JSON.stringify({
+        type: 'CONNECTED',
+        message: 'Connected to AI Concierge WebSocket'
+      }));
 
       // Handle pong messages for connection monitoring
       ws.on('pong', () => {
@@ -192,6 +183,11 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         try {
           const data = JSON.parse(message);
           console.log('Received message type:', data.type);
+
+          const client = clients.get(ws);
+          if (!client) {
+            throw new Error('Client not found in tracking map');
+          }
 
           switch (data.type) {
             case 'SPEECH_INPUT':
@@ -256,8 +252,13 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
       });
 
       // Handle connection close
-      ws.on('close', () => {
-        console.log('Client disconnected from AI Concierge');
+      ws.on('close', (code, reason) => {
+        console.log(`Client disconnected. Code: ${code}, Reason: ${reason}`);
+        const client = clients.get(ws);
+        if (client) {
+          // Store reconnect attempts for backoff
+          client.reconnectAttempts += 1;
+        }
         clients.delete(ws);
       });
 
@@ -830,4 +831,14 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   });
 
   return { server, liveStreamingServer };
+}
+
+// Placeholder for the cookie parsing function.  Replace with your actual implementation.
+function parse(cookieHeader: string): Record<string, string> {
+  return cookieHeader.split(';')
+    .reduce((acc: Record<string, string>, cookie) => {
+      const [key, value] = cookie.trim().split('=');
+      acc[key] = value;
+      return acc;
+    }, {});
 }
