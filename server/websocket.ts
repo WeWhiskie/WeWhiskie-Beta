@@ -24,11 +24,6 @@ interface Client {
   bytesTransferred: number;
 }
 
-type WebSocketMessage = {
-  type: 'join-session' | 'leave-session' | 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'heartbeat' | 'broadcast-ready' | 'request-offer';
-  payload: any;
-};
-
 export class LiveStreamingServer {
   private wss: WebSocketServer;
   private clients: Map<WebSocket, Client> = new Map();
@@ -110,6 +105,7 @@ export class LiveStreamingServer {
           bytesTransferred: 0,
         });
 
+        ws.on('message', this.createMessageHandler(ws, user.id));
 
         ws.on('error', (error) => {
           log(`WebSocket error for user ${user.id}: ${error}`, 'websocket');
@@ -126,7 +122,6 @@ export class LiveStreamingServer {
           this.messageCounters.delete(ws);
         });
 
-        ws.on('message', this.createMessageHandler(ws, user.id));
 
         ws.send(JSON.stringify({
           type: 'connection-established',
@@ -255,6 +250,9 @@ export class LiveStreamingServer {
       case 'chat':
         this.handleChat(ws, message.payload);
         break;
+      case 'heartbeat':
+          this.sendHeartbeat(ws);
+          break;
     }
   }
 
@@ -277,12 +275,11 @@ export class LiveStreamingServer {
 
   private startHeartbeatCheck() {
     setInterval(() => {
-      const clientEntries = Array.from(this.clients.entries());
-      for (const [ws] of clientEntries) {
+      this.clients.forEach((client, ws) => {
         if (ws.readyState === WebSocket.OPEN) {
           this.sendHeartbeat(ws);
         }
-      }
+      });
     }, this.HEARTBEAT_INTERVAL);
   }
 
@@ -319,6 +316,7 @@ export class LiveStreamingServer {
       this.handleLeaveSession(ws, client.sessionId);
     }
     ws.terminate();
+    this.clients.delete(ws);
   }
 
   private startMetricsCollection() {
@@ -429,3 +427,8 @@ export class LiveStreamingServer {
     }
   }
 }
+
+type WebSocketMessage = {
+  type: 'join-session' | 'leave-session' | 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'heartbeat' | 'broadcast-ready' | 'request-offer' | 'user-joined' | 'user-left' | 'connection-established' | 'error';
+  payload: any;
+};

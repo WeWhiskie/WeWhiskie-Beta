@@ -55,7 +55,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
 
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/ai-concierge`;
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
         console.log('Connecting to WebSocket URL:', wsUrl);
 
         const ws = new WebSocket(wsUrl);
@@ -75,21 +75,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
               ws.send(JSON.stringify({ type: 'HEARTBEAT' }));
             }
           }, 30000);
-
-          // Send authentication information immediately after connection
-          const authToken = localStorage.getItem('auth_token');
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'AUTHENTICATE',
-              token: authToken,
-              timestamp: Date.now()
-            }));
-          }
-
-          // Resend last message if any
-          if (lastMessageRef.current && ws.readyState === WebSocket.OPEN) {
-            ws.send(lastMessageRef.current);
-          }
         };
 
         ws.onmessage = (event) => {
@@ -98,48 +83,29 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
             console.log('Received WebSocket message:', response);
 
             switch (response.type) {
-              case 'AUTHENTICATED':
+              case 'CONNECTED':
                 console.log('Authentication successful');
-                // Request personality data if available
-                if (personality?.name && ws.readyState === WebSocket.OPEN) {
-                  ws.send(JSON.stringify({
-                    type: 'GET_PERSONALITY',
-                    name: personality.name
-                  }));
-                }
-                break;
-
-              case 'AUTH_ERROR':
-                console.error('Authentication error:', response.error);
-                toast({
-                  title: "Authentication Error",
-                  description: "Please sign in again to continue.",
-                  variant: "destructive"
-                });
-                // Redirect to login
-                window.location.href = '/auth';
-                break;
-
-              case 'AI_RESPONSE':
-                setAiResponse(response.data.message);
-                if (!isMuted) {
-                  speakResponse(response.data.message);
-                }
-                setIsProcessing(false);
-                break;
-
-              case 'HEARTBEAT':
-                // Received heartbeat from server, connection is alive
-                console.log('Heartbeat received');
                 break;
 
               case 'ERROR':
-                console.error('AI Concierge error:', response.error);
+                console.error('WebSocket error:', response.error);
                 toast({
-                  title: "AI Concierge Error",
+                  title: "Connection Error",
                   description: response.error,
                   variant: "destructive"
                 });
+                if (response.error.includes('Unauthorized')) {
+                  // Redirect to login page if unauthorized
+                  window.location.href = '/auth';
+                }
+                break;
+
+              case 'HEARTBEAT':
+                // Heartbeat received, connection is alive
+                break;
+
+              default:
+                // Handle other message types
                 break;
             }
           } catch (error) {
@@ -163,9 +129,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
 
             toast({
               title: "Connection Lost",
-              description: event.code === 1006 
-                ? "Connection lost unexpectedly. Reconnecting..." 
-                : "Connection closed. Attempting to reconnect...",
+              description: "Connection lost unexpectedly. Reconnecting...",
               variant: "default"
             });
 
@@ -182,15 +146,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         ws.onerror = (error) => {
           console.error('WebSocket error:', error);
           setIsConnecting(false);
-
-          // Only show error toast if we've exceeded retry attempts
-          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS - 1) {
-            toast({
-              title: "Connection Error",
-              description: "Unable to connect to the AI Concierge. Please check your internet connection.",
-              variant: "destructive"
-            });
-          }
         };
 
         wsRef.current = ws;
@@ -210,11 +165,11 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
-      if (wsRef.current) {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
       }
     };
-  }, [personality, toast, isMuted, reconnectAttempts]);
+  }, [reconnectAttempts, toast]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
