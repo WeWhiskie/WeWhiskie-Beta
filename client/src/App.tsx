@@ -22,11 +22,16 @@ import Navbar from "./components/navbar";
 import { UserStatusBar } from "./components/user-status-bar";
 import { useAuth } from "./hooks/use-auth";
 import { FloatingChatButton } from "@/components/ui/floating-chat";
-import { memo } from "react";
+import { memo, useCallback } from "react";
 
 // Memoize the Router component to prevent unnecessary re-renders
 const Router = memo(function Router() {
   const { user, isLoading } = useAuth();
+
+  // Callback to memoize the route components
+  const renderRoute = useCallback((Component: React.ComponentType, requiredLevel = 1) => {
+    return () => <Component />;
+  }, []);
 
   // Don't render routes until auth state is determined
   if (isLoading) {
@@ -34,7 +39,9 @@ const Router = memo(function Router() {
       <div className="min-h-screen bg-background flex flex-col">
         <Navbar />
         <main className="container mx-auto px-4 py-8 flex-grow">
-          <div className="animate-pulse">Loading...</div>
+          <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+            <div className="animate-pulse text-lg">Loading...</div>
+          </div>
         </main>
       </div>
     );
@@ -46,28 +53,54 @@ const Router = memo(function Router() {
       {user && <UserStatusBar />}
       <main className="container mx-auto px-4 py-8 flex-grow">
         <Switch>
-          <Route path="/" component={HomePage} />
-          <Route path="/whisky/:id" component={WhiskyPage} />
-          <Route path="/auth" component={AuthPage} />
-          <Route path="/profile/:id" component={ProfilePage} />
-          <Route path="/rewards" component={RewardsProgramPage} />
-          <ProtectedRoute path="/concierge" component={WhiskyConcierge} />
-          <ProtectedRoute path="/review" component={ReviewPage} />
-          <ProtectedRoute path="/review/:id" component={ReviewPage} />
-          <ProtectedRoute path="/sessions" component={SessionsPage} />
-          <ProtectedRoute path="/sessions/:id" component={LiveSessionPage} />
-          <ProtectedRoute path="/recommendations" component={RecommendationsPage} />
-          <ProtectedRoute path="/groups" component={TastingGroups} />
-          <ProtectedRoute path="/groups/new" component={NewTastingGroup} />
+          <Route path="/" component={renderRoute(HomePage)} />
+          <Route path="/whisky/:id" component={renderRoute(WhiskyPage)} />
+          <Route path="/auth" component={renderRoute(AuthPage)} />
+          <Route path="/profile/:id" component={renderRoute(ProfilePage)} />
+          <Route path="/rewards" component={renderRoute(RewardsProgramPage)} />
+
+          {/* Protected Routes */}
+          <ProtectedRoute 
+            path="/concierge" 
+            component={renderRoute(WhiskyConcierge)} 
+          />
+          <ProtectedRoute 
+            path="/review" 
+            component={renderRoute(ReviewPage)} 
+          />
+          <ProtectedRoute 
+            path="/review/:id" 
+            component={renderRoute(ReviewPage)} 
+          />
+          <ProtectedRoute 
+            path="/sessions" 
+            component={renderRoute(SessionsPage)} 
+          />
+          <ProtectedRoute 
+            path="/sessions/:id" 
+            component={renderRoute(LiveSessionPage)} 
+          />
+          <ProtectedRoute 
+            path="/recommendations" 
+            component={renderRoute(RecommendationsPage)} 
+          />
+          <ProtectedRoute 
+            path="/groups" 
+            component={renderRoute(TastingGroups)} 
+          />
+          <ProtectedRoute 
+            path="/groups/new" 
+            component={renderRoute(NewTastingGroup)} 
+          />
           <ProtectedRoute 
             path="/live" 
-            component={GoLivePage} 
+            component={renderRoute(GoLivePage)} 
             requiredLevel={3}
           />
           <Route component={NotFound} />
         </Switch>
       </main>
-      <FloatingChatButton />
+      {user && <FloatingChatButton />}
     </div>
   );
 });

@@ -1,0 +1,160 @@
+🛠️ Step 1: Fix the React Router Redirect
+📌 Issue:
+
+Users accessing a protected route (/review, /sessions, etc.) while not logged in see a blank screen.
+The React Router is failing to redirect unauthenticated users.
+📌 Fix:
+
+Modify client/src/App.tsx to ensure redirection using useEffect and useNavigate.
+🔹 Update App.tsx to Handle Authentication Redirects
+tsx
+Copy
+Edit
+import React, { useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
+import SessionsPage from "./pages/SessionsPage";
+import ReviewPage from "./pages/ReviewPage";
+import LoginPage from "./pages/LoginPage";
+
+const PrivateRoute = ({ element }) => {
+    const { isAuthenticated } = useAuth();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            navigate("/auth", { replace: true });
+        }
+    }, [isAuthenticated, navigate]);
+
+    return isAuthenticated ? element : null;
+};
+
+const App = () => {
+    return (
+        <Router>
+            <Routes>
+                <Route path="/auth" element={<LoginPage />} />
+                <Route path="/sessions" element={<PrivateRoute element={<SessionsPage />} />} />
+                <Route path="/review" element={<PrivateRoute element={<ReviewPage />} />} />
+            </Routes>
+        </Router>
+    );
+};
+
+export default App;
+✅ Outcome:
+✔ If a non-logged-in user tries to access /sessions or /review, they will automatically be redirected to /auth.
+✔ Logged-in users can access protected pages normally.
+
+🛠️ Step 2: Fix Backend Authentication Middleware
+📌 Issue:
+
+The backend is not properly rejecting unauthorized requests.
+The frontend receives a blank screen instead of a redirect.
+📌 Fix:
+
+Modify server/middleware/authMiddleware.js to properly return a 401 response.
+🔹 Update authMiddleware.js
+js
+Copy
+Edit
+const requireAuth = (req, res, next) => {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized. Redirecting to login." });
+    }
+    next();
+};
+
+module.exports = requireAuth;
+🔹 Apply Middleware in server/routes/protectedRoutes.js
+js
+Copy
+Edit
+const express = require("express");
+const router = express.Router();
+const requireAuth = require("../middleware/authMiddleware");
+
+// Protect the /sessions and /review routes
+router.get("/sessions", requireAuth, (req, res) => {
+    res.json({ message: "Protected session data" });
+});
+
+router.get("/review", requireAuth, (req, res) => {
+    res.json({ message: "Protected review data" });
+});
+
+module.exports = router;
+✅ Outcome:
+✔ If an unauthenticated user tries to access /sessions or /review, the server will respond with a 401 error.
+✔ The frontend will detect this and trigger a redirect to /auth.
+
+🛠️ Step 3: Fix Undefined Property Error (React Query)
+📌 Issue:
+
+The error message in Replit Console says:
+"Cannot read properties of undefined (reading 'optional')"
+This usually happens when React Query is expecting a value that is missing.
+📌 Fix:
+
+Modify the component fetching session/review data to handle undefined values properly.
+🔹 Update SessionsPage.tsx & ReviewPage.tsx
+tsx
+Copy
+Edit
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const SessionsPage = () => {
+    const navigate = useNavigate();
+    const [data, setData] = useState(null);
+
+    useEffect(() => {
+        fetch("/api/sessions", { credentials: "include" })
+            .then((response) => {
+                if (response.status === 401) {
+                    navigate("/auth", { replace: true });
+                }
+                return response.json();
+            })
+            .then((data) => setData(data))
+            .catch((error) => console.error("Error fetching sessions:", error));
+    }, [navigate]);
+
+    if (!data) return <p>Loading...</p>;
+
+    return (
+        <div>
+            <h2>Session Data</h2>
+            <p>{data.message || "No data available"}</p>
+        </div>
+    );
+};
+
+export default SessionsPage;
+✅ Outcome:
+✔ Fixes React Query error by ensuring missing values don’t break the UI.
+✔ If there is no data, the page shows a “No data available” message instead of crashing.
+
+🛠️ Step 4: Restart Replit & Test Each Step
+🔹 Restart Replit:
+
+sh
+Copy
+Edit
+npm run dev
+🔹 Test Each Step Separately: 1️⃣ Try accessing /sessions or /review without logging in.
+
+Expected outcome: Redirects to /auth.
+If it doesn’t work, check console logs for any errors.
+2️⃣ Log in, then access /sessions again.
+
+Expected outcome: Session data loads correctly.
+3️⃣ Try submitting a review after logging in.
+
+Expected outcome: No blank screens, and review submission works.
+🚀 Final Fix Summary
+✅ Step 1: Fixed React Router to redirect unauthorized users.
+✅ Step 2: Fixed backend authentication to reject unauthorized requests correctly.
+✅ Step 3: Fixed React Query to prevent crashes on missing values.
+✅ Step 4: Restart Replit and test each fix separately.
