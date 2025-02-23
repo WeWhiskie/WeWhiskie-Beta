@@ -477,26 +477,15 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   // Whisky Concierge routes
   app.post("/api/whisky-concierge", async (req, res) => {
     try {
-      const response = await handleWhiskyConciergeChat(req, res);
-
-      // If voice response is requested, generate speech
-      if (req.body.requireVoice && response.answer) {
-        const voiceOptions = {
-          text: response.answer,
-          voice: req.body.personality?.accent || 'highland',
-        };
-
-        const audioResponse = await textToSpeechService.synthesizeSpeech(voiceOptions);
-        return res.json({
-          ...response,
-          audioUrl: audioResponse.audioUrl
+      await handleWhiskyConciergeChat(req, res);
+    } catch (error) {
+      console.error('Error in whisky concierge route:', error);
+      // Only send error response if headers haven't been sent
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          message: error instanceof Error ? error.message : "Failed to process request" 
         });
       }
-
-      return res.json(response);
-    } catch (error) {
-      console.error('Error in whisky concierge:', error);
-      res.status(500).json({ message: "Failed to process request" });
     }
   });
 

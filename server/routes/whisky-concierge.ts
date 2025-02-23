@@ -158,7 +158,11 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
         model: result.model,
         responseLength: aiResponse.length
       },
-      personality: personality || {}
+      personality: personality ? {
+        name: personality.name,
+        accent: personality.accent,
+        catchphrase: personality.catchphrase
+      } : {}
     });
 
     // Update conversation last message timestamp
@@ -169,16 +173,26 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
       })
       .where(eq(chatConversations.id, conversation.id));
 
-    return res.json({
+    // Return a simplified response object without circular references
+    const responseData = {
       answer: aiResponse,
       conversationId: conversation.id,
-      citations: result.citations || []
-    });
+      citations: result.citations || [],
+      metadata: {
+        model: result.model,
+        responseLength: aiResponse.length
+      }
+    };
+
+    return res.json(responseData);
   } catch (error) {
     console.error("Whisky concierge error:", error);
-    return res.status(500).json({
-      message: error instanceof Error ? error.message : "Internal server error"
-    });
+    // Ensure we haven't already sent a response
+    if (!res.headersSent) {
+      return res.status(500).json({
+        message: error instanceof Error ? error.message : "Internal server error"
+      });
+    }
   }
 }
 
