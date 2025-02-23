@@ -24,6 +24,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
   avatarUrl: undefined
 } }) => {
   const [isListening, setIsListening] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [transcript, setTranscript] = useState("");
   const { toast } = useToast();
@@ -43,7 +44,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
 
     try {
       const recognition = new (window as any).webkitSpeechRecognition();
-      recognition.continuous = true;
+      recognition.continuous = false; // Changed to false to avoid multiple results
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
@@ -62,6 +63,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
 
         if (lastResult.isFinal && onMessage) {
           onMessage(text);
+          recognition.stop(); // Stop after getting final result
         }
       };
 
@@ -72,7 +74,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
         const errorMessages: Record<string, string> = {
           'network': 'Network error occurred. Please check your connection.',
           'no-speech': 'No speech detected. Please try again.',
-          'not-allowed': 'Microphone access denied. Please enable microphone access.',
+          'not-allowed': 'Please allow microphone access in your browser settings.',
           'aborted': 'Listening stopped.',
         };
 
@@ -104,17 +106,27 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
     };
   }, [toast, onMessage]);
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (!recognitionRef.current) return;
 
     if (!isListening) {
       try {
-        recognitionRef.current.start();
+        // Request microphone permission first
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        try {
+          recognitionRef.current.start();
+        } catch (error) {
+          if ((error as Error).message === 'Failed to execute \'start\' on \'SpeechRecognition\': recognition has already started.') {
+            recognitionRef.current.stop();
+          } else {
+            throw error;
+          }
+        }
       } catch (error) {
-        console.error("Error starting speech recognition:", error);
+        console.error("Error accessing microphone:", error);
         toast({
-          title: "Speech Recognition Error",
-          description: "Failed to start speech recognition. Please try again.",
+          title: "Microphone Access Error",
+          description: "Please allow microphone access in your browser settings.",
           variant: "destructive"
         });
       }
@@ -130,8 +142,17 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
     setVolume(newVolume);
+    setIsMuted(newVolume === 0);
     if (audioRef.current) {
       audioRef.current.volume = newVolume;
+    }
+  };
+
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    setVolume(isMuted ? 1 : 0);
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 1 : 0;
     }
   };
 
@@ -140,6 +161,10 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
       <AvatarComponent
         personality={personality}
         isListening={isListening}
+        isMuted={isMuted}
+        onStartListening={toggleListening}
+        onStopListening={toggleListening}
+        onToggleMute={toggleMute}
       />
 
       <div className="concierge-controls">
