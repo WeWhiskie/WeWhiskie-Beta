@@ -14,6 +14,7 @@ interface AIConciergeProps {
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 3000; // 3 seconds
+const RECONNECT_BACKOFF_MULTIPLIER = 1.5;
 
 const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => {
   const [isListening, setIsListening] = useState(false);
@@ -22,6 +23,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
   const [transcript, setTranscript] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [synthesis, setSynthesis] = useState<SpeechSynthesis | null>(null);
   const [aiResponse, setAiResponse] = useState("");
   const { toast } = useToast();
@@ -32,9 +34,8 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
   const wsRef = useRef<WebSocket | null>(null);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageRef = useRef<string | null>(null);
 
-
-  // Initialize WebSocket connection
   useEffect(() => {
     const connectWebSocket = () => {
       if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
@@ -46,30 +47,62 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         return;
       }
 
+      if (isConnecting) return;
+
+      setIsConnecting(true);
+
       try {
+        // Ensure proper URL construction
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/ai-concierge`);
+        const wsUrl = `${protocol}//${window.location.host}/ws/ai-concierge`;
+        console.log('Connecting to WebSocket URL:', wsUrl);
+
+        const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
           console.log('Connected to AI Concierge WebSocket');
           setIsConnected(true);
-          setReconnectAttempts(0); // Reset attempts on successful connection
+          setIsConnecting(false);
+          setReconnectAttempts(0);
+
+          // Send initial handshake message with current timestamp
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ 
+              type: 'HANDSHAKE',
+              timestamp: Date.now()
+            }));
+          }
+
+          // Resend last message if any
+          if (lastMessageRef.current && ws.readyState === WebSocket.OPEN) {
+            ws.send(lastMessageRef.current);
+          }
         };
 
         ws.onmessage = (event) => {
           try {
             const response = JSON.parse(event.data);
-            console.log('Received WebSocket message:', response.type);
+            console.log('Received WebSocket message:', response);
 
             switch (response.type) {
               case 'CONNECTED':
                 console.log('Connection confirmed:', response.message);
+                // Request personality data if available
                 if (personality?.name) {
                   ws.send(JSON.stringify({
                     type: 'GET_PERSONALITY',
                     name: personality.name
                   }));
                 }
+                break;
+
+              case 'AUTH_ERROR':
+                console.error('Authentication error:', response.error);
+                toast({
+                  title: "Authentication Error",
+                  description: "Please sign in again to use the AI Concierge.",
+                  variant: "destructive"
+                });
                 break;
 
               case 'AI_RESPONSE':
@@ -81,7 +114,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
                 break;
 
               case 'PERSONALITY_DATA':
-                // Handle personality data update if needed
+                console.log('Received personality data:', response.data);
                 break;
 
               case 'ERROR':
@@ -99,29 +132,30 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         };
 
         ws.onclose = (event) => {
-          console.log('Disconnected from AI Concierge WebSocket:', event.code, event.reason);
+          console.log('WebSocket connection closed:', event);
           setIsConnected(false);
+          setIsConnecting(false);
 
-          // Only attempt to reconnect if it wasn't a clean closure and not unauthorized
-          if (!event.wasClean && event.code !== 1008) {
+          if (!event.wasClean) {
+            const delay = RECONNECT_DELAY * Math.pow(RECONNECT_BACKOFF_MULTIPLIER, reconnectAttempts);
             setReconnectAttempts(prev => prev + 1);
+
             toast({
               title: "Connection Lost",
-              description: "Attempting to reconnect...",
+              description: event.code === 1006 
+                ? "Connection lost unexpectedly. Reconnecting..." 
+                : "Connection closed. Attempting to reconnect...",
               variant: "default"
             });
 
-            // Clear any existing reconnection timeout
             if (reconnectTimeoutRef.current) {
               clearTimeout(reconnectTimeoutRef.current);
             }
 
-            // Attempt to reconnect after delay
             reconnectTimeoutRef.current = setTimeout(() => {
               connectWebSocket();
-            }, RECONNECT_DELAY);
+            }, delay);
           } else if (event.code === 1008) {
-            // Handle unauthorized access
             toast({
               title: "Authentication Required",
               description: "Please sign in to use the AI Concierge.",
@@ -132,12 +166,13 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
 
         ws.onerror = (error) => {
           console.error('WebSocket error:', error);
-          // Let onclose handle the reconnection logic
+          setIsConnecting(false);
         };
 
         wsRef.current = ws;
       } catch (error) {
         console.error('Error creating WebSocket connection:', error);
+        setIsConnecting(false);
         setReconnectAttempts(prev => prev + 1);
       }
     };
@@ -251,10 +286,11 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
           setIsProcessing(true);
           // Send transcript through WebSocket
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
+            lastMessageRef.current = JSON.stringify({
               type: 'SPEECH_INPUT',
               text: transcript
-            }));
+            });
+            wsRef.current.send(lastMessageRef.current);
           } else {
             toast({
               title: "Connection Error",
@@ -447,7 +483,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
           size="lg"
           onClick={toggleListening}
           className={`mic-button ${isListening ? 'listening' : ''}`}
-          disabled={isProcessingMicPermission}
+          disabled={isProcessingMicPermission || !isConnected}
         >
           {isProcessingMicPermission ? (
             <Loader2 className="h-6 w-6 animate-spin" />

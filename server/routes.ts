@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import type { IncomingMessage } from "http";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
@@ -14,6 +15,14 @@ import { generateConciergeName, getWhiskyRecommendations } from "./services/reco
 import { handleWhiskyConciergeChat, handleGenerateName, handleGeneratePersonality } from "./routes/whisky-concierge";
 import { textToSpeechService } from './services/text-to-speech';
 import { WebSocketServer, WebSocket } from 'ws';
+import type { SessionData } from 'express-session';
+
+// Extend IncomingMessage to include session store
+interface ExtendedIncomingMessage extends IncomingMessage {
+  sessionStore?: {
+    get(sid: string, callback: (err: any, session?: SessionData | null) => void): void;
+  };
+}
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -48,48 +57,125 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   // Create HTTP server
   const server = createServer(app);
 
-  // Initialize WebSocket server for AI Concierge with a distinct path
+  // Initialize WebSocket server for AI Concierge with enhanced security and error handling
   const wss = new WebSocketServer({ 
     server, 
-    path: '/ws/ai-concierge',  // Changed path to avoid conflicts
-    verifyClient: (info, callback) => {
+    path: '/ws/ai-concierge',
+    verifyClient: async (info, callback) => {
       try {
-        const cookies = info.req.headers.cookie?.split(';')
+        console.log('WebSocket connection attempt - Verifying client...');
+        console.log('Request headers:', info.req.headers);
+
+        // Parse cookies with better error handling
+        const cookieHeader = info.req.headers.cookie;
+        if (!cookieHeader) {
+          console.log('No cookies found in request');
+          callback(false, 401, 'No session cookie found');
+          return;
+        }
+
+        const cookies = cookieHeader.split(';')
           .reduce((acc: Record<string, string>, cookie) => {
             const [key, value] = cookie.trim().split('=');
             acc[key] = value;
             return acc;
           }, {});
 
-        // Check for either whisky.session.id or connect.sid
-        const sessionId = cookies?.['whisky.session.id'] || cookies?.['connect.sid'];
+        console.log('Parsed cookies:', cookies);
+
+        // Check all possible session cookie names
+        const sessionId = cookies['whisky.session.id'] || 
+                         cookies['connect.sid'] || 
+                         cookies['whisky.sid'];
+
         if (!sessionId) {
-          console.log('WebSocket connection attempt without valid session');
-          callback(false, 401, 'Unauthorized');
+          console.log('No valid session cookie found');
+          callback(false, 401, 'No valid session found');
           return;
         }
+
+        console.log('Found session ID:', sessionId);
+
+        // Verify session is valid in the database
+        const extendedReq = info.req as ExtendedIncomingMessage;
+        if (!extendedReq.sessionStore) {
+          console.error('Session store not available');
+          callback(false, 500, 'Internal server error');
+          return;
+        }
+
+        const session = await new Promise<SessionData | null>((resolve) => {
+          extendedReq.sessionStore!.get(sessionId, (err, session) => {
+            if (err) {
+              console.error('Error fetching session:', err);
+              resolve(null);
+            } else {
+              resolve(session);
+            }
+          });
+        });
+
+        if (!session) {
+          console.log('Session not found in store');
+          callback(false, 401, 'Invalid session');
+          return;
+        }
+
+        console.log('Session verified successfully');
         callback(true);
       } catch (error) {
-        console.error('Error verifying WebSocket client:', error);
+        console.error('Error in WebSocket client verification:', error);
         callback(false, 500, 'Internal Server Error');
       }
     }
   });
 
-  // Keep track of connected clients
-  const clients = new Map();
+  // Enhanced client tracking with timestamps and session info
+  const clients = new Map<WebSocket, { connectedAt: Date; sessionId: string | undefined; lastPingTime?: number }>();
+
+  // Set up heartbeat interval
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      const client = clients.get(ws);
+      if (client && Date.now() - (client.lastPingTime || 0) > 30000) {
+        console.log('Client timeout, closing connection');
+        ws.terminate();
+        return;
+      }
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      }
+    });
+  }, 15000);
 
   wss.on('connection', async (ws, req) => {
     try {
       console.log('New AI Concierge WebSocket connection established');
 
-      // Add client to tracking map with current timestamp
+      // Add client to tracking map with metadata
       clients.set(ws, { 
         connectedAt: new Date(),
-        sessionId: req.headers.cookie
+        sessionId: req.headers.cookie,
+        lastPingTime: Date.now()
       });
 
-      // Handle incoming messages
+      // Send initial connection confirmation
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'CONNECTED',
+          message: 'Successfully connected to AI Concierge'
+        }));
+      }
+
+      // Handle pong messages for connection monitoring
+      ws.on('pong', () => {
+        const client = clients.get(ws);
+        if (client) {
+          client.lastPingTime = Date.now();
+        }
+      });
+
+      // Handle incoming messages with enhanced error handling
       ws.on('message', async (message: string) => {
         try {
           const data = JSON.parse(message);
@@ -97,23 +183,29 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
 
           switch (data.type) {
             case 'SPEECH_INPUT':
+              if (!data.text) {
+                throw new Error('Speech input text is required');
+              }
+
               const response = await handleWhiskyConciergeChat({
-                ...req,
                 body: { message: data.text }
-              }, {
-                json: (data: any) => {
+              } as any, {
+                json: (responseData: any) => {
                   if (ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({
                       type: 'AI_RESPONSE',
-                      data
+                      data: responseData
                     }));
                   }
                 }
-              });
+              } as any);
               break;
 
             case 'GET_PERSONALITY':
               try {
+                if (!data.name) {
+                  throw new Error('Personality name is required');
+                }
                 const personality = whiskyConcierge.getPersonality(data.name);
                 if (ws.readyState === WebSocket.OPEN) {
                   ws.send(JSON.stringify({
@@ -157,13 +249,11 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         clients.delete(ws);
       });
 
-      // Send initial connection success message
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'CONNECTED',
-          message: 'Successfully connected to AI Concierge'
-        }));
-      }
+      // Handle errors
+      ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        clients.delete(ws);
+      });
 
     } catch (error) {
       console.error('Error in WebSocket connection handler:', error);
@@ -171,6 +261,11 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         ws.close(1011, 'Internal Server Error');
       }
     }
+  });
+
+  // Clean up interval on server close
+  server.on('close', () => {
+    clearInterval(heartbeatInterval);
   });
 
   // Serve static files from attached_assets directory
