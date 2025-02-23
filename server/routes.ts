@@ -18,7 +18,16 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { SessionData } from 'express-session';
 import { parse as parseCookie } from 'cookie';
 
-// Extend IncomingMessage to include session store
+// Extend SessionData to include passport
+declare module 'express-session' {
+  interface SessionData {
+    passport?: {
+      user: number;
+    };
+  }
+}
+
+// Extend IncomingMessage to include session and store
 interface ExtendedIncomingMessage extends IncomingMessage {
   session?: SessionData;
   sessionStore?: {
@@ -66,13 +75,14 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     verifyClient: async (info, callback) => {
       try {
         const cookies = parseCookie(info.req.headers.cookie || '');
+        const rawSessionId = cookies['whisky.session.id'];
+
         console.log('WebSocket verification - Session check:', {
-          sessionId: cookies['whisky.session.id'],
-          rawCookie: info.req.headers.cookie
+          rawSessionId,
+          cookies: info.req.headers.cookie
         });
 
-        const sessionId = cookies['whisky.session.id'];
-        if (!sessionId) {
+        if (!rawSessionId) {
           console.log('WebSocket connection rejected: No session ID');
           callback(false, 401, 'Unauthorized - No session ID');
           return;
@@ -84,21 +94,19 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
           return;
         }
 
-        // Clean the session ID by removing the 's:' prefix and signature
-        const cleanSessionId = sessionId.split('.')[0].replace('s:', '');
+        // Clean the session ID by removing the 's:' prefix and getting the actual ID
+        const cleanSessionId = rawSessionId.split('.')[0].replace('s:', '');
+        console.log('Clean session ID:', cleanSessionId);
 
         const session = await new Promise<SessionData | null>((resolve, reject) => {
           sessionStore.get(cleanSessionId, (err, sess) => {
             if (err) {
               console.error('Session fetch error:', err);
               reject(err);
-            } else {
-              console.log('Session verification result:', {
-                hasSession: !!sess,
-                sessionId: cleanSessionId
-              });
-              resolve(sess);
+              return;
             }
+            console.log('Session data:', sess);
+            resolve(sess);
           });
         });
 
@@ -162,7 +170,7 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
       clients.set(ws, {
         lastPing: Date.now(),
         reconnectAttempts: 0,
-        userId: req.session?.userId,
+        userId: req.session?.passport?.user,
         sessionId: req.session?.id,
         connectedAt: Date.now()
       });
@@ -172,7 +180,7 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         type: 'CONNECTED',
         message: 'Connected to AI Concierge WebSocket',
         data: {
-          userId: req.session?.userId,
+          userId: req.session?.passport?.user,
           timestamp: Date.now()
         }
       }));

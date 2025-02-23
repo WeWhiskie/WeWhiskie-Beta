@@ -10,6 +10,15 @@ import { v4 as uuidv4 } from 'uuid';
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
 
+// Extend express session types
+declare module 'express-session' {
+  interface SessionData {
+    passport?: {
+      user: number;
+    };
+  }
+}
+
 declare global {
   namespace Express {
     interface User extends SelectUser {}
@@ -64,13 +73,15 @@ export async function verify(sessionId: string): Promise<SelectUser | null> {
 export function setupAuth(app: Express): { sessionStore: any; } {
   const PostgresStore = connectPg(session);
 
-  // Initialize session store
+  // Initialize session store with enhanced logging
   const sessionStore = new PostgresStore({
     pool,
     tableName: 'session',
     createTableIfMissing: true,
     pruneSessionInterval: 60,
-    errorLog: console.error,
+    errorLog: (error: Error) => {
+      console.error('Session store error:', error);
+    },
   });
 
   // Enhanced session configuration
@@ -92,8 +103,6 @@ export function setupAuth(app: Express): { sessionStore: any; } {
 
   // Initialize session before passport
   app.use(session(sessionSettings));
-
-  // Initialize passport after session
   app.use(passport.initialize());
   app.use(passport.session());
 
