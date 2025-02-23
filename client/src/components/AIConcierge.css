@@ -3,6 +3,7 @@
   --border: #ccc;
   --radius: 8px;
   --foreground: white;
+  --mic-pulse-color: rgba(220, 38, 38, 0.4);
 }
 
 .concierge-container {
@@ -36,6 +37,7 @@
   border: 3px solid #D2691E;
   box-shadow: 0 4px 8px rgba(255, 165, 0, 0.5);
   object-fit: cover;
+  transition: all 0.3s ease-in-out;
 }
 
 .default-avatar {
@@ -81,9 +83,27 @@
   transform: scale(1.05);
 }
 
-.mic-button.active {
+.mic-button.listening {
   background: #dc2626;
   animation: pulse 2s infinite;
+}
+
+.mic-button.listening::before {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--mic-pulse-color);
+  animation: pulse 2s infinite;
+}
+
+.volume-button {
+  transition: all 0.2s ease-in-out;
+}
+
+.volume-button:hover {
+  transform: scale(1.05);
 }
 
 .transcript-container {
@@ -94,6 +114,9 @@
   border-radius: var(--radius);
   padding: 1rem;
   margin-top: 1rem;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeIn 0.3s ease-out forwards;
 }
 
 .ai-response {
@@ -107,13 +130,24 @@
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+    box-shadow: 0 0 0 0 var(--mic-pulse-color);
   }
   70% {
     box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
   }
   100% {
     box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

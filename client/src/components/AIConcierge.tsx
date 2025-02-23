@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import type { ConciergePersonality } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { AvatarComponent } from "./avatar/AvatarComponent";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Mic, VolumeX, Volume2, User } from "lucide-react";
@@ -27,9 +26,34 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [transcript, setTranscript] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+  const [synthesis, setSynthesis] = useState<SpeechSynthesis | null>(null);
   const { toast } = useToast();
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize speech synthesis
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      setSynthesis(window.speechSynthesis);
+    }
+  }, []);
+
+  // WebSocket connection check
+  useEffect(() => {
+    const checkConnection = () => {
+      setIsConnected(navigator.onLine);
+    };
+
+    window.addEventListener('online', checkConnection);
+    window.addEventListener('offline', checkConnection);
+    checkConnection();
+
+    return () => {
+      window.removeEventListener('online', checkConnection);
+      window.removeEventListener('offline', checkConnection);
+    };
+  }, []);
 
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window)) {
@@ -63,6 +87,17 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
         if (lastResult.isFinal && onMessage) {
           onMessage(text);
           recognition.stop();
+
+          // Text-to-speech response
+          if (synthesis && personality) {
+            const utterance = new SpeechSynthesisUtterance(
+              `${personality.catchphrase} Let me think about that.`
+            );
+            utterance.rate = 0.9;
+            utterance.pitch = 1;
+            utterance.volume = volume;
+            synthesis.speak(utterance);
+          }
         }
       };
 
@@ -75,6 +110,8 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
           'no-speech': 'No speech detected. Please try again.',
           'not-allowed': 'Please allow microphone access in your browser settings.',
           'aborted': 'Listening stopped.',
+          'audio-capture': 'No microphone was found. Ensure it is plugged in and allowed.',
+          'service-not-allowed': 'Speech service not allowed. Please try again.',
         };
 
         toast({
@@ -103,10 +140,19 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
         recognitionRef.current.abort();
       }
     };
-  }, [toast, onMessage]);
+  }, [toast, onMessage, synthesis, volume, personality]);
 
   const toggleListening = async () => {
     if (!recognitionRef.current) return;
+
+    if (!isConnected) {
+      toast({
+        title: "Connection Error",
+        description: "Please check your internet connection before using voice features.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     if (!isListening) {
       try {
@@ -144,13 +190,24 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
     if (audioRef.current) {
       audioRef.current.volume = newVolume;
     }
+    // Update synthesis volume if active
+    if (synthesis) {
+      synthesis.cancel(); // Stop current speech
+      const utterance = new SpeechSynthesisUtterance("Volume adjusted");
+      utterance.volume = newVolume;
+      synthesis.speak(utterance);
+    }
   };
 
   const toggleMute = () => {
     setIsMuted(!isMuted);
-    setVolume(isMuted ? 1 : 0);
+    const newVolume = isMuted ? 1 : 0;
+    setVolume(newVolume);
     if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 1 : 0;
+      audioRef.current.volume = newVolume;
+    }
+    if (synthesis) {
+      synthesis.cancel(); // Stop current speech
     }
   };
 
@@ -179,14 +236,22 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
         <Button
           variant={isListening ? "destructive" : "default"}
           size="icon"
-          className="mic-button"
+          className={`mic-button ${isListening ? 'listening' : ''}`}
           onClick={toggleListening}
+          disabled={!isConnected}
         >
           <Mic className={isListening ? "animate-pulse" : ""} />
         </Button>
 
         <div className="volume-control">
-          {volume === 0 ? <VolumeX /> : <Volume2 />}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleMute}
+            className="volume-button"
+          >
+            {volume === 0 ? <VolumeX /> : <Volume2 />}
+          </Button>
           <Slider
             value={[volume]}
             max={1}
