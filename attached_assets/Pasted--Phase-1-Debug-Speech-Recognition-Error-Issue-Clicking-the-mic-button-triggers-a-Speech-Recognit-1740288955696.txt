@@ -1,0 +1,159 @@
+🔹 Phase 1: Debug Speech Recognition Error
+Issue:
+Clicking the mic button triggers a Speech Recognition Error (network error)
+The volume button only toggles on/off, without adjustable levels
+Fix Instructions for Replit:
+1️⃣ Install Required Packages
+Make sure the required Web Speech API support is present:
+Run in Replit Terminal:
+
+sh
+Copy
+Edit
+npm install react-speech-recognition
+🔹 If it's already installed, try removing and reinstalling:
+
+sh
+Copy
+Edit
+npm uninstall react-speech-recognition
+npm install react-speech-recognition
+2️⃣ Fix Speech Recognition Component (React)
+Modify AIConcierge.tsx to ensure Web Speech API is correctly handling microphone permissions.
+
+🔹 Update SpeechRecognition Setup
+
+tsx
+Copy
+Edit
+import React, { useState, useEffect } from "react";
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import { FaMicrophone, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
+
+const AIConcierge = () => {
+    const [micOn, setMicOn] = useState(false);
+    const [volume, setVolume] = useState(1.0); // Default to max volume
+    const { transcript, listening, resetTranscript } = useSpeechRecognition();
+
+    useEffect(() => {
+        if (!SpeechRecognition.browserSupportsSpeechRecognition()) {
+            console.error("Browser does not support speech recognition.");
+            return;
+        }
+    }, []);
+
+    const toggleMic = () => {
+        if (!listening) {
+            SpeechRecognition.startListening({ continuous: true });
+        } else {
+            SpeechRecognition.stopListening();
+        }
+        setMicOn(!micOn);
+    };
+
+    const toggleVolume = () => {
+        setVolume(volume === 1.0 ? 0.0 : 1.0); // Toggle between max and mute
+    };
+
+    return (
+        <div className="concierge-container">
+            <div className="concierge-avatar"></div>
+            <div className="concierge-controls">
+                <button onClick={toggleMic} className={`mic-button ${micOn ? "active" : ""}`}>
+                    <FaMicrophone />
+                </button>
+                <button onClick={toggleVolume} className={`volume-button`}>
+                    {volume > 0 ? <FaVolumeUp /> : <FaVolumeMute />}
+                </button>
+            </div>
+            {transcript && <p className="ai-response">"{transcript}"</p>}
+        </div>
+    );
+};
+
+export default AIConcierge;
+✅ Fixes in this update:
+✔ Fixes speech recognition error (ensures browser supports Web Speech API)
+✔ Adds continuous listening mode
+✔ Allows microphone toggle
+✔ Improves volume toggle (max vs mute)
+
+3️⃣ Debug Speech Recognition Permissions
+Ensure Replit requests microphone access properly:
+
+Open Browser DevTools (F12) → Go to Application → Permissions
+Make sure Microphone is allowed
+Run this command in Console:
+js
+Copy
+Edit
+navigator.mediaDevices.getUserMedia({ audio: true })
+  .then(() => console.log("Mic access granted"))
+  .catch(err => console.error("Mic access denied:", err));
+🚨 If denied, manually enable mic access in browser settings.
+
+🔹 Phase 2: Add Avatar Selection
+Issue:
+Avatar is just an empty circle
+No option to change avatars
+Fix Instructions for Replit:
+1️⃣ Add Avatar Selection Component
+Modify AIConcierge.tsx to allow selecting an avatar:
+
+tsx
+Copy
+Edit
+const avatars = [
+    { name: "Scottish Highland", image: "/avatars/highland.png" },
+    { name: "Bourbon Master", image: "/avatars/bourbon.png" },
+    { name: "Speyside Scholar", image: "/avatars/speyside.png" }
+];
+
+const [selectedAvatar, setSelectedAvatar] = useState(avatars[0]);
+
+const handleAvatarChange = (event) => {
+    const selectedName = event.target.value;
+    const avatar = avatars.find(a => a.name === selectedName);
+    setSelectedAvatar(avatar);
+};
+Then, update the return section:
+
+tsx
+Copy
+Edit
+<select onChange={handleAvatarChange}>
+    {avatars.map((avatar, index) => (
+        <option key={index} value={avatar.name}>{avatar.name}</option>
+    ))}
+</select>
+
+<img src={selectedAvatar.image} alt="AI Avatar" className="concierge-avatar" />
+✅ Fixes in this update:
+✔ Adds dropdown to change avatars
+✔ Displays selected avatar image
+
+🔹 Phase 3: Improve Volume Control
+Issue:
+Volume button only toggles ON/OFF
+No adjustable levels
+Fix Instructions for Replit:
+Modify AIConcierge.tsx:
+
+tsx
+Copy
+Edit
+<input 
+    type="range" 
+    min="0" max="1" step="0.1" 
+    value={volume} 
+    onChange={(e) => setVolume(parseFloat(e.target.value))} 
+/>
+✅ Fixes in this update:
+✔ Adds volume slider (0.0 - 1.0)
+✔ Allows smooth volume adjustments
+
+🔹 Phase 4: Final Testing
+Test Cases
+✅ Speech recognition starts when mic is clicked
+✅ Volume adjusts smoothly using slider
+✅ Avatars can be changed via dropdown
