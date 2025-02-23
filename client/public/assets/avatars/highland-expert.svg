@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="200" cy="200" r="200" fill="#E8D9C0"/>
+  
+  <!-- Face Shape -->
+  <path d="M200 300C255.228 300 300 255.228 300 200C300 144.772 255.228 100 200 100C144.772 100 100 144.772 100 200C100 255.228 144.772 300 200 300Z" fill="#FFE0B2"/>
+  
+  <!-- Beard -->
+  <path d="M160 220C160 220 180 260 200 260C220 260 240 220 240 220C240 220 220 240 200 240C180 240 160 220 160 220Z" fill="#8D6E63"/>
+  
+  <!-- Eyes -->
+  <circle cx="170" cy="180" r="10" fill="#4E342E"/>
+  <circle cx="230" cy="180" r="10" fill="#4E342E"/>
+  
+  <!-- Eyebrows -->
+  <path d="M160 170C160 170 170 165 180 170" stroke="#8D6E63" stroke-width="4" stroke-linecap="round"/>
+  <path d="M220 170C220 170 230 165 240 170" stroke="#8D6E63" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Scottish Cap -->
+  <path d="M100 150C100 150 150 100 200 100C250 100 300 150 300 150C300 150 250 130 200 130C150 130 100 150 100 150Z" fill="#4E342E"/>
+  <circle cx="200" cy="100" r="20" fill="#8D6E63"/>
+  
+  <!-- Plaid Pattern -->
+  <rect x="180" y="80" width="40" height="40" fill="#B71C1C" fill-opacity="0.3"/>
+  <rect x="160" y="100" width="80" height="4" fill="#1B5E20" fill-opacity="0.3"/>
+  <rect x="180" y="80" width="4" height="40" fill="#1B5E20" fill-opacity="0.3"/>
+</svg>
