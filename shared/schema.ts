@@ -58,6 +58,15 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Add new concierge table definition after user relation
+export const conciergeAvatars = pgTable("concierge_avatars", {
+  id: serial("id").primaryKey(),
+  personalityId: text("personality_id").notNull(),
+  avatarUrl: text("avatar_url").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Add new table for invite tracking
 export const invites = pgTable("invites", {
   id: serial("id").primaryKey(),
@@ -499,6 +508,11 @@ export const usersRelations = relations(users, ({ many }) => ({
   preferences: many(userWhiskyPreferences),
   aiProfiles: many(aiCompanionProfiles)
 }));
+
+// Add new insert schema and types
+export const insertConciergeAvatarSchema = createInsertSchema(conciergeAvatars);
+export type ConciergeAvatar = InferModel<typeof conciergeAvatars>;
+export type InsertConciergeAvatar = z.infer<typeof insertConciergeAvatarSchema>;
 
 // Update the whiskies relations to include the collection relationship
 export const whiskiesRelations = relations(whiskies, ({ one, many }) => ({

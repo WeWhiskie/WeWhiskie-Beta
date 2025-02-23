@@ -50,42 +50,56 @@ export async function verify(sessionId: string): Promise<SelectUser | null> {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: "super-secret-key-change-in-production",
+    secret: process.env.SESSION_SECRET || "super-secret-key-change-in-production",
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax'
     }
   };
 
+  // Enable trust proxy if we're behind a reverse proxy
   app.set("trust proxy", 1);
+
+  // Session middleware
   app.use(session(sessionSettings));
+
+  // Initialize passport and restore authentication state from session
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Serve static files without requiring authentication
+  app.use('/attached_assets', (req, res, next) => {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    // Check if the request is for a public asset
+    if (req.path.startsWith('/public/')) {
+      return next();
+    }
+    res.status(401).json({ message: "Not authenticated" });
+  });
+
+  // Local strategy setup
   passport.use(
     new LocalStrategy(async (username: string, password: string, done) => {
       try {
-        console.log('Attempting login for username:', username);
         const user = await storage.getUserByUsername(username);
 
         if (!user) {
-          console.log('User not found:', username);
           return done(null, false, { message: "Invalid username or password" });
         }
 
-        console.log('User found, comparing passwords');
         const passwordsMatch = await comparePasswords(password, user.password);
 
         if (!passwordsMatch) {
-          console.log('Password mismatch for user:', username);
           return done(null, false, { message: "Invalid username or password" });
         }
 
-        console.log('Login successful for user:', username);
         return done(null, user);
       } catch (error) {
         console.error('Authentication error:', error);

@@ -16,7 +16,8 @@ import {
   invites, Invite, InsertInvite,
   masterclassEvents, MasterclassEvent,
   masterclassParticipants, MasterclassParticipant,
-  userWhiskyCollection 
+  userWhiskyCollection,
+  conciergeAvatars, ConciergeAvatar
 } from "@shared/schema";
 
 const PostgresSessionStore = connectPg(session);
@@ -151,6 +152,10 @@ export interface IStorage {
 
   // Whisky collection methods
   getUserWhiskies(userId: number): Promise<Whisky[]>;
+
+  // Concierge avatar methods
+  updateConciergeAvatar(personalityId: string, avatarUrl: string): Promise<ConciergeAvatar>;
+  getConciergeAvatar(personalityId: string): Promise<ConciergeAvatar | undefined>;
 }
 
 type ReviewWithRelations = {
@@ -872,8 +877,7 @@ export class DatabaseStorage implements IStorage {
         required: 1,
         reward: 15,
         date: new Date(),
-      },
-      {
+      },      {
         userId,
         taskType: 'comment',
         required: 3,
@@ -1164,6 +1168,41 @@ export class DatabaseStorage implements IStorage {
       .orderBy(whiskies.name) as { whisky: Whisky }[];
 
     return result.map(row => row.whisky);
+  }
+  // Concierge avatar implementation
+  async updateConciergeAvatar(personalityId: string, avatarUrl: string): Promise<ConciergeAvatar> {
+    // Try to update existing avatar first
+    const [updated] = await db
+      .update(conciergeAvatars)
+      .set({
+        avatarUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(conciergeAvatars.personalityId, personalityId))
+      .returning() as [ConciergeAvatar | undefined];
+
+    if (updated) {
+      return updated;
+    }
+
+    // If no existing avatar, create new one
+    const [newAvatar] = await db
+      .insert(conciergeAvatars)
+      .values({
+        personalityId,
+        avatarUrl,
+      })
+      .returning() as [ConciergeAvatar];
+
+    return newAvatar;
+  }
+
+  async getConciergeAvatar(personalityId: string): Promise<ConciergeAvatar | undefined> {
+    const [avatar] = await db
+      .select()
+      .from(conciergeAvatars)
+      .where(eq(conciergeAvatars.personalityId, personalityId)) as [ConciergeAvatar | undefined];
+    return avatar;
   }
 }
 

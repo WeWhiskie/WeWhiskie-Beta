@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, RefreshCcw, UserCircle2, MessageSquare } from "lucide-react";
+import { Send, RefreshCcw, UserCircle2, MessageSquare, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -17,8 +17,6 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ConciergePersonality } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
-import { AvatarComponent } from "@/components/avatar/AvatarComponent";
-
 
 // Message interface for local state
 interface Message {
@@ -48,6 +46,63 @@ const TypingIndicator = () => (
   </div>
 );
 
+// Avatar component with voice controls
+const Avatar = ({ 
+  personality, 
+  isListening, 
+  onStartListening, 
+  onStopListening,
+  isMuted,
+  onToggleMute,
+  customAvatarUrl 
+}: { 
+  personality: ConciergePersonality;
+  isListening: boolean;
+  onStartListening: () => void;
+  onStopListening: () => void;
+  isMuted: boolean;
+  onToggleMute: () => void;
+  customAvatarUrl?: string;
+}) => {
+  return (
+    <div className="relative flex flex-col items-center gap-2">
+      <div className="relative w-24 h-24 rounded-full overflow-hidden bg-muted">
+        {customAvatarUrl ? (
+          <img
+            src={customAvatarUrl}
+            alt={personality.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <UserCircle2 className="w-16 h-16 text-primary" />
+          </div>
+        )}
+      </div>
+      <div className="flex gap-2 mt-2">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={isListening ? onStopListening : onStartListening}
+          className={`transition-colors ${isListening ? 'bg-primary text-primary-foreground' : ''}`}
+        >
+          {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={onToggleMute}
+          className={`transition-colors ${!isMuted ? 'bg-primary text-primary-foreground' : ''}`}
+        >
+          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </Button>
+      </div>
+      <span className="text-sm font-medium">{personality.name}</span>
+      <span className="text-xs text-muted-foreground">{personality.accent}</span>
+    </div>
+  );
+};
+
 const TIMEOUT_DURATION = 30000; // 30 seconds timeout
 
 const PERSONALITY_STYLES = [
@@ -67,28 +122,110 @@ export default function WhiskyConcierge() {
   const [currentPersonality, setCurrentPersonality] = useState<ConciergePersonality | null>(null);
   const [isPersonalityChanging, setIsPersonalityChanging] = useState(false);
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [recognition, setRecognition] = useState<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
-  const [isListening, setIsListening] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [recognition, setRecognition] = useState<any>(null);
 
-  // Get user's collection
-  const { data: collection = [] } = useQuery({
-    queryKey: ["/api/whiskies", "collection"],
-    enabled: !!user?.id,
-  });
+  // Initialize speech recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window) {
+      const recognition = new (window as any).webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setQuery(transcript);
+        handleSubmit(new Event('submit') as any);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      setRecognition(recognition);
+    }
+  }, []);
 
   // Get concierge personality
-  const { data: personality, refetch: refetchPersonality } = useQuery({
+  const { data: personalityData, refetch: refetchPersonality } = useQuery({
     queryKey: ["/api/whisky-concierge/personality", selectedStyle],
     enabled: !!selectedStyle,
   });
+
+  // Update personality when style changes
+  useEffect(() => {
+    if (personalityData && typeof personalityData === 'object') {
+      setCurrentPersonality(personalityData as ConciergePersonality);
+
+      // Add welcome message
+      setMessages(prev => {
+        const welcomeMessage = {
+          role: "assistant" as const,
+          content: `${(personalityData as ConciergePersonality).catchphrase} I'm ${(personalityData as ConciergePersonality).name}, and I'm here to guide you through the world of whisky with my ${(personalityData as ConciergePersonality).accent} expertise.`,
+          timestamp: new Date().toISOString(),
+        };
+
+        // Only add welcome message if it's different from the last message
+        const lastMessage = prev[prev.length - 1];
+        if (!lastMessage || lastMessage.content !== welcomeMessage.content) {
+          return [...prev, welcomeMessage];
+        }
+        return prev;
+      });
+    }
+  }, [personalityData]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [timeoutId]);
+
+  const startListening = () => {
+    if (recognition) {
+      recognition.start();
+      setIsListening(true);
+    } else {
+      toast({
+        title: "Speech Recognition Unavailable",
+        description: "Your browser doesn't support speech recognition.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const stopListening = () => {
+    if (recognition) {
+      recognition.stop();
+      setIsListening(false);
+    }
+  };
+
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    if (audioRef.current) {
+      audioRef.current.muted = !isMuted;
+    }
+  };
 
   // Generate new personality
   const generatePersonality = useMutation({
@@ -139,92 +276,6 @@ export default function WhiskyConcierge() {
     },
   });
 
-  // Update personality when style changes
-  useEffect(() => {
-    if (personality && typeof personality === 'object') {
-      console.log("[WhiskyConcierge] Setting new personality:", personality);
-      setCurrentPersonality(personality as ConciergePersonality);
-
-      // Add a welcome message when personality changes
-      setMessages(prev => {
-        const welcomeMessage = {
-          role: "assistant" as const,
-          content: `${(personality as ConciergePersonality).catchphrase} I'm ${(personality as ConciergePersonality).name}, and I'm here to guide you through the world of whisky with my ${(personality as ConciergePersonality).accent} expertise.`,
-          timestamp: new Date().toISOString(),
-        };
-
-        // Only add welcome message if it's different from the last message
-        const lastMessage = prev[prev.length - 1];
-        if (!lastMessage || lastMessage.content !== welcomeMessage.content) {
-          return [...prev, welcomeMessage];
-        }
-        return prev;
-      });
-    } else {
-      console.log("[WhiskyConcierge] No personality data received");
-    }
-  }, [personality]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Clear timeout on component unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [timeoutId]);
-
-  useEffect(() => {
-    // Initialize speech recognition
-    if ('webkitSpeechRecognition' in window) {
-      const recognition = new (window as any).webkitSpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setQuery(transcript);
-        handleSubmit(new Event('submit') as any);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      setRecognition(recognition);
-    }
-  }, []);
-
-  const startListening = () => {
-    if (recognition) {
-      recognition.start();
-      setIsListening(true);
-    }
-  };
-
-  const stopListening = () => {
-    if (recognition) {
-      recognition.stop();
-      setIsListening(false);
-    }
-  };
-
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
-    }
-  };
-
-
   const conciergeQuery = useMutation({
     mutationFn: async (message: string) => {
       if (!user) {
@@ -238,7 +289,7 @@ export default function WhiskyConcierge() {
       setIsThinking(true);
       setRetryCount(0);
 
-      // Set timeout for response
+      // Set timeout
       const timeout = setTimeout(() => {
         setIsThinking(false);
         toast({
@@ -282,7 +333,7 @@ export default function WhiskyConcierge() {
           return data;
         } catch (error: any) {
           if (attempt < maxRetries) {
-            const delay = 1000 * Math.pow(2, attempt); // Exponential backoff
+            const delay = 1000 * Math.pow(2, attempt);
             await new Promise(resolve => setTimeout(resolve, delay));
             setRetryCount(attempt + 1);
             return makeRequest(attempt + 1);
@@ -338,7 +389,6 @@ export default function WhiskyConcierge() {
         },
       ]);
 
-      // Invalidate chat history queries
       if (currentConversationId) {
         queryClient.invalidateQueries({ queryKey: ['/api/chat', currentConversationId] });
       }
@@ -385,7 +435,7 @@ export default function WhiskyConcierge() {
 
   return (
     <div className="flex flex-col h-full max-w-3xl mx-auto">
-      {/* Header with Personality Selection - Improved mobile layout */}
+      {/* Header with Personality Selection */}
       <div className="text-center p-4 space-y-4 border-b bg-background/95 sticky top-0 z-10">
         <h1 className="text-xl md:text-2xl font-semibold">Whisky Concierge</h1>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
@@ -437,22 +487,13 @@ export default function WhiskyConcierge() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               )}
-              <AvatarComponent
+              <Avatar
                 personality={currentPersonality}
                 isListening={isListening}
-                onStartListening={() => {
-                  console.log("[WhiskyConcierge] Starting listening");
-                  startListening();
-                }}
-                onStopListening={() => {
-                  console.log("[WhiskyConcierge] Stopping listening");
-                  stopListening();
-                }}
+                onStartListening={startListening}
+                onStopListening={stopListening}
                 isMuted={isMuted}
-                onToggleMute={() => {
-                  console.log("[WhiskyConcierge] Toggling mute");
-                  toggleMute();
-                }}
+                onToggleMute={toggleMute}
                 customAvatarUrl={currentPersonality.avatarUrl}
               />
             </motion.div>
@@ -460,7 +501,7 @@ export default function WhiskyConcierge() {
         </AnimatePresence>
       </div>
 
-      {/* Messages Area - Improved spacing and readability */}
+      {/* Messages Area */}
       <ScrollArea className="flex-1 px-2 sm:px-4">
         <div className="space-y-4 py-4 max-w-2xl mx-auto">
           <AnimatePresence>
@@ -534,7 +575,7 @@ export default function WhiskyConcierge() {
         </div>
       </ScrollArea>
 
-      {/* Input Area - Improved mobile layout */}
+      {/* Input Area */}
       <div className="p-2 sm:p-4 border-t mt-auto bg-background/95 sticky bottom-0">
         <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
           <Input
