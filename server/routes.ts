@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import type { IncomingMessage } from "http";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -72,15 +72,12 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   const wss = new WebSocketServer({ 
     server, 
     path: '/ws/ai-concierge',
-    verifyClient: async (info, callback) => {
+    verifyClient: async (info: { req: ExtendedIncomingMessage }, callback: (res: boolean, code?: number, message?: string) => void) => {
       try {
         const cookies = parseCookie(info.req.headers.cookie || '');
-        const rawCookie = info.req.headers.cookie;
-
         console.log('WebSocket verification - Debug Info:', {
           timestamp: new Date().toISOString(),
-          hasRawCookie: !!rawCookie,
-          rawCookie,
+          hasRawCookie: !!info.req.headers.cookie,
           parsedCookies: cookies,
           availableSessionIds: Object.keys(cookies).filter(key => key.includes('session'))
         });
@@ -88,81 +85,42 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         const sessionId = cookies['whisky.session.id'];
 
         if (!sessionId) {
-          console.log('WebSocket connection rejected: Missing session cookie', {
-            timestamp: new Date().toISOString(),
-            availableCookies: Object.keys(cookies)
-          });
+          console.log('WebSocket connection rejected: Missing session cookie');
           callback(false, 401, 'Unauthorized - No session cookie');
           return;
         }
 
-        // Clean the session ID properly
         const cleanSessionId = sessionId.split('.')[0].replace('s:', '');
         console.log('Session ID processing:', {
-          timestamp: new Date().toISOString(),
           originalSessionId: sessionId,
-          cleanedSessionId: cleanSessionId,
-          processingSteps: {
-            step1: 'Split on dot',
-            result1: sessionId.split('.')[0],
-            step2: 'Remove s: prefix',
-            result2: cleanSessionId
-          }
+          cleanedSessionId: cleanSessionId
         });
 
-        // Get the session from the store with enhanced error handling
+        if (!info.req.sessionStore) {
+          console.error('Session store not available');
+          callback(false, 500, 'Internal Server Error - Session store not available');
+          return;
+        }
+
         const session = await new Promise<SessionData | null>((resolve, reject) => {
-          sessionStore.get(cleanSessionId, (err, session) => {
+          info.req.sessionStore.get(cleanSessionId, (err, session) => {
             if (err) {
-              console.error('Session fetch error:', {
-                timestamp: new Date().toISOString(),
-                error: err,
-                sessionId: cleanSessionId
-              });
               reject(err);
               return;
             }
-
-            console.log('Session retrieval result:', {
-              timestamp: new Date().toISOString(),
-              sessionFound: !!session,
-              sessionData: session ? {
-                hasPassport: !!session.passport,
-                hasUser: !!session.passport?.user,
-                userId: session.passport?.user
-              } : null
-            });
-
             resolve(session);
           });
         });
 
         if (!session?.passport?.user) {
-          console.log('WebSocket connection rejected: Invalid session data', {
-            timestamp: new Date().toISOString(),
-            session: session ? 'exists' : 'null',
-            hasPassport: session ? !!session.passport : false
-          });
+          console.log('Invalid session data');
           callback(false, 401, 'Invalid session');
           return;
         }
 
-        // Store session data for later use
-        (info.req as ExtendedIncomingMessage).session = session;
-
-        console.log('WebSocket client authenticated successfully', {
-          timestamp: new Date().toISOString(),
-          userId: session.passport.user,
-          cleanSessionId
-        });
-
         callback(true);
       } catch (error) {
-        console.error('WebSocket verification error:', {
-          timestamp: new Date().toISOString(),
-          error: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : undefined
-        });
+        console.error('WebSocket verification error:', error);
         callback(false, 500, 'Internal Server Error');
       }
     }
@@ -386,18 +344,17 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     res.json(reviews);
   });
 
-  app.post("/api/reviews", upload.single('media'), async (req, res) => {
+  app.post("/api/reviews", upload.single('media'), async (req: Request, res: Response) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
     try {
       const reviewData = {
-        ...req.body,
         userId: req.user!.id,
         whiskyId: parseInt(req.body.whiskyId),
         rating: parseInt(req.body.rating),
-        // Ensure optional fields are explicitly null if not provided
+        content: req.body.content,
         finish: req.body.finish || null,
         palate: req.body.palate || null,
         nosing: req.body.nosing || null,
@@ -466,22 +423,26 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     res.json(session);
   });
 
-  app.post("/api/sessions", async (req, res) => {
+  app.post("/api/sessions", async (req: Request, res: Response) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
     }
 
     try {
       const sessionData = {
-        ...req.body,
         hostId: req.user!.id,
-        status: 'scheduled', // Default status for new sessions
+        title: req.body.title,
+        scheduledFor: req.body.scheduledFor,
+        duration: req.body.duration,
+        status: 'scheduled',
         description: req.body.description || null,
         maxParticipants: req.body.maxParticipants || null,
         price: req.body.price || null,
         videoUrl: req.body.videoUrl || null,
         streamKey: req.body.streamKey || null,
-        groupId: req.body.groupId || null
+        groupId: req.body.groupId || null,
+        isPrivate: req.body.isPrivate || false,
+        whiskyId: req.body.whiskyId || null
       };
 
       const parsedSession = insertTastingSessionSchema.parse(sessionData);
@@ -849,6 +810,37 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     } catch (error) {
       console.error("Error fetching concierge personality:", error);
       res.status(500).json({ message: "Failed to fetch concierge personality" });
+    }
+  });
+
+  // Add the new REST API routes for session and whisky data
+  app.get("/api/session", (req, res) => {
+    const sessionId = req.cookies.sid || req.headers.authorization;
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: 'No session ID' });
+    }
+    res.json({ 
+      hasSession: true, 
+      userId: req.user.id, 
+      username: req.user.username 
+    });
+  });
+
+  app.get("/api/whisky/recommend", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const userPrefs = req.query.prefs;
+      const recommendations = await getWhiskyRecommendations(
+        typeof userPrefs === 'string' ? JSON.parse(userPrefs) : userPrefs,
+        req.user.id
+      );
+      res.json(recommendations);
+    } catch (error) {
+      console.error("Error getting recommendations:", error);
+      res.status(500).json({ message: "Failed to generate recommendations" });
     }
   });
 

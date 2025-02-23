@@ -36,28 +36,40 @@ export class LiveStreamingServer {
     callback: (res: boolean, code?: number, message?: string) => void
   ) {
     try {
+      // Enhanced logging for debugging
+      log('WebSocket verification started', 'websocket');
       const cookies = parse(info.req.headers.cookie || '');
-      const sessionId = cookies['whisky.session.id'];
+      log(`Received cookies: ${Object.keys(cookies).join(', ')}`, 'websocket');
+
+      // Try multiple session cookie names
+      const sessionId = cookies['whisky.session.id'] || cookies['connect.sid'];
 
       if (!sessionId) {
-        log('WebSocket connection rejected: No session cookie', 'websocket');
+        log('No session cookie found', 'websocket');
         callback(false, 401, 'Unauthorized - No session cookie');
         return;
       }
 
+      log(`Session ID found: ${sessionId}`, 'websocket');
+
+      // Extract clean session ID
       const cleanSessionId = sessionId.split('.')[0].replace('s:', '');
+      log(`Cleaned session ID: ${cleanSessionId}`, 'websocket');
+
       const user = await verify(cleanSessionId);
 
       if (!user) {
-        log('WebSocket connection rejected: Invalid session', 'websocket');
+        log('Invalid session - User not found', 'websocket');
         callback(false, 401, 'Unauthorized - Invalid session');
         return;
       }
 
+      log(`User verified: ${user.id}`, 'websocket');
       info.req.user = user;
       callback(true);
     } catch (error) {
-      console.error('WebSocket verification error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log(`WebSocket verification error: ${errorMessage}`, 'websocket');
       callback(false, 500, 'Internal Server Error');
     }
   }
@@ -66,6 +78,7 @@ export class LiveStreamingServer {
     this.wss.on('connection', async (ws: WebSocket, request: any) => {
       try {
         if (!request.user) {
+          log('Missing user in request', 'websocket');
           ws.close(1008, 'User not authenticated');
           return;
         }
@@ -73,6 +86,7 @@ export class LiveStreamingServer {
         const userId = request.user.id;
         log(`New WebSocket connection established for user ${userId}`, 'websocket');
 
+        // Initialize client tracking
         this.clients.set(ws, {
           ws,
           userId,
@@ -80,31 +94,40 @@ export class LiveStreamingServer {
           connectTime: Date.now(),
         });
 
-        // Send connection confirmation
+        // Send initial connection confirmation
         ws.send(JSON.stringify({
-          type: 'connection-established',
+          type: 'CONNECTED',
           userId,
           timestamp: Date.now()
         }));
 
-        // Set up message handler
-        ws.on('message', async (message: string) => {
+        // Handle incoming messages
+        ws.on('message', (message: string) => {
           try {
             const data = JSON.parse(message.toString());
-            log(`Received message: ${JSON.stringify(data)}`, 'websocket');
+            log(`Received message from user ${userId}: ${JSON.stringify(data)}`, 'websocket');
 
             // Echo back for testing
             ws.send(JSON.stringify({
-              type: 'echo',
-              data: data,
+              type: 'ECHO',
+              data,
               timestamp: Date.now()
             }));
           } catch (error) {
-            console.error('Error handling message:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            log(`Message handling error: ${errorMessage}`, 'websocket');
             ws.send(JSON.stringify({
-              type: 'error',
+              type: 'ERROR',
               error: 'Failed to process message'
             }));
+          }
+        });
+
+        // Handle pong messages to update last ping time
+        ws.on('pong', () => {
+          const client = this.clients.get(ws);
+          if (client) {
+            client.lastPing = Date.now();
           }
         });
 
@@ -122,7 +145,8 @@ export class LiveStreamingServer {
         });
 
       } catch (error) {
-        console.error('Error handling WebSocket connection:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        log(`Error in WebSocket connection handler: ${errorMessage}`, 'websocket');
         ws.close(1011, 'Internal Server Error');
       }
     });
@@ -130,10 +154,16 @@ export class LiveStreamingServer {
 
   private startHeartbeatCheck() {
     setInterval(() => {
+      const now = Date.now();
       this.clients.forEach((client, ws) => {
+        if (now - client.lastPing > this.HEARTBEAT_INTERVAL * 1.5) {
+          log(`Client timeout detected for user ${client.userId}`, 'websocket');
+          ws.terminate();
+          return;
+        }
+
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'heartbeat' }));
-          client.lastPing = Date.now();
+          ws.ping();
         }
       });
     }, this.HEARTBEAT_INTERVAL);
