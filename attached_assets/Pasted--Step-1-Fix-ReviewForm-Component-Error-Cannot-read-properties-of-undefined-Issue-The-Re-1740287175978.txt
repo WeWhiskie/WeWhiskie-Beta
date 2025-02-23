@@ -1,0 +1,145 @@
+🛠️ Step 1: Fix ReviewForm Component Error ("Cannot read properties of undefined")
+📌 Issue:
+
+The ReviewForm component is expecting an optional property that is missing.
+The error prevents the page from rendering correctly.
+📌 Fix:
+
+Modify ReviewForm.tsx to ensure it checks for undefined values before accessing them.
+🔹 Update ReviewForm.tsx
+tsx
+Copy
+Edit
+import React from "react";
+
+const ReviewForm = ({ reviewData = {} }) => {
+    const { title = "", rating = 0, comment = "" } = reviewData || {};
+
+    return (
+        <div>
+            <h2>Write a Review</h2>
+            <form>
+                <label>Title:</label>
+                <input type="text" defaultValue={title} placeholder="Enter review title" />
+
+                <label>Rating:</label>
+                <input type="number" defaultValue={rating} min="0" max="10" />
+
+                <label>Comment:</label>
+                <textarea defaultValue={comment} placeholder="Write your review here..." />
+
+                <button type="submit">Submit</button>
+            </form>
+        </div>
+    );
+};
+
+export default ReviewForm;
+✅ Outcome:
+✔ Fixes undefined property errors in ReviewForm.tsx.
+✔ If reviewData is missing, it will use default values instead of crashing.
+
+🛠️ Step 2: Fix Authentication Redirect (Prevent Blank Screen)
+📌 Issue:
+
+Users trying to access /review without logging in get a blank screen instead of being redirected to /auth.
+React Router isn't handling redirection properly when users are not logged in.
+📌 Fix:
+
+Modify App.tsx to ensure proper redirection logic.
+🔹 Update App.tsx
+tsx
+Copy
+Edit
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
+import SessionsPage from "./pages/SessionsPage";
+import ReviewPage from "./pages/ReviewPage";
+import LoginPage from "./pages/LoginPage";
+
+const PrivateRoute = ({ element }) => {
+    const { isAuthenticated } = useAuth();
+    return isAuthenticated ? element : <Navigate to="/auth" replace />;
+};
+
+const App = () => {
+    return (
+        <Router>
+            <Routes>
+                <Route path="/auth" element={<LoginPage />} />
+                <Route path="/sessions" element={<PrivateRoute element={<SessionsPage />} />} />
+                <Route path="/review" element={<PrivateRoute element={<ReviewPage />} />} />
+            </Routes>
+        </Router>
+    );
+};
+
+export default App;
+✅ Outcome:
+✔ If a non-logged-in user tries to access /review, they will be redirected to /auth.
+✔ Fixes the blank screen issue when accessing protected routes.
+
+🛠️ Step 3: Fix Backend Authentication Middleware
+📌 Issue:
+
+The backend is not properly rejecting unauthorized requests.
+Instead of returning an error, it's allowing the frontend to break silently.
+📌 Fix:
+
+Modify server/middleware/authMiddleware.js to return a proper 401 Unauthorized response.
+🔹 Update authMiddleware.js
+js
+Copy
+Edit
+const requireAuth = (req, res, next) => {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized. Redirecting to login." });
+    }
+    next();
+};
+
+module.exports = requireAuth;
+🔹 Apply Middleware in server/routes/protectedRoutes.js
+js
+Copy
+Edit
+const express = require("express");
+const router = express.Router();
+const requireAuth = require("../middleware/authMiddleware");
+
+router.get("/sessions", requireAuth, (req, res) => {
+    res.json({ message: "Protected session data" });
+});
+
+router.get("/review", requireAuth, (req, res) => {
+    res.json({ message: "Protected review data" });
+});
+
+module.exports = router;
+✅ Outcome:
+✔ If an unauthenticated user tries to access /sessions or /review, the server will return a 401 error.
+✔ The frontend will detect this and trigger a redirect to /auth.
+
+🛠️ Step 4: Restart Replit & Test Each Fix
+🔹 Restart Replit:
+
+sh
+Copy
+Edit
+npm run dev
+🔹 Test Each Fix Separately: 1️⃣ Try accessing /review without logging in.
+
+Expected outcome: Redirects to /auth instead of a blank screen.
+If it doesn’t work, check console logs for errors.
+2️⃣ Log in, then access /review again.
+
+Expected outcome: Review page loads properly.
+3️⃣ Submit a review after logging in.
+
+Expected outcome: No blank screens, and review submission works correctly.
+🚀 Final Fix Summary
+✅ Step 1: Fixed ReviewForm.tsx to prevent crashes when reviewData is missing.
+✅ Step 2: Fixed React Router redirection so users are sent to /auth instead of a blank screen.
+✅ Step 3: Fixed backend to properly reject unauthorized requests with a 401 error.
+✅ Step 4: Restart Replit and test each fix separately.
