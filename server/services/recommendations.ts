@@ -115,6 +115,11 @@ interface ConciergeResponse {
   recommendations?: WhiskyRecommendation[];
   answer?: string;
   suggestedTopics?: string[];
+  tastingProfile?: {
+    primaryFlavors: string[];
+    preferredRegions: string[];
+    strengthPreference: string;
+  };
 }
 
 async function processAIResponse(prompt: string, requestContext?: any): Promise<any> {
@@ -125,41 +130,58 @@ async function processAIResponse(prompt: string, requestContext?: any): Promise<
     }
 
     const response = await requestQueue.add(async () => {
-      const formattedPrompt = `${prompt}\n\nFormat the response as a JSON object with fields: answer (string), recommendations (optional), and suggestedTopics (string[] optional).`;
+      const formattedPrompt = `${prompt}
+
+Format the response as a JSON object with these fields:
+- answer (string, max 100 words)
+- recommendations (array of whisky suggestions)
+- suggestedTopics (array of 2-3 follow-up topics)
+- tastingProfile (object with flavor preferences)`;
 
       const generatedText = await huggingFaceClient.generateResponse(formattedPrompt);
       try {
-        // Enhanced JSON extraction with better error handling
         const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const jsonStr = jsonMatch[0];
           try {
             const parsed = JSON.parse(jsonStr);
-            // Validate response structure
             if (!parsed.answer && !parsed.recommendations) {
               throw new Error("Invalid response structure");
             }
             return parsed;
           } catch (parseError) {
             console.error('JSON parse error:', parseError);
-            // Fallback: Convert text response to proper JSON format
             return {
-              answer: generatedText.trim(),
-              suggestedTopics: ["General whisky discussion", "Whisky recommendations", "Tasting notes"]
+              answer: generatedText.trim().substring(0, 100),
+              suggestedTopics: ["Whisky recommendations", "Tasting notes"],
+              tastingProfile: { 
+                primaryFlavors: [],
+                preferredRegions: [],
+                strengthPreference: "medium"
+              }
             };
           }
         }
 
-        // If no JSON found, format the text response
         return {
-          answer: generatedText.trim(),
-          suggestedTopics: ["General whisky discussion", "Whisky recommendations", "Tasting notes"]
+          answer: generatedText.trim().substring(0, 100),
+          suggestedTopics: ["Whisky recommendations", "Tasting notes"],
+          tastingProfile: {
+            primaryFlavors: [],
+            preferredRegions: [],
+            strengthPreference: "medium"
+          }
         };
       } catch (error) {
         console.error('Error processing AI response:', error);
         return {
           answer: "I apologize, but I'm having trouble processing your request at the moment. Could you please try again?",
-          suggestedTopics: ["General whisky discussion", "Whisky recommendations", "Tasting notes"]
+          suggestedTopics: ["Whisky recommendations", "Tasting notes"],
+          tastingProfile: {
+            primaryFlavors: [],
+            preferredRegions: [],
+            strengthPreference: "medium"
+          }
         };
       }
     });
@@ -187,20 +209,25 @@ export async function getWhiskyRecommendations(
   try {
     const whiskies = await storage.getWhiskies();
     const userReviews = await storage.getUserReviews(userId);
+    const tastingHistory = await analyzeTastingHistory(userId);
 
-    const prompt = `As a master whisky educator and concierge, recommend 3 whiskies from the following list based on these preferences:
-    - Preferred flavors: ${preferences.flavors.join(', ')}
-    - Price range: $${preferences.priceRange.min} - $${preferences.priceRange.max}
-    - Preferred types: ${preferences.preferred_types.join(', ')}
-    - Experience level: ${preferences.experience_level}
+    const prompt = `As a master whisky educator and concierge, recommend 3 whiskies based on:
 
-    User's previous reviews:
-    ${userReviews.map(review => `- ${review.whisky.name}: ${review.rating}/5 stars`).join('\n')}
+Preferences:
+• Flavors: ${preferences.flavors.join(', ')}
+• Price: $${preferences.priceRange.min} - $${preferences.priceRange.max}
+• Types: ${preferences.preferred_types.join(', ')}
+• Experience: ${preferences.experience_level}
 
-    Available whiskies:
-    ${whiskies.map(w => `- ${w.name} (${w.type}, $${w.price}, ${w.tastingNotes})`).join('\n')}
+Tasting History:
+${tastingHistory.topNotes.slice(0, 5).join(', ')}
+Average rating: ${tastingHistory.averageRating}/5
+Preferred regions: ${tastingHistory.preferredRegions.join(', ')}
 
-    Format the response as a JSON object with recommendations array containing objects with whiskyId, reason, confidence, and educationalContent fields.`;
+Available whiskies:
+${whiskies.map(w => `• ${w.name} (${w.type}, $${w.price}, ${w.tasting_notes})`).join('\n')}
+
+For each recommendation, explain in 2-3 sentences why it matches their taste profile.`;
 
     const result = await processAIResponse(prompt);
 
@@ -215,9 +242,12 @@ export async function getWhiskyRecommendations(
         }
         return {
           whisky,
-          reason: rec.reason,
+          reason: rec.reason.substring(0, 150), // Keep reasons concise
           confidence: rec.confidence,
-          educationalContent: rec.educationalContent
+          educationalContent: {
+            tastingNotes: rec.educationalContent?.tastingNotes?.substring(0, 100),
+            pairingAdvice: rec.educationalContent?.pairingAdvice?.substring(0, 100)
+          }
         };
       })
     );
@@ -230,6 +260,53 @@ export async function getWhiskyRecommendations(
       "RECOMMENDATION_ERROR"
     );
   }
+}
+
+// New helper function to analyze user's tasting history
+async function analyzeTastingHistory(userId: number) {
+  const userReviews = await storage.getUserReviews(userId);
+
+  const analysis = {
+    topNotes: new Map<string, number>(),
+    preferredRegions: new Map<string, number>(),
+    averageRating: 0,
+    totalReviews: userReviews.length
+  };
+
+  userReviews.forEach(review => {
+    // Analyze tasting notes
+    if (review.whisky.tasting_notes) {
+      review.whisky.tasting_notes.split(',').forEach(note => {
+        const trimmedNote = note.trim();
+        analysis.topNotes.set(trimmedNote, (analysis.topNotes.get(trimmedNote) || 0) + 1);
+      });
+    }
+
+    // Track preferred regions
+    if (review.whisky.region) {
+      analysis.preferredRegions.set(
+        review.whisky.region,
+        (analysis.preferredRegions.get(review.whisky.region) || 0) + 1
+      );
+    }
+
+    analysis.averageRating += review.rating;
+  });
+
+  if (analysis.totalReviews > 0) {
+    analysis.averageRating /= analysis.totalReviews;
+  }
+
+  return {
+    topNotes: Array.from(analysis.topNotes.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([note]) => note),
+    preferredRegions: Array.from(analysis.preferredRegions.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([region]) => region),
+    averageRating: analysis.averageRating,
+    totalReviews: analysis.totalReviews
+  };
 }
 
 // Themed responses for different personalities

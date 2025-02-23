@@ -1,22 +1,31 @@
 import { Request, Response } from "express";
 import { db } from "../db";
-import { chatConversations, chatMessages, whiskies, userWhiskyCollection } from "@shared/schema";
+import { chatConversations, chatMessages, whiskies, userWhiskyCollection, reviews } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { whiskyConcierge, generateConciergeName, generateConciergePersonality } from "../services/ai-concierge";
 
-const SYSTEM_PROMPT = `You are a whisky expert concierge with deep knowledge of distilleries, tasting notes, and whisky culture. Help users explore and appreciate whisky through detailed, accurate information and personalized recommendations.
+const SYSTEM_PROMPT = `You are a whisky expert concierge with deep knowledge of distilleries, tasting notes, and whisky culture. Your responses should be concise and focused, encouraging user interaction.
 
-Key responsibilities:
-1. Provide detailed tasting notes and flavor profiles
-2. Share distillery history and production methods
-3. Make personalized recommendations based on user preferences
-4. Suggest food pairings and serving suggestions
-5. Explain whisky terminology and concepts
-6. Consider user's existing collection when making recommendations
+Key principles:
+1. Keep responses brief and digestible (max 2-3 sentences per point)
+2. Break complex information into bullet points
+3. Encourage follow-up questions for deeper insights
+4. Focus on one aspect at a time
+5. Use interactive elements to engage users
 
-Always be precise and educational while maintaining an engaging, conversational tone.
+Areas of expertise:
+• Tasting notes and flavor profiles
+• Distillery history and methods
+• Personalized recommendations
+• Food pairings
+• Whisky terminology
 
-Additional personality context will be provided to customize your responses.`;
+Additional personality context will be provided to customize your responses.
+
+Response format:
+- Keep initial responses under 100 words
+- Use bullet points for lists
+- Include a suggested follow-up question`;
 
 export async function handleWhiskyConciergeChat(req: Request, res: Response) {
   try {
@@ -53,7 +62,10 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
         userId,
         title: "Whisky Consultation",
         status: "active",
-        context: { collectionSize: userCollection.length },
+        context: { 
+          collectionSize: userCollection.length,
+          userPreferences: await getUserPreferences(userId)
+        },
         personalitySettings: personality ? {
           style: personality.accent?.toLowerCase().includes('highland') ? 'highland' :
                  personality.accent?.toLowerCase().includes('speyside') ? 'speyside' :
@@ -83,10 +95,13 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
     Background: ${personality.background}
     Personality traits: ${personality.personality}
     Your catchphrase: "${personality.catchphrase}"
-    Maintain this persona consistently in your responses.
+    Remember to:
+    - Keep responses brief and engaging
+    - Use your catchphrase sparingly
+    - Maintain your distinct personality
     ` : "";
 
-    // Call Perplexity API
+    // Call Perplexity API with enhanced controls
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
@@ -97,11 +112,19 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
         model: "llama-3.1-sonar-small-128k-online",
         messages: [
           { role: "system", content: SYSTEM_PROMPT + "\n" + personalityPrompt },
-          { role: "user", content: `Context: User has ${userCollection.length} whiskies in their collection.\nQuery: ${query}` }
+          { 
+            role: "user", 
+            content: `Context: User has ${userCollection.length} whiskies in their collection.
+                     Previous preferences: ${JSON.stringify(await getUserPreferences(userId))}
+                     Query: ${query}
+
+                     Remember to keep your response concise and focused.`
+          }
         ],
         temperature: 0.2,
         top_p: 0.9,
-        frequency_penalty: 1
+        frequency_penalty: 1,
+        max_tokens: 150  // Limit response length
       })
     });
 
@@ -120,7 +143,8 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
       content: aiResponse,
       metadata: {
         citations: result.citations || [],
-        model: result.model
+        model: result.model,
+        responseLength: aiResponse.length
       },
       personality: personality || {}
     });
@@ -146,7 +170,48 @@ export async function handleWhiskyConciergeChat(req: Request, res: Response) {
   }
 }
 
-// Add new route handlers
+// Helper function to get user preferences
+async function getUserPreferences(userId: number) {
+  const reviews = await db.query.reviews.findMany({
+    where: eq(reviews.userId, userId),
+    with: {
+      whisky: true
+    }
+  });
+
+  // Extract preferences from reviews
+  const preferences = {
+    favoriteTypes: new Set<string>(),
+    preferredFlavors: new Set<string>(),
+    averageRating: 0,
+    totalReviews: reviews.length
+  };
+
+  reviews.forEach(review => {
+    if (review.whisky) {
+      preferences.favoriteTypes.add(review.whisky.type);
+      if (review.whisky.tasting_notes) {
+        review.whisky.tasting_notes.split(',').forEach(note => 
+          preferences.preferredFlavors.add(note.trim())
+        );
+      }
+      preferences.averageRating += review.rating;
+    }
+  });
+
+  if (reviews.length > 0) {
+    preferences.averageRating /= reviews.length;
+  }
+
+  return {
+    favoriteTypes: Array.from(preferences.favoriteTypes),
+    preferredFlavors: Array.from(preferences.preferredFlavors),
+    averageRating: preferences.averageRating,
+    totalReviews: preferences.totalReviews
+  };
+}
+
+// Existing route handlers remain unchanged
 export async function handleGenerateName(req: Request, res: Response) {
   try {
     const { style } = req.body;
