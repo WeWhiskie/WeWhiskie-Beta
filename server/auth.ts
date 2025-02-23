@@ -73,33 +73,25 @@ export function setupAuth(app: Express) {
       sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax',
       path: '/'
     },
-    name: 'connect.sid' // Explicitly set the cookie name
+    name: 'whisky.sid' // Changed cookie name for better security
   };
 
-  // Enable trust proxy if we're behind a reverse proxy
-  app.set("trust proxy", 1);
+  // Initialize passport before session to ensure proper auth state
+  app.use(passport.initialize());
 
   // Session middleware with enhanced logging
   app.use(session(sessionSettings));
-  app.use((req, res, next) => {
-    console.log('Session middleware:', {
-      hasSession: !!req.session,
-      sessionID: req.sessionID,
-      isAuthenticated: req.isAuthenticated?.()
-    });
-    next();
-  });
 
-  // Initialize passport and restore authentication state from session
-  app.use(passport.initialize());
+  // Passport session handling after express-session
   app.use(passport.session());
 
-  // Passport authentication debugging middleware
+  // Debug middleware
   app.use((req, res, next) => {
-    console.log('Passport auth state:', {
-      isAuthenticated: req.isAuthenticated?.(),
-      user: req.user ? { id: req.user.id, username: req.user.username } : null,
-      sessionID: req.sessionID
+    console.log('Auth Debug:', {
+      hasSession: !!req.session,
+      sessionID: req.sessionID,
+      isAuthenticated: req.isAuthenticated(),
+      user: req.user ? { id: req.user.id, username: req.user.username } : null
     });
     next();
   });
