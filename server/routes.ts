@@ -64,7 +64,6 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     verifyClient: async (info, callback) => {
       try {
         console.log('WebSocket connection attempt - Verifying client...');
-        console.log('Request headers:', info.req.headers);
 
         // Parse cookies with better error handling
         const cookieHeader = info.req.headers.cookie;
@@ -81,9 +80,7 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
             return acc;
           }, {});
 
-        console.log('Parsed cookies:', cookies);
-
-        // Check all possible session cookie names
+        // Check for session ID in multiple possible cookie names
         const sessionId = cookies['whisky.session.id'] || 
                          cookies['connect.sid'] || 
                          cookies['whisky.sid'];
@@ -94,9 +91,7 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
           return;
         }
 
-        console.log('Found session ID:', sessionId);
-
-        // Verify session is valid in the database
+        // Get session store from request
         const extendedReq = info.req as ExtendedIncomingMessage;
         if (!extendedReq.sessionStore) {
           console.error('Session store not available');
@@ -104,25 +99,31 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
           return;
         }
 
-        const session = await new Promise<SessionData | null>((resolve) => {
+        // Verify session exists and is valid
+        const session = await new Promise<SessionData | null>((resolve, reject) => {
           extendedReq.sessionStore!.get(sessionId, (err, session) => {
             if (err) {
               console.error('Error fetching session:', err);
-              resolve(null);
+              reject(err);
             } else {
               resolve(session);
             }
           });
+        }).catch(err => {
+          console.error('Session verification failed:', err);
+          return null;
         });
 
         if (!session) {
-          console.log('Session not found in store');
+          console.log('Session not found or invalid');
           callback(false, 401, 'Invalid session');
           return;
         }
 
+        // Session is valid
         console.log('Session verified successfully');
         callback(true);
+
       } catch (error) {
         console.error('Error in WebSocket client verification:', error);
         callback(false, 500, 'Internal Server Error');
@@ -130,8 +131,13 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     }
   });
 
-  // Enhanced client tracking with timestamps and session info
-  const clients = new Map<WebSocket, { connectedAt: Date; sessionId: string | undefined; lastPingTime?: number }>();
+  // Enhanced client tracking and connection management
+  const clients = new Map<WebSocket, { 
+    connectedAt: Date; 
+    sessionId: string | undefined; 
+    lastPingTime?: number;
+    userId?: number;
+  }>();
 
   // Set up heartbeat interval
   const heartbeatInterval = setInterval(() => {

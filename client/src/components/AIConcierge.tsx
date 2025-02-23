@@ -36,158 +36,154 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    const connectWebSocket = () => {
-      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        toast({
-          title: "Connection Error",
-          description: "Failed to connect after multiple attempts. Please refresh the page.",
-          variant: "destructive"
-        });
-        return;
-      }
+useEffect(() => {
+  const connectWebSocket = () => {
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect after multiple attempts. Please refresh the page.",
+        variant: "destructive"
+      });
+      return;
+    }
 
-      if (isConnecting) return;
+    if (isConnecting) return;
 
-      setIsConnecting(true);
+    setIsConnecting(true);
 
-      try {
-        // Ensure proper URL construction
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/ai-concierge`;
-        console.log('Connecting to WebSocket URL:', wsUrl);
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/ai-concierge`;
+      console.log('Connecting to WebSocket URL:', wsUrl);
 
-        const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(wsUrl);
 
-        ws.onopen = () => {
-          console.log('Connected to AI Concierge WebSocket');
-          setIsConnected(true);
-          setIsConnecting(false);
-          setReconnectAttempts(0);
-
-          // Send initial handshake message with current timestamp
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ 
-              type: 'HANDSHAKE',
-              timestamp: Date.now()
-            }));
-          }
-
-          // Resend last message if any
-          if (lastMessageRef.current && ws.readyState === WebSocket.OPEN) {
-            ws.send(lastMessageRef.current);
-          }
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const response = JSON.parse(event.data);
-            console.log('Received WebSocket message:', response);
-
-            switch (response.type) {
-              case 'CONNECTED':
-                console.log('Connection confirmed:', response.message);
-                // Request personality data if available
-                if (personality?.name) {
-                  ws.send(JSON.stringify({
-                    type: 'GET_PERSONALITY',
-                    name: personality.name
-                  }));
-                }
-                break;
-
-              case 'AUTH_ERROR':
-                console.error('Authentication error:', response.error);
-                toast({
-                  title: "Authentication Error",
-                  description: "Please sign in again to use the AI Concierge.",
-                  variant: "destructive"
-                });
-                break;
-
-              case 'AI_RESPONSE':
-                setAiResponse(response.data.message);
-                if (!isMuted) {
-                  speakResponse(response.data.message);
-                }
-                setIsProcessing(false);
-                break;
-
-              case 'PERSONALITY_DATA':
-                console.log('Received personality data:', response.data);
-                break;
-
-              case 'ERROR':
-                console.error('AI Concierge error:', response.error);
-                toast({
-                  title: "AI Concierge Error",
-                  description: response.error,
-                  variant: "destructive"
-                });
-                break;
-            }
-          } catch (error) {
-            console.error('Error processing WebSocket message:', error);
-          }
-        };
-
-        ws.onclose = (event) => {
-          console.log('WebSocket connection closed:', event);
-          setIsConnected(false);
-          setIsConnecting(false);
-
-          if (!event.wasClean) {
-            const delay = RECONNECT_DELAY * Math.pow(RECONNECT_BACKOFF_MULTIPLIER, reconnectAttempts);
-            setReconnectAttempts(prev => prev + 1);
-
-            toast({
-              title: "Connection Lost",
-              description: event.code === 1006 
-                ? "Connection lost unexpectedly. Reconnecting..." 
-                : "Connection closed. Attempting to reconnect...",
-              variant: "default"
-            });
-
-            if (reconnectTimeoutRef.current) {
-              clearTimeout(reconnectTimeoutRef.current);
-            }
-
-            reconnectTimeoutRef.current = setTimeout(() => {
-              connectWebSocket();
-            }, delay);
-          } else if (event.code === 1008) {
-            toast({
-              title: "Authentication Required",
-              description: "Please sign in to use the AI Concierge.",
-              variant: "destructive"
-            });
-          }
-        };
-
-        ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          setIsConnecting(false);
-        };
-
-        wsRef.current = ws;
-      } catch (error) {
-        console.error('Error creating WebSocket connection:', error);
+      ws.onopen = () => {
+        console.log('Connected to AI Concierge WebSocket');
+        setIsConnected(true);
         setIsConnecting(false);
-        setReconnectAttempts(prev => prev + 1);
-      }
-    };
+        setReconnectAttempts(0);
 
-    connectWebSocket();
+        // Send initial handshake message
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ 
+            type: 'HANDSHAKE',
+            timestamp: Date.now()
+          }));
+        }
 
-    return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, [personality, toast, isMuted, reconnectAttempts]);
+        // Resend last message if any
+        if (lastMessageRef.current && ws.readyState === WebSocket.OPEN) {
+          ws.send(lastMessageRef.current);
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const response = JSON.parse(event.data);
+          console.log('Received WebSocket message:', response);
+
+          switch (response.type) {
+            case 'CONNECTED':
+              console.log('Connection confirmed:', response.message);
+              // Request personality data if available
+              if (personality?.name) {
+                ws.send(JSON.stringify({
+                  type: 'GET_PERSONALITY',
+                  name: personality.name
+                }));
+              }
+              break;
+
+            case 'AUTH_ERROR':
+              console.error('Authentication error:', response.error);
+              toast({
+                title: "Authentication Error",
+                description: "Please sign in again to use the AI Concierge.",
+                variant: "destructive"
+              });
+              // Redirect to login or handle auth error
+              break;
+
+            case 'AI_RESPONSE':
+              setAiResponse(response.data.message);
+              if (!isMuted) {
+                speakResponse(response.data.message);
+              }
+              setIsProcessing(false);
+              break;
+
+            case 'ERROR':
+              console.error('AI Concierge error:', response.error);
+              toast({
+                title: "AI Concierge Error",
+                description: response.error,
+                variant: "destructive"
+              });
+              break;
+          }
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket connection closed:', event);
+        setIsConnected(false);
+        setIsConnecting(false);
+
+        if (!event.wasClean) {
+          const delay = RECONNECT_DELAY * Math.pow(RECONNECT_BACKOFF_MULTIPLIER, reconnectAttempts);
+          setReconnectAttempts(prev => prev + 1);
+
+          toast({
+            title: "Connection Lost",
+            description: event.code === 1006 
+              ? "Connection lost unexpectedly. Reconnecting..." 
+              : "Connection closed. Attempting to reconnect...",
+            variant: "default"
+          });
+
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+          }
+
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket();
+          }, delay);
+        } else if (event.code === 1008) {
+          toast({
+            title: "Authentication Required",
+            description: "Please sign in to use the AI Concierge.",
+            variant: "destructive"
+          });
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setIsConnecting(false);
+      };
+
+      wsRef.current = ws;
+    } catch (error) {
+      console.error('Error creating WebSocket connection:', error);
+      setIsConnecting(false);
+      setReconnectAttempts(prev => prev + 1);
+    }
+  };
+
+  connectWebSocket();
+
+  return () => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+  };
+}, [personality, toast, isMuted, reconnectAttempts]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
