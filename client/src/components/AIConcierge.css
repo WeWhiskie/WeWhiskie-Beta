@@ -68,6 +68,50 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.listening-indicator {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  margin-top: 1rem;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.waveform-animation {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 20px;
+}
+
+.waveform-animation span {
+  display: inline-block;
+  width: 3px;
+  height: 100%;
+  background-color: var(--whisky-gold);
+  border-radius: 3px;
+  animation: wave 1s ease-in-out infinite;
+}
+
+.waveform-animation span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.waveform-animation span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.waveform-animation span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.waveform-animation span:nth-child(4) {
+  animation-delay: 0.6s;
+}
+
+
 .mic-button {
   position: relative;
   transition: all 0.3s ease-in-out;
@@ -79,6 +123,7 @@
   justify-content: center;
   background: rgba(255, 255, 255, 0.1);
   border: 2px solid var(--whisky-gold);
+  overflow: visible;
 }
 
 .mic-button:hover {
@@ -95,10 +140,10 @@
 .mic-button.listening::before {
   content: '';
   position: absolute;
-  width: 100%;
-  height: 100%;
+  width: 150%;
+  height: 150%;
   border-radius: 50%;
-  background: var(--mic-pulse-color);
+  background: radial-gradient(circle, var(--mic-pulse-color) 0%, transparent 70%);
   animation: pulseRing 2s infinite;
 }
 
@@ -194,7 +239,7 @@
 
 @keyframes pulseRing {
   0% {
-    transform: scale(1);
+    transform: scale(0.8);
     opacity: 0.8;
   }
   50% {
@@ -202,8 +247,17 @@
     opacity: 0;
   }
   100% {
-    transform: scale(1);
+    transform: scale(0.8);
     opacity: 0.8;
+  }
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
   }
 }
 

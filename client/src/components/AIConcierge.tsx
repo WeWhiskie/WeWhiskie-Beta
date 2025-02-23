@@ -26,7 +26,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
   const audioContextRef = useRef<AudioContext | null>(null);
   const [isProcessingMicPermission, setIsProcessingMicPermission] = useState(false);
 
-  // Initialize Web Audio API for better audio processing
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -37,14 +36,12 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
     }
   }, []);
 
-  // Initialize speech synthesis
   useEffect(() => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       setSynthesis(window.speechSynthesis);
     }
   }, []);
 
-  // WebSocket connection check
   useEffect(() => {
     const checkConnection = () => {
       setIsConnected(navigator.onLine);
@@ -60,7 +57,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
     };
   }, []);
 
-  // Initialize speech recognition with better error handling
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window)) {
       toast({
@@ -80,8 +76,9 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       recognition.onstart = () => {
         setIsListening(true);
         toast({
-          title: "Listening Active",
+          title: "Voice Recognition Active",
           description: "I'm listening... Speak clearly into your microphone.",
+          className: "bg-green-100",
         });
       };
 
@@ -92,13 +89,10 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
 
         setTranscript(transcript);
 
-        // Process final results
-        const lastResult = event.results[event.results.length - 1];
-        if (lastResult.isFinal) {
+        if (event.results[event.results.length - 1].isFinal) {
           setIsProcessing(true);
           if (onMessage) {
             onMessage(transcript);
-            // Simulated AI response (replace with actual AI response handling)
             setTimeout(() => {
               const mockResponse = "I understand you're interested in whisky. How can I help you today?";
               setAiResponse(mockResponse);
@@ -115,16 +109,16 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         setIsProcessingMicPermission(false);
 
         const errorMessages: Record<string, string> = {
-          'network': 'Network error. Please check your internet connection and try again.',
+          'network': 'Please check your internet connection and try again.',
           'no-speech': 'No speech detected. Please speak clearly into your microphone.',
-          'not-allowed': 'Microphone access denied. Please enable it in your browser settings (click the camera icon in the address bar).',
-          'aborted': 'Listening stopped. Click the microphone icon to start again.',
+          'not-allowed': 'Microphone access denied. Please click the camera icon in your browser\'s address bar to enable access.',
+          'aborted': 'Voice recognition stopped. Click the microphone icon to start again.',
           'audio-capture': 'No microphone found. Please ensure your microphone is properly connected.',
-          'service-not-allowed': 'Speech service not available. Please try again in a moment.',
+          'service-not-allowed': 'Voice recognition service unavailable. Please try again in a moment.',
         };
 
         toast({
-          title: "Speech Recognition Error",
+          title: "Voice Recognition Error",
           description: errorMessages[event.error] || `Error: ${event.error}. Please try again.`,
           variant: "destructive"
         });
@@ -132,7 +126,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
 
       recognition.onend = () => {
         if (isListening) {
-          // Only restart if we haven't manually stopped
           try {
             recognition.start();
           } catch (error) {
@@ -148,8 +141,8 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
     } catch (error) {
       console.error("Error initializing speech recognition:", error);
       toast({
-        title: "Speech Recognition Error",
-        description: "Failed to initialize speech recognition. Please refresh the page.",
+        title: "Voice Recognition Error",
+        description: "Failed to initialize voice recognition. Please refresh the page.",
         variant: "destructive"
       });
     }
@@ -163,11 +156,10 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
 
   const speakResponse = (text: string) => {
     if (synthesis && !isMuted) {
-      synthesis.cancel(); // Cancel any ongoing speech
+      synthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.volume = volume;
 
-      // Set voice based on personality
       const voices = synthesis.getVoices();
       const preferredVoice = voices.find(voice =>
         personality?.accent?.toLowerCase().includes('scottish')
@@ -270,7 +262,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         customAvatarUrl={personality?.avatarUrl}
       />
 
-      {/* Voice Interaction Controls */}
       <div className="controls-container">
         <Button
           variant={isListening ? "destructive" : "secondary"}
@@ -283,7 +274,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
             <Loader2 className="h-6 w-6 animate-spin" />
           ) : isListening ? (
             <>
-              <Activity className="h-6 w-6 animate-pulse" />
+              <Activity className="h-6 w-6 animate-pulse text-red-500" />
               <StopCircle className="h-4 w-4 absolute top-1 right-1" />
             </>
           ) : (
@@ -291,7 +282,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
           )}
         </Button>
 
-        {/* Volume Controls */}
         <div className="volume-control">
           <Button
             variant="ghost"
@@ -311,7 +301,15 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         </div>
       </div>
 
-      {/* Processing Indicator */}
+      {isListening && (
+        <div className="listening-indicator">
+          <div className="waveform-animation">
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <p>Listening...</p>
+        </div>
+      )}
+
       {isProcessing && (
         <div className="processing-indicator">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -319,14 +317,12 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         </div>
       )}
 
-      {/* Real-time Transcript */}
       {transcript && (
         <div className="transcript-container">
           <p className="transcript-text">{transcript}</p>
         </div>
       )}
 
-      {/* AI Response */}
       {aiResponse && (
         <div className="ai-response-container">
           <p className="ai-response">{aiResponse}</p>
