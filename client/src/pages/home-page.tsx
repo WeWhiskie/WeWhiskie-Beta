@@ -128,8 +128,8 @@ export default function HomePage() {
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4" />
                         <span>
-                          {typeof session.maxParticipants === 'number' 
-                            ? session.maxParticipants 
+                          {typeof session.maxParticipants === 'number'
+                            ? session.maxParticipants
                             : "∞"}
                         </span>
                       </div>
@@ -186,7 +186,7 @@ export default function HomePage() {
               <Card className="overflow-hidden cursor-pointer transition-transform hover:scale-105 hover:shadow-lg">
                 <div className="aspect-[4/3] relative">
                   <img
-                    src={whisky.imageUrl}
+                    src={whisky.image_url}
                     alt={whisky.name}
                     className="object-cover w-full h-full"
                   />
@@ -223,13 +223,12 @@ export default function HomePage() {
                         <Badge variant="outline">{whisky.age} Years</Badge>
                       )}
                     </div>
-                    {whisky.tastingNotes && (
+                    {whisky.tasting_notes && (
                       <p className="text-sm text-muted-foreground line-clamp-2">
-                        {whisky.tastingNotes}
+                        {whisky.tasting_notes}
                       </p>
                     )}
                   </div>
-                  {/* Removed Share button */}
                 </CardContent>
               </Card>
             </Link>
