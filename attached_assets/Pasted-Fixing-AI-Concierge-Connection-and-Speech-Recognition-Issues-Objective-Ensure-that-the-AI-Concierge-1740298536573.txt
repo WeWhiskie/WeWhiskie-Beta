@@ -1,0 +1,84 @@
+Fixing AI Concierge Connection and Speech Recognition Issues
+Objective:
+Ensure that the AI Concierge:
+
+Connects successfully to the backend without WebSocket errors (401 errors, disconnections, failed attempts).
+Displays an avatar with correct animation.
+Processes speech input correctly, with live transcription and appropriate icons.
+Responds via voice output, ensuring real-time interaction.
+Step 1: Fix WebSocket Connection Issues
+Issue: The AI Concierge is repeatedly failing to connect due to WebSocket authentication errors.
+
+Fix:
+Verify Authentication Flow:
+
+Check if the WebSocket connection correctly authenticates the session token before attempting communication.
+Ensure that token expiration is being handled correctly.
+Implement automatic re-authentication if a 401 error occurs.
+Improve Reconnection Handling:
+
+If a connection is lost, the WebSocket should retry automatically with an exponential backoff (e.g., retry every 2s, 5s, 10s).
+Implement session persistence so reconnections don’t require a full page refresh.
+Confirm WebSocket Events Are Registered:
+
+Ensure WebSocket onmessage, onopen, onerror, and onclose handlers are properly set.
+Log WebSocket events to the console to identify failure points.
+Alternative Approach (if WebSocket continues to fail):
+
+Use RESTful API with polling as a backup method if WebSocket fails.
+Consider WebRTC for real-time interaction instead of WebSockets.
+Step 2: Ensure Avatar and Visual Feedback Works
+Issue: The AI Concierge does not display an avatar or speaking animation.
+
+Fix:
+Confirm Avatar Rendering:
+
+Check if the avatar is correctly loading from the backend.
+If it’s not appearing, log errors and verify that the image assets exist.
+Animate Avatar When Speaking:
+
+Use CSS animations or a waveform visualization to indicate when the AI is speaking.
+Ensure the avatar reacts dynamically to voice output.
+Step 3: Fix Speech Recognition & Input Issues
+Issue: The microphone icon is unclear, speech is not recognized, and no real-time transcription is displayed.
+
+Fix:
+Replace the microphone icon with a speaking person icon (use an industry-standard UI, such as Material Icons or FontAwesome).
+Ensure proper microphone permissions:
+Before starting speech recognition, check navigator.mediaDevices.getUserMedia to confirm access.
+If permission is denied, show a clear message with a link to enable it.
+Implement Real-Time Transcription:
+Use Web Speech API (SpeechRecognition) to process speech-to-text dynamically.
+Display the transcribed text in real-time below the avatar.
+If no speech is detected for 3-5 seconds, show a message prompting the user to try again.
+Ensure Background Noise Handling:
+Filter out silence using a noise threshold.
+Implement a "Listening…" state with a waveform animation.
+Step 4: Enable Voice Responses
+Issue: The AI is not speaking back, leading to a broken interaction.
+
+Fix:
+Use Web Speech API for Text-to-Speech (TTS):
+
+Implement speechSynthesis.speak() to allow the AI to respond via audio.
+Allow users to adjust voice type and speed in settings.
+Confirm Audio Output Works:
+
+Ensure the browser is not blocking autoplay for speech responses.
+Check if the correct audio device is being used.
+Final Check:
+✅ AI Concierge connects without WebSocket errors.
+✅ Avatar renders properly and reacts dynamically to speech.
+✅ Speech recognition works correctly, with a clear speaking person icon instead of a microphone.
+✅ Live transcription appears in real-time.
+✅ AI responds with voice output, with adjustable volume and playback speed.
+
+Priority Fixes for Replit
+Ensure WebSocket Authentication & Reconnection Work Properly.
+Implement Avatar Animation & Real-Time Transcription.
+Fix Speech Recognition & Voice Output.
+Add an Alternative API-based Backup if WebSockets Fail.
+Alternative Approach (If WebSocket Still Fails)
+Switch to a REST API polling system where the frontend checks for responses every 2-5 seconds.
+Implement WebRTC for real-time voice transmission.
+Move speech processing to a dedicated backend service instead of the browser.
