@@ -372,7 +372,7 @@ export default function WhiskyConcierge() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-4">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
         <Alert>
           <MessageSquare className="h-4 w-4" />
           <AlertDescription>
@@ -384,11 +384,11 @@ export default function WhiskyConcierge() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header with Personality Selection */}
-      <div className="text-center p-4 border-b space-y-4">
-        <h1 className="text-2xl font-semibold">Whisky Concierge</h1>
-        <div className="flex items-center justify-center gap-4">
+    <div className="flex flex-col h-full max-w-3xl mx-auto">
+      {/* Header with Personality Selection - Improved mobile layout */}
+      <div className="text-center p-4 space-y-4 border-b bg-background/95 sticky top-0 z-10">
+        <h1 className="text-xl md:text-2xl font-semibold">Whisky Concierge</h1>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
           <Select
             value={selectedStyle}
             onValueChange={(value) => {
@@ -398,7 +398,7 @@ export default function WhiskyConcierge() {
               refetchPersonality().finally(() => setIsPersonalityChanging(false));
             }}
           >
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px] max-w-full">
               <SelectValue placeholder="Select personality" />
             </SelectTrigger>
             <SelectContent>
@@ -416,10 +416,12 @@ export default function WhiskyConcierge() {
             variant="outline"
             onClick={() => generatePersonality.mutate()}
             disabled={generatePersonality.isPending || isPersonalityChanging}
+            className="w-full sm:w-auto"
           >
             {generatePersonality.isPending || isPersonalityChanging ? "Generating..." : "Generate New Personality"}
           </Button>
         </div>
+
         <AnimatePresence mode="wait">
           {currentPersonality && (
             <motion.div
@@ -428,10 +430,10 @@ export default function WhiskyConcierge() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
               transition={{ duration: 0.3 }}
-              className="relative"
+              className="relative max-w-xs mx-auto"
             >
               {isAvatarLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/50">
+                <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-full">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               )}
@@ -458,9 +460,9 @@ export default function WhiskyConcierge() {
         </AnimatePresence>
       </div>
 
-      {/* Messages Area */}
-      <ScrollArea className="flex-1 px-4">
-        <div className="space-y-4 py-4">
+      {/* Messages Area - Improved spacing and readability */}
+      <ScrollArea className="flex-1 px-2 sm:px-4">
+        <div className="space-y-4 py-4 max-w-2xl mx-auto">
           <AnimatePresence>
             {messages.map((msg, i) => (
               <motion.div
@@ -476,24 +478,24 @@ export default function WhiskyConcierge() {
                   }`}
                 >
                   {msg.role === "assistant" && currentPersonality && (
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 hidden sm:flex">
                       <UserCircle2 className="w-6 h-6 text-primary" />
                     </div>
                   )}
                   <div
-                    className={`rounded-lg p-4 max-w-[85%] ${
+                    className={`rounded-lg p-3 sm:p-4 max-w-[90%] sm:max-w-[85%] ${
                       msg.role === "user"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
+                        ? "bg-primary text-primary-foreground ml-4"
+                        : "bg-muted mr-4"
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                     {msg.citations && msg.citations.length > 0 && (
                       <div className="mt-2 text-xs text-muted-foreground">
                         <p className="font-semibold">Sources:</p>
                         <ul className="list-disc list-inside">
                           {msg.citations.map((citation, idx) => (
-                            <li key={idx}>
+                            <li key={idx} className="truncate">
                               <a
                                 href={citation}
                                 target="_blank"
@@ -516,7 +518,7 @@ export default function WhiskyConcierge() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-start gap-2"
+              className="flex items-start gap-2 pl-2"
             >
               <div className="bg-muted rounded-lg">
                 <TypingIndicator />
@@ -532,9 +534,9 @@ export default function WhiskyConcierge() {
         </div>
       </ScrollArea>
 
-      {/* Input Area */}
-      <div className="p-4 border-t mt-auto">
-        <form onSubmit={handleSubmit} className="flex gap-2">
+      {/* Input Area - Improved mobile layout */}
+      <div className="p-2 sm:p-4 border-t mt-auto bg-background/95 sticky bottom-0">
+        <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
           <Input
             ref={inputRef}
             value={query}
@@ -547,6 +549,7 @@ export default function WhiskyConcierge() {
             type="submit"
             disabled={isThinking || !query.trim() || isPersonalityChanging}
             size="icon"
+            className="shrink-0"
           >
             <Send className="h-4 w-4" />
           </Button>
@@ -556,6 +559,7 @@ export default function WhiskyConcierge() {
               variant="outline"
               size="icon"
               onClick={handleRetry}
+              className="shrink-0"
             >
               <RefreshCcw className="h-4 w-4" />
             </Button>

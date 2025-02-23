@@ -41,7 +41,7 @@ export function AvatarComponent({
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setHasMicPermission(true);
         // Clean up the stream after checking permissions
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       } catch (err) {
         console.error("[AvatarComponent] Microphone access error:", err);
         setHasMicPermission(false);
@@ -126,12 +126,12 @@ export function AvatarComponent({
   };
 
   return (
-    <div className="relative flex flex-col items-center space-y-4">
-      <div className="relative w-32 h-32 rounded-full overflow-hidden shadow-lg">
+    <div className="relative flex flex-col items-center space-y-3">
+      <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden shadow-lg">
         {renderAvatar()}
       </div>
 
-      <div className="flex items-center gap-2 mt-4">
+      <div className="flex items-center gap-2">
         <Button
           variant={isListening ? "destructive" : "outline"}
           size="icon"
@@ -152,7 +152,7 @@ export function AvatarComponent({
             isListening ? onStopListening() : onStartListening();
           }}
           disabled={!hasMicPermission}
-          title={!hasMicPermission ? "Microphone access required" : (isListening ? "Stop listening" : "Start listening")}
+          title={!hasMicPermission ? "Microphone access required" : isListening ? "Stop listening" : "Start listening"}
         >
           {isListening ? (
             <MicOff className="h-4 w-4" />
@@ -181,8 +181,8 @@ export function AvatarComponent({
 
       {personality && (
         <div className="text-center animate-fade-in">
-          <p className="text-sm font-medium">{personality.name}</p>
-          <p className="text-xs text-muted-foreground">{personality.accent}</p>
+          <p className="text-sm font-medium truncate max-w-[200px]">{personality.name}</p>
+          <p className="text-xs text-muted-foreground truncate max-w-[200px]">{personality.accent}</p>
         </div>
       )}
     </div>
