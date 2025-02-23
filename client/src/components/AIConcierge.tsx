@@ -74,7 +74,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       const recognition = new (window as any).webkitSpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      recognition.lang = personality?.accent?.toLowerCase().includes('scottish') ? 'en-GB' : 'en-US';
 
       recognition.onstart = () => {
         setIsListening(true);
@@ -131,7 +131,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
 
       recognition.onend = () => {
         setIsListening(false);
-        // Don't reset processing here as we might still be waiting for AI response
       };
 
       recognitionRef.current = recognition;
@@ -149,7 +148,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
         recognitionRef.current.abort();
       }
     };
-  }, [toast, onMessage]);
+  }, [toast, onMessage, personality]);
 
   const speakResponse = (text: string) => {
     if (synthesis && !isMuted) {
