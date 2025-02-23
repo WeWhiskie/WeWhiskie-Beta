@@ -60,6 +60,7 @@ export async function verify(sessionId: string): Promise<SelectUser | null> {
 }
 
 export function setupAuth(app: Express) {
+  // Session configuration with enhanced security and logging
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET || "super-secret-key-change-in-production",
     resave: false,
@@ -84,7 +85,7 @@ export function setupAuth(app: Express) {
     console.log('Session middleware:', {
       hasSession: !!req.session,
       sessionID: req.sessionID,
-      isAuthenticated: req.isAuthenticated()
+      isAuthenticated: req.isAuthenticated?.()
     });
     next();
   });
@@ -96,23 +97,11 @@ export function setupAuth(app: Express) {
   // Passport authentication debugging middleware
   app.use((req, res, next) => {
     console.log('Passport auth state:', {
-      isAuthenticated: req.isAuthenticated(),
+      isAuthenticated: req.isAuthenticated?.(),
       user: req.user ? { id: req.user.id, username: req.user.username } : null,
       sessionID: req.sessionID
     });
     next();
-  });
-
-  // Serve static files without requiring authentication
-  app.use('/attached_assets', (req, res, next) => {
-    if (req.isAuthenticated()) {
-      return next();
-    }
-    // Check if the request is for a public asset
-    if (req.path.startsWith('/public/')) {
-      return next();
-    }
-    res.status(401).json({ message: "Not authenticated" });
   });
 
   // Local strategy setup
@@ -186,7 +175,7 @@ export function setupAuth(app: Express) {
       });
 
       // Generate a unique invite code
-      const inviteCode = generateUniqueInviteCode();
+      const inviteCode = uuidv4().substring(0, 8).toUpperCase();
 
       const user = await storage.createUser({
         ...req.body,
@@ -264,11 +253,4 @@ export function setupAuth(app: Express) {
     }
     res.json(req.user);
   });
-}
-
-function generateUniqueInviteCode(): string {
-  // Generate a code based on timestamp and random string
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 6);
-  return `${timestamp}${random}`.toUpperCase();
 }
