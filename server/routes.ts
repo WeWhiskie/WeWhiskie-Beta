@@ -19,6 +19,7 @@ import type { SessionData } from 'express-session';
 
 // Extend IncomingMessage to include session store
 interface ExtendedIncomingMessage extends IncomingMessage {
+  session?: SessionData;
   sessionStore?: {
     get(sid: string, callback: (err: any, session?: SessionData | null) => void): void;
   };
@@ -52,18 +53,21 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<{ server: Server; liveStreamingServer: LiveStreamingServer }> {
   // Set up auth first
-  setupAuth(app);
+  const { sessionStore } = setupAuth(app);
 
   // Create HTTP server
   const server = createServer(app);
 
-  // Initialize WebSocket server for AI Concierge with enhanced security and error handling
+  // Update WebSocket configuration with better error handling and logging
   const wss = new WebSocketServer({ 
     server, 
     path: '/ws/ai-concierge',
     verifyClient: async (info, callback) => {
       try {
         console.log('WebSocket connection attempt - Verifying client...');
+
+        const extendedReq = info.req as ExtendedIncomingMessage;
+        extendedReq.sessionStore = sessionStore;
 
         // Parse cookies with better error handling
         const cookieHeader = info.req.headers.cookie;
@@ -92,9 +96,8 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         }
 
         // Get session store from request
-        const extendedReq = info.req as ExtendedIncomingMessage;
         if (!extendedReq.sessionStore) {
-          console.error('Session store not available');
+          console.error('Session store not available - this should not happen');
           callback(false, 500, 'Internal server error');
           return;
         }
@@ -119,6 +122,9 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
           callback(false, 401, 'Invalid session');
           return;
         }
+
+        // Store session in request for later use
+        extendedReq.session = session;
 
         // Session is valid
         console.log('Session verified successfully');

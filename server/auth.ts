@@ -61,18 +61,21 @@ export async function verify(sessionId: string): Promise<SelectUser | null> {
   }
 }
 
-export function setupAuth(app: Express) {
+export function setupAuth(app: Express): { sessionStore: any; } {
   const PostgresStore = connectPg(session);
+
+  // Initialize session store
+  const sessionStore = new PostgresStore({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true,
+    pruneSessionInterval: 60,
+    errorLog: console.error,
+  });
 
   // Enhanced session configuration
   const sessionSettings: session.SessionOptions = {
-    store: new PostgresStore({
-      pool,
-      tableName: 'session',
-      createTableIfMissing: true,
-      pruneSessionInterval: 60,
-      errorLog: console.error,
-    }),
+    store: sessionStore,
     secret: process.env.SESSION_SECRET || "super-secret-key-change-in-production",
     name: 'whisky.session.id',
     resave: false,
@@ -273,4 +276,7 @@ export function setupAuth(app: Express) {
     }
     res.json(req.user);
   });
+
+  // Return the session store for use in WebSocket verification
+  return { sessionStore };
 }
