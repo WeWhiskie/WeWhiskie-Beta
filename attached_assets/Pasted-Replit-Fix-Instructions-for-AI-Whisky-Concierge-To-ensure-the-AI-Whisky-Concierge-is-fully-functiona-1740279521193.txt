@@ -1,0 +1,111 @@
+Replit Fix Instructions for AI Whisky Concierge
+To ensure the AI Whisky Concierge is fully functional and delivers a premium user experience, follow these structured debugging and enhancement steps within Replit.
+
+1️⃣ Restore & Debug Missing UI Elements
+🔹 Issue: Mic, avatar, and volume controls disappeared after recent updates.
+🔹 Fix:
+
+Open client/src/components/avatar/AvatarComponent.tsx
+Verify that the AvatarComponent is properly imported and included in the UI.
+Ensure the MicrophoneComponent and VolumeControlComponent are properly imported.
+Add the following state and rendering logic to restore missing elements:
+tsx
+Copy
+Edit
+import Avatar from "./Avatar";
+import Microphone from "./Microphone";
+import VolumeControl from "./VolumeControl";
+
+return (
+  <div className="ai-concierge">
+     <Avatar />
+     <Microphone />
+     <VolumeControl />
+  </div>
+);
+Run npm run dev and check for console errors.
+2️⃣ Ensure the Avatar Renders Properly
+🔹 Issue: Avatar placeholder is present, but customization and default selection are missing.
+🔹 Fix:
+
+Open client/src/components/avatar/AvatarComponent.tsx
+Add logic to allow avatar selection and user uploads:
+tsx
+Copy
+Edit
+const [selectedAvatar, setSelectedAvatar] = useState("whisky_pete"); // Default avatar
+
+const handleAvatarChange = (avatar) => {
+    setSelectedAvatar(avatar);
+};
+
+return (
+   <div className="avatar-container">
+       <img src={`/avatars/${selectedAvatar}.png`} alt="AI Avatar" />
+       <button onClick={() => handleAvatarChange("custom_avatar")}>Upload Custom Avatar</button>
+   </div>
+);
+Ensure the avatar component persists the user’s selection across sessions.
+3️⃣ Reimplement Microphone & Voice Response (TTS)
+🔹 Issue: Mic permission request is missing, and AI doesn't talk back.
+🔹 Fix:
+
+Open client/src/components/Microphone.tsx
+Ensure mic permissions are requested when clicking:
+tsx
+Copy
+Edit
+const handleMicClick = async () => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setMicEnabled(true);
+    } catch (error) {
+        console.error("Microphone access denied", error);
+    }
+};
+Enable text-to-speech (TTS) so the AI responds aloud:
+tsx
+Copy
+Edit
+import { useEffect } from "react";
+
+const speak = (text) => {
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.lang = "en-GB";  // Set appropriate accent
+    window.speechSynthesis.speak(speech);
+};
+
+useEffect(() => {
+   if (responseText) {
+       speak(responseText);
+   }
+}, [responseText]);
+4️⃣ Make UI Look & Feel Premium
+🔹 Issue: The interface is still clunky and not premium-looking.
+🔹 Fix:
+
+Improve spacing, padding, and fonts in client/src/styles/concierge.css:
+css
+Copy
+Edit
+.ai-concierge {
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s ease-in-out;
+}
+.avatar-container img {
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+.avatar-container img:hover {
+    transform: scale(1.05);
+}
+Add smooth animations to mic and volume toggles.
+⏭️ Final Steps
+✔️ Save all changes
+✔️ Restart Replit (npm run dev)
+✔️ Test avatar, mic, volume, and chat stability
+✔️ Verify AI speaks responses aloud
+
+🚀 After implementing, test and confirm if everything works! 🚀
