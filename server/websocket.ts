@@ -7,6 +7,13 @@ import { IncomingMessage } from 'http';
 import { parse } from 'cookie';
 import { verify } from './auth';
 
+// Extend IncomingMessage to include user property
+declare module 'http' {
+  interface IncomingMessage {
+    user?: Express.User;
+  }
+}
+
 interface Client {
   ws: WebSocket;
   userId: number;
@@ -35,7 +42,7 @@ export class LiveStreamingServer {
   constructor(server: Server) {
     log('Initializing WebSocket server...', 'websocket');
 
-    this.wss = new WebSocketServer({ 
+    this.wss = new WebSocketServer({
       server,
       path: '/ws',
       verifyClient: this.verifyClient.bind(this),
@@ -72,7 +79,7 @@ export class LiveStreamingServer {
       }
 
       log(`WebSocket connection authorized for user ${user.id}`, 'websocket');
-      info.req.user = user; 
+      info.req.user = user;
       callback(true);
     } catch (error) {
       console.error('WebSocket verification error:', error);
@@ -120,9 +127,9 @@ export class LiveStreamingServer {
 
         ws.on('message', this.createMessageHandler(ws, user.id));
 
-        ws.send(JSON.stringify({ 
+        ws.send(JSON.stringify({
           type: 'connection-established',
-          payload: { 
+          payload: {
             userId: user.id,
             timestamp: Date.now(),
             sessionInfo: {
@@ -146,9 +153,9 @@ export class LiveStreamingServer {
       try {
         if (this.isRateLimited(ws)) {
           log('Rate limit exceeded for client', 'websocket');
-          ws.send(JSON.stringify({ 
-            type: 'error', 
-            payload: 'Rate limit exceeded' 
+          ws.send(JSON.stringify({
+            type: 'error',
+            payload: 'Rate limit exceeded'
           }));
           return;
         }
@@ -165,9 +172,9 @@ export class LiveStreamingServer {
       } catch (error) {
         console.error('Error handling message:', error);
         log(`Error handling message: ${error}`, 'websocket');
-        ws.send(JSON.stringify({ 
-          type: 'error', 
-          payload: 'Invalid message format' 
+        ws.send(JSON.stringify({
+          type: 'error',
+          payload: 'Invalid message format'
         }));
       }
     };
@@ -334,14 +341,14 @@ export class LiveStreamingServer {
             bandwidth: totalBytesTransferred,
             cpuUsage: process.cpuUsage().user / 1000000,
             memoryUsage: process.memoryUsage().heapUsed,
-            streamHealth: 100, 
+            streamHealth: 100,
             timestamp: new Date(),
           });
         } catch (error) {
           console.error('Error recording stream stats:', error);
         }
       }
-    }, 60000); 
+    }, 60000);
   }
 
   private async handleJoinSession(ws: WebSocket, payload: { userId: number; sessionId: number }) {

@@ -16,6 +16,7 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
 
+  // Show loading state while checking authentication
   if (isLoading) {
     return (
       <Route path={path}>
@@ -26,14 +27,17 @@ export function ProtectedRoute({
     );
   }
 
+  // Redirect to auth page if not authenticated
   if (!user) {
+    const redirectPath = `/auth?redirect=${encodeURIComponent(path)}`;
     return (
       <Route path={path}>
-        <Redirect to="/auth" />
+        <Redirect to={redirectPath} />
       </Route>
     );
   }
 
+  // Check user level requirement
   const userLevel = user.level || 1;
   if (userLevel < requiredLevel) {
     return (
@@ -50,6 +54,7 @@ export function ProtectedRoute({
     );
   }
 
+  // If authenticated and meets level requirement, render the protected component
   return (
     <Route path={path}>
       <Component />
