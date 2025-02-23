@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import { Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
@@ -14,7 +13,7 @@ import { whiskyConcierge } from "./services/ai-concierge";
 import { generateConciergeName, getWhiskyRecommendations } from "./services/recommendations";
 import { handleWhiskyConciergeChat, handleGenerateName, handleGeneratePersonality } from "./routes/whisky-concierge";
 import { textToSpeechService } from './services/text-to-speech';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -46,80 +45,136 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   // Set up auth first
   setupAuth(app);
 
-  // Serve static files from attached_assets directory
-  app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
-
   // Create HTTP server
   const server = createServer(app);
 
-  // Initialize WebSocket server for AI Concierge
-  const wss = new WebSocketServer({ server, path: '/ai-concierge' });
+  // Initialize WebSocket server for AI Concierge with a distinct path
+  const wss = new WebSocketServer({ 
+    server, 
+    path: '/ws/ai-concierge',  // Changed path to avoid conflicts
+    verifyClient: (info, callback) => {
+      try {
+        const cookies = info.req.headers.cookie?.split(';')
+          .reduce((acc: Record<string, string>, cookie) => {
+            const [key, value] = cookie.trim().split('=');
+            acc[key] = value;
+            return acc;
+          }, {});
+
+        // Check for either whisky.session.id or connect.sid
+        const sessionId = cookies?.['whisky.session.id'] || cookies?.['connect.sid'];
+        if (!sessionId) {
+          console.log('WebSocket connection attempt without valid session');
+          callback(false, 401, 'Unauthorized');
+          return;
+        }
+        callback(true);
+      } catch (error) {
+        console.error('Error verifying WebSocket client:', error);
+        callback(false, 500, 'Internal Server Error');
+      }
+    }
+  });
+
+  // Keep track of connected clients
+  const clients = new Map();
 
   wss.on('connection', async (ws, req) => {
-    // Extract session ID from cookies
-    const cookies = req.headers.cookie?.split(';')
-      .reduce((acc: Record<string, string>, cookie) => {
-        const [key, value] = cookie.trim().split('=');
-        acc[key] = value;
-        return acc;
-      }, {});
+    try {
+      console.log('New AI Concierge WebSocket connection established');
 
-    const sessionId = cookies?.['whisky.session.id'];
-    if (!sessionId) {
-      ws.close(1008, 'Authentication required');
-      return;
-    }
+      // Add client to tracking map with current timestamp
+      clients.set(ws, { 
+        connectedAt: new Date(),
+        sessionId: req.headers.cookie
+      });
 
-    // Handle incoming messages
-    ws.on('message', async (message: string) => {
-      try {
-        const data = JSON.parse(message);
+      // Handle incoming messages
+      ws.on('message', async (message: string) => {
+        try {
+          const data = JSON.parse(message);
+          console.log('Received message type:', data.type);
 
-        switch (data.type) {
-          case 'SPEECH_INPUT':
-            // Handle speech input
-            const response = await handleWhiskyConciergeChat({
-              ...req,
-              body: { message: data.text }
-            }, {
-              json: (data: any) => {
+          switch (data.type) {
+            case 'SPEECH_INPUT':
+              const response = await handleWhiskyConciergeChat({
+                ...req,
+                body: { message: data.text }
+              }, {
+                json: (data: any) => {
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                      type: 'AI_RESPONSE',
+                      data
+                    }));
+                  }
+                }
+              });
+              break;
+
+            case 'GET_PERSONALITY':
+              try {
+                const personality = whiskyConcierge.getPersonality(data.name);
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({
+                    type: 'PERSONALITY_DATA',
+                    data: personality
+                  }));
+                }
+              } catch (error) {
+                console.error('Error getting personality:', error);
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({
+                    type: 'ERROR',
+                    error: 'Failed to get personality data'
+                  }));
+                }
+              }
+              break;
+
+            default:
+              if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
-                  type: 'AI_RESPONSE',
-                  data
+                  type: 'ERROR',
+                  error: 'Unknown message type'
                 }));
               }
-            });
-            break;
-
-          case 'GET_PERSONALITY':
-            // Get personality details
-            const personality = whiskyConcierge.getPersonality(data.name);
-            ws.send(JSON.stringify({
-              type: 'PERSONALITY_DATA',
-              data: personality
-            }));
-            break;
-
-          default:
+          }
+        } catch (error) {
+          console.error('WebSocket message handling error:', error);
+          if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
               type: 'ERROR',
-              error: 'Unknown message type'
+              error: 'Failed to process message'
             }));
+          }
         }
-      } catch (error) {
-        console.error('WebSocket message handling error:', error);
+      });
+
+      // Handle connection close
+      ws.on('close', () => {
+        console.log('Client disconnected from AI Concierge');
+        clients.delete(ws);
+      });
+
+      // Send initial connection success message
+      if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
-          type: 'ERROR',
-          error: 'Failed to process message'
+          type: 'CONNECTED',
+          message: 'Successfully connected to AI Concierge'
         }));
       }
-    });
 
-    // Handle connection close
-    ws.on('close', () => {
-      console.log('Client disconnected from AI Concierge');
-    });
+    } catch (error) {
+      console.error('Error in WebSocket connection handler:', error);
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close(1011, 'Internal Server Error');
+      }
+    }
   });
+
+  // Serve static files from attached_assets directory
+  app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
   // Initialize WebSocket server for live streaming
   const liveStreamingServer = new LiveStreamingServer(server);
