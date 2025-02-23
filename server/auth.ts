@@ -31,16 +31,27 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export async function verify(sessionId: string): Promise<SelectUser | null> {
   try {
+    console.log('Verifying session:', sessionId);
+
     const session = await new Promise<any>((resolve) => {
       storage.sessionStore.get(sessionId, (err, session) => {
-        if (err) resolve(null);
-        else resolve(session);
+        if (err) {
+          console.error('Session store error:', err);
+          resolve(null);
+        } else {
+          console.log('Session found:', session ? 'yes' : 'no');
+          resolve(session);
+        }
       });
     });
 
-    if (!session?.passport?.user) return null;
+    if (!session?.passport?.user) {
+      console.log('No user in session');
+      return null;
+    }
 
     const user = await storage.getUser(session.passport.user);
+    console.log('User found:', user ? 'yes' : 'no');
     return user || null;
   } catch (error) {
     console.error('Session verification error:', error);
@@ -58,19 +69,39 @@ export function setupAuth(app: Express) {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax'
-    }
+      sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax',
+      path: '/'
+    },
+    name: 'connect.sid' // Explicitly set the cookie name
   };
 
   // Enable trust proxy if we're behind a reverse proxy
   app.set("trust proxy", 1);
 
-  // Session middleware
+  // Session middleware with enhanced logging
   app.use(session(sessionSettings));
+  app.use((req, res, next) => {
+    console.log('Session middleware:', {
+      hasSession: !!req.session,
+      sessionID: req.sessionID,
+      isAuthenticated: req.isAuthenticated()
+    });
+    next();
+  });
 
   // Initialize passport and restore authentication state from session
   app.use(passport.initialize());
   app.use(passport.session());
+
+  // Passport authentication debugging middleware
+  app.use((req, res, next) => {
+    console.log('Passport auth state:', {
+      isAuthenticated: req.isAuthenticated(),
+      user: req.user ? { id: req.user.id, username: req.user.username } : null,
+      sessionID: req.sessionID
+    });
+    next();
+  });
 
   // Serve static files without requiring authentication
   app.use('/attached_assets', (req, res, next) => {
@@ -183,9 +214,9 @@ export function setupAuth(app: Express) {
       });
     } catch (error) {
       console.error('Registration error:', error);
-      res.status(500).json({ 
-        message: "Registration failed", 
-        error: error instanceof Error ? error.message : "Unknown error" 
+      res.status(500).json({
+        message: "Registration failed",
+        error: error instanceof Error ? error.message : "Unknown error"
       });
     }
   });

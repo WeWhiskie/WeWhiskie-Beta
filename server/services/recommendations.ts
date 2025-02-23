@@ -483,7 +483,7 @@ export async function getWhiskyConciergeResponse(
     const prompt = `As a whisky concierge, help answer this query: "${query}"
 
 Collection information:
-${collectionWhiskies.map(w => `- ${w.name} (${w.type}, ${w.tastingNotes})`).join('\n')}
+${collectionWhiskies.map(w => `- ${w.name} (${w.type}, ${w.tasting_notes || 'No tasting notes'})`).join('\n')}
 
 User's previous ratings:
 ${userReviews.map(review => `- ${review.whisky.name}: ${review.rating}/5 stars`).join('\n')}

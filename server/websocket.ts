@@ -26,18 +26,20 @@ export class LiveStreamingServer {
   private wss: WebSocketServer;
   private clients: Map<WebSocket, Client> = new Map();
   private sessions: Map<number, Set<WebSocket>> = new Map();
-  private readonly HEARTBEAT_INTERVAL = 30000; // 30 seconds
+  private readonly HEARTBEAT_INTERVAL = 30000;
   private readonly MAX_CONNECTIONS_PER_SESSION = 100;
-  private readonly RATE_LIMIT_WINDOW = 1000; // 1 second
+  private readonly RATE_LIMIT_WINDOW = 1000;
   private readonly MAX_MESSAGES_PER_WINDOW = 100;
   private messageCounters: Map<WebSocket, { count: number; timestamp: number }> = new Map();
 
   constructor(server: Server) {
     log('Initializing WebSocket server...', 'websocket');
+
     this.wss = new WebSocketServer({ 
       server,
       path: '/ws',
       verifyClient: this.verifyClient.bind(this),
+      clientTracking: true
     });
 
     this.setupWebSocketServer();
@@ -52,6 +54,7 @@ export class LiveStreamingServer {
     callback: (res: boolean, code?: number, message?: string) => void
   ) {
     try {
+      log('Verifying WebSocket client connection...', 'websocket');
       const cookies = parse(info.req.headers.cookie || '');
       const sessionId = cookies['connect.sid'];
 
@@ -69,6 +72,7 @@ export class LiveStreamingServer {
       }
 
       log(`WebSocket connection authorized for user ${user.id}`, 'websocket');
+      info.req.user = user; 
       callback(true);
     } catch (error) {
       console.error('WebSocket verification error:', error);
@@ -98,59 +102,35 @@ export class LiveStreamingServer {
           bytesTransferred: 0,
         });
 
-        // Send initial connection success message
-        ws.send(JSON.stringify({ 
-          type: 'connection-established',
-          payload: { 
-            userId: user.id,
-            timestamp: Date.now() 
-          }
-        }));
 
-        // Set up event handlers
-        ws.on('message', async (message: string) => {
-          try {
-            if (this.isRateLimited(ws)) {
-              log('Rate limit exceeded for client', 'websocket');
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                payload: 'Rate limit exceeded' 
-              }));
-              return;
-            }
-
-            const data: WebSocketMessage = JSON.parse(message.toString());
-            log(`Received message type: ${data.type} from user ${user.id}`, 'websocket');
-            await this.handleMessage(ws, data);
-
-            const client = this.clients.get(ws);
-            if (client) {
-              client.bytesTransferred += message.length;
-            }
-          } catch (error) {
-            console.error('Error handling message:', error);
-            log(`Error handling message: ${error}`, 'websocket');
-            ws.send(JSON.stringify({ 
-              type: 'error', 
-              payload: 'Invalid message format' 
-            }));
-          }
+        ws.on('error', (error) => {
+          log(`WebSocket error for user ${user.id}: ${error}`, 'websocket');
+          this.handleConnectionError(ws);
         });
 
-        ws.on('close', () => {
+        ws.on('close', (code, reason) => {
+          log(`WebSocket connection closed for user ${user.id}. Code: ${code}, Reason: ${reason}`, 'websocket');
           const client = this.clients.get(ws);
           if (client?.sessionId) {
             this.handleLeaveSession(ws, client.sessionId);
           }
           this.clients.delete(ws);
           this.messageCounters.delete(ws);
-          log(`WebSocket connection closed for user ${user.id}`, 'websocket');
         });
 
-        ws.on('error', (error) => {
-          log(`WebSocket error for user ${user.id}: ${error}`, 'websocket');
-          this.handleConnectionError(ws);
-        });
+        ws.on('message', this.createMessageHandler(ws, user.id));
+
+        ws.send(JSON.stringify({ 
+          type: 'connection-established',
+          payload: { 
+            userId: user.id,
+            timestamp: Date.now(),
+            sessionInfo: {
+              isAuthenticated: true,
+              sessionId: cookies['connect.sid']
+            }
+          }
+        }));
 
         this.sendHeartbeat(ws);
       } catch (error) {
@@ -160,6 +140,39 @@ export class LiveStreamingServer {
       }
     });
   }
+
+  private createMessageHandler(ws: WebSocket, userId: number) {
+    return async (message: string) => {
+      try {
+        if (this.isRateLimited(ws)) {
+          log('Rate limit exceeded for client', 'websocket');
+          ws.send(JSON.stringify({ 
+            type: 'error', 
+            payload: 'Rate limit exceeded' 
+          }));
+          return;
+        }
+
+        const data = JSON.parse(message.toString());
+        log(`Received message type: ${data.type} from user ${userId}`, 'websocket');
+
+        await this.handleMessage(ws, data);
+
+        const client = this.clients.get(ws);
+        if (client) {
+          client.bytesTransferred += message.length;
+        }
+      } catch (error) {
+        console.error('Error handling message:', error);
+        log(`Error handling message: ${error}`, 'websocket');
+        ws.send(JSON.stringify({ 
+          type: 'error', 
+          payload: 'Invalid message format' 
+        }));
+      }
+    };
+  }
+
   private findHostClient(sessionId: number): Client | undefined {
     const clientEntries = Array.from(this.clients.entries());
     for (const [, client] of clientEntries) {
@@ -246,7 +259,6 @@ export class LiveStreamingServer {
       if (client !== exclude && client.readyState === WebSocket.OPEN) {
         client.send(messageStr);
 
-        // Update bytes transferred
         const clientInfo = this.clients.get(client);
         if (clientInfo) {
           clientInfo.bytesTransferred += messageStr.length;
@@ -322,14 +334,14 @@ export class LiveStreamingServer {
             bandwidth: totalBytesTransferred,
             cpuUsage: process.cpuUsage().user / 1000000,
             memoryUsage: process.memoryUsage().heapUsed,
-            streamHealth: 100, // Calculate based on connection quality
+            streamHealth: 100, 
             timestamp: new Date(),
           });
         } catch (error) {
           console.error('Error recording stream stats:', error);
         }
       }
-    }, 60000); // Every minute
+    }, 60000); 
   }
 
   private async handleJoinSession(ws: WebSocket, payload: { userId: number; sessionId: number }) {
@@ -342,14 +354,12 @@ export class LiveStreamingServer {
       return;
     }
 
-    // Check session capacity
     const currentParticipants = this.sessions.get(sessionId)?.size || 0;
     if (currentParticipants >= this.MAX_CONNECTIONS_PER_SESSION) {
       ws.send(JSON.stringify({ type: 'error', payload: 'Session is at maximum capacity' }));
       return;
     }
 
-    // Set up client info
     this.clients.set(ws, {
       ws,
       userId,
@@ -359,7 +369,6 @@ export class LiveStreamingServer {
       bytesTransferred: 0,
     });
 
-    // Add to session room
     if (!this.sessions.has(sessionId)) {
       this.sessions.set(sessionId, new Set());
     }
@@ -367,13 +376,11 @@ export class LiveStreamingServer {
 
     log(`User ${userId} successfully joined session ${sessionId}`, 'websocket');
 
-    // Notify others in the session
     this.broadcastToSession(sessionId, {
       type: 'user-joined',
       payload: { userId }
     }, ws);
 
-    // If this is a viewer and host is already connected, request an offer
     const hostClient = this.findHostClient(sessionId);
     if (hostClient && session.hostId !== userId) {
       hostClient.ws.send(JSON.stringify({
