@@ -8,7 +8,7 @@ import type { InferModel } from 'drizzle-orm';
 export const session = pgTable("session", {
   sid: text("sid").primaryKey(),
   sess: jsonb("sess").notNull(),
-  expire: timestamp("expire").notNull()
+  expire: timestamp("expire", { mode: "date" }).notNull()
 });
 
 // Define concierge personality schema
@@ -23,7 +23,6 @@ export const conciergePersonalitySchema = z.object({
   catchphrase: z.string()
 });
 
-export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;
 
 // Users table definition
 export const users = pgTable("users", {
@@ -473,19 +472,20 @@ export const userWhiskyCollectionRelations = relations(userWhiskyCollection, ({ 
   }),
 }));
 
+// Fix chat conversation relations
 export const chatConversationsRelations = relations(chatConversations, ({ one, many }) => ({
   user: one(users, {
     fields: [chatConversations.userId],
-    references: [users.id],
+    references: [users.id]
   }),
-  messages: many(chatMessages),
+  messages: many(chatMessages)
 }));
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
   conversation: one(chatConversations, {
     fields: [chatMessages.conversationId],
-    references: [chatConversations.id],
-  }),
+    references: [chatConversations.id]
+  })
 }));
 
 export const invitesRelations = relations(invites, ({ one }) => ({
@@ -533,6 +533,13 @@ export const insertGroupMemberSchema = createInsertSchema(groupMembers);
 export const insertGroupAchievementSchema = createInsertSchema(groupAchievements);
 export const insertActivitySchema = createInsertSchema(activityFeed);
 
+
+// Add the missing insertTastingSessionSchema export
+export const insertTastingSessionSchema = createInsertSchema(tastingSessions);
+
+// Add tasting session type export
+export type TastingSession = InferModel<typeof tastingSessions>;
+export type InsertTastingSession = z.infer<typeof insertTastingSessionSchema>;
 
 // Type exports
 export type User = InferModel<typeof users>;
