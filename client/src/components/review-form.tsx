@@ -23,22 +23,22 @@ import { PreciseRating } from "./precise-rating";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Upload } from "lucide-react";
+import { Upload, Image as ImageIcon, Loader2 } from "lucide-react";
 import { SharePopup } from "./share-popup";
 import { useState } from "react";
 
 type FormData = {
-  whiskyId: string; // Changed to string for Select compatibility
+  whiskyId: string;
   rating: number;
   content: string;
-  videoUrl?: string;
-  thumbnailUrl?: string;
-  mediaFile?: FileList;
+  imageFile?: FileList;
 };
 
 export function ReviewForm() {
   const { toast } = useToast();
   const [showSharePopup, setShowSharePopup] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastReviewData, setLastReviewData] = useState<{
     title: string;
     text: string;
@@ -53,7 +53,7 @@ export function ReviewForm() {
     resolver: zodResolver(
       insertReviewSchema.omit({ userId: true, likes: true }).extend({
         whiskyId: insertReviewSchema.shape.whiskyId.transform(String),
-        mediaFile: insertReviewSchema.shape.videoUrl.optional(),
+        imageFile: insertReviewSchema.shape.imageUrl.optional(),
       })
     ),
     defaultValues: {
@@ -64,28 +64,33 @@ export function ReviewForm() {
 
   const createReview = useMutation({
     mutationFn: async (data: FormData) => {
-      const formData = new FormData();
-      formData.append('whiskyId', String(data.whiskyId));
-      formData.append('rating', String(data.rating));
-      formData.append('content', data.content);
+      setIsSubmitting(true);
+      try {
+        const formData = new FormData();
+        formData.append('whiskyId', String(data.whiskyId));
+        formData.append('rating', String(data.rating));
+        formData.append('content', data.content);
 
-      if (data.mediaFile?.[0]) {
-        formData.append('media', data.mediaFile[0]);
+        if (data.imageFile?.[0]) {
+          formData.append('image', data.imageFile[0]);
+        }
+
+        const response = await fetch('/api/reviews', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create review');
+        }
+
+        const reviewData = await response.json();
+        return { reviewData, whiskyName: whiskies?.find(w => w.id === Number(data.whiskyId))?.name };
+      } finally {
+        setIsSubmitting(false);
       }
-
-      const response = await fetch('/api/reviews', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create review');
-      }
-
-      const reviewData = await response.json();
-      return { reviewData, whiskyName: whiskies?.find(w => w.id === Number(data.whiskyId))?.name };
     },
     onError: (error: Error) => {
       console.error('Review creation error:', error);
@@ -98,6 +103,7 @@ export function ReviewForm() {
     onSuccess: ({ reviewData, whiskyName }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
       form.reset();
+      setPreviewImage(null);
       toast({
         title: "Review posted!",
         description: "Your review has been shared with the community.",
@@ -113,11 +119,15 @@ export function ReviewForm() {
     },
   });
 
-  const onSubmit = async (data: FormData) => {
-    try {
-      await createReview.mutate(data);
-    } catch (error) {
-      console.error('Form submission error:', error);
+  const handleImageChange = (files: FileList | null) => {
+    if (files?.[0]) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewImage(reader.result as string);
+      };
+      reader.readAsDataURL(files[0]);
+    } else {
+      setPreviewImage(null);
     }
   };
 
@@ -125,7 +135,7 @@ export function ReviewForm() {
     <>
       <Form {...form}>
         <form
-          onSubmit={form.handleSubmit(onSubmit)}
+          onSubmit={form.handleSubmit((data) => createReview.mutate(data))}
           className="space-y-6"
         >
           <FormField
@@ -194,20 +204,34 @@ export function ReviewForm() {
 
           <FormField
             control={form.control}
-            name="mediaFile"
+            name="imageFile"
             render={({ field: { onChange, value, ...field } }) => (
               <FormItem>
-                <FormLabel>Add Photo or Video</FormLabel>
+                <FormLabel>Add Photo</FormLabel>
                 <FormControl>
-                  <div className="flex items-center gap-4">
-                    <Input
-                      type="file"
-                      accept="image/*,video/*"
-                      onChange={(e) => onChange(e.target.files)}
-                      className="flex-1"
-                      {...field}
-                    />
-                    <Upload className="h-5 w-5 text-muted-foreground" />
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          onChange(e.target.files);
+                          handleImageChange(e.target.files);
+                        }}
+                        className="flex-1"
+                        {...field}
+                      />
+                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    {previewImage && (
+                      <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
+                        <img
+                          src={previewImage}
+                          alt="Preview"
+                          className="object-cover w-full h-full"
+                        />
+                      </div>
+                    )}
                   </div>
                 </FormControl>
                 <FormMessage />
@@ -218,9 +242,16 @@ export function ReviewForm() {
           <Button
             type="submit"
             className="w-full"
-            disabled={createReview.isPending}
+            disabled={isSubmitting}
           >
-            {createReview.isPending ? "Posting..." : "Post Review"}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Posting...
+              </>
+            ) : (
+              "Post Review"
+            )}
           </Button>
         </form>
       </Form>
