@@ -1,85 +1,139 @@
-import React, { useState, useEffect } from "react";
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
-import { FaMicrophone, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import React, { useState, useEffect, useRef } from "react";
+import type { ConciergePersonality } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { AvatarComponent } from "./avatar/AvatarComponent";
+import "./AIConcierge.css";
 
-const AIConcierge = () => {
-    const [micOn, setMicOn] = useState(false);
-    const [volumeOn, setVolumeOn] = useState(true);
-    const { transcript, listening } = useSpeechRecognition();
+interface AIConciergeProps {
+  onMessage?: (message: string) => void;
+  personality?: ConciergePersonality;
+}
 
-    useEffect(() => {
-        console.log("AI Concierge Loaded");
-    }, []);
+const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
+  name: "Highland Expert",
+  accent: "Scottish Highland",
+  catchphrase: "Slàinte mhath!",
+  background: "Expert in Highland single malts",
+  personality: "Warm and knowledgeable",
+  avatarDescription: "Distinguished with a hint of Highland charm",
+  voiceDescription: "Rich, warm Scottish accent",
+  specialties: ["Highland whisky", "Scotch traditions", "Distillery processes"],
+  avatarUrl: undefined
+} }) => {
+  const [isListening, setIsListening] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const { toast } = useToast();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recognitionRef = useRef<any>(null);
 
-    const toggleMic = () => {
-        if (!micOn) {
-            SpeechRecognition.startListening();
-        } else {
-            SpeechRecognition.stopListening();
+  useEffect(() => {
+    if (!('webkitSpeechRecognition' in window)) {
+      toast({
+        title: "Speech Recognition Unavailable",
+        description: "Your browser doesn't support speech recognition",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const recognition = new (window as any).webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = (event: any) => {
+        const text = event.results[0][0].transcript;
+        setTranscript(text);
+        if (onMessage) {
+          onMessage(text);
         }
-        setMicOn(!micOn);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+        toast({
+          title: "Speech Recognition Error",
+          description: `Error: ${event.error}. Please try again.`,
+          variant: "destructive"
+        });
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+    } catch (error) {
+      console.error("Error initializing speech recognition:", error);
+      toast({
+        title: "Speech Recognition Error",
+        description: "Failed to initialize speech recognition",
+        variant: "destructive"
+      });
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
     };
+  }, [toast, onMessage]);
 
-    const toggleVolume = () => {
-        setVolumeOn(!volumeOn);
-    };
+  const handleStartListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+        setTranscript("");
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+        toast({
+          title: "Speech Recognition Error",
+          description: "Failed to start speech recognition",
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
-    const generateResponse = (input: string) => {
-        const generatedText = `You said: ${input}. Here's a whisky recommendation...`;
-        if (volumeOn) {
-            const synth = window.speechSynthesis;
-            const utterance = new SpeechSynthesisUtterance(generatedText);
-            synth.speak(utterance);
-        }
-    };
+  const handleStopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.error("Error stopping speech recognition:", error);
+      }
+    }
+    setIsListening(false);
+  };
 
-    useEffect(() => {
-        if (transcript) generateResponse(transcript);
-    }, [transcript]);
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    if (audioRef.current) {
+      audioRef.current.muted = !isMuted;
+    }
+  };
 
-    return (
-        <div className="concierge-container">
-            {/* Avatar Rendering */}
-            <div className="concierge-avatar">
-                <Canvas>
-                    <OrbitControls />
-                    <ambientLight intensity={0.5} />
-                    <pointLight position={[10, 10, 10]} />
-                    <mesh>
-                        <sphereGeometry args={[0.5, 32, 32]} />
-                        <meshStandardMaterial color="#D2691E" />
-                    </mesh>
-                </Canvas>
-            </div>
+  return (
+    <div className="concierge-container">
+      <AvatarComponent
+        personality={personality}
+        isListening={isListening}
+        onStartListening={handleStartListening}
+        onStopListening={handleStopListening}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+      />
 
-            {/* Controls */}
-            <div className="concierge-controls">
-                <button 
-                    onClick={toggleMic} 
-                    className={`mic-button ${micOn ? "active" : ""}`}
-                    aria-label="Toggle microphone"
-                >
-                    <FaMicrophone />
-                </button>
-                <button 
-                    onClick={toggleVolume} 
-                    className={`volume-button ${volumeOn ? "active" : ""}`}
-                    aria-label="Toggle volume"
-                >
-                    {volumeOn ? <FaVolumeUp /> : <FaVolumeMute />}
-                </button>
-            </div>
-            
-            {/* Chat Transcript */}
-            {transcript && (
-                <div className="transcript-container">
-                    <p className="ai-response">"{transcript}"</p>
-                </div>
-            )}
+      {transcript && (
+        <div className="transcript-container">
+          <p className="ai-response">{transcript}</p>
         </div>
-    );
+      )}
+    </div>
+  );
 };
 
 export default AIConcierge;
