@@ -11,6 +11,7 @@ import { verify } from './auth';
 declare module 'http' {
   interface IncomingMessage {
     user?: Express.User;
+    session?: any;
   }
 }
 
@@ -56,29 +57,47 @@ export class LiveStreamingServer {
     callback: (res: boolean, code?: number, message?: string) => void
   ) {
     try {
-      log('Verifying WebSocket client connection...', 'websocket');
+      console.log('Starting WebSocket client verification...');
       const cookies = parse(info.req.headers.cookie || '');
+
+      console.log('Parsed cookies:', JSON.stringify({
+        available: Object.keys(cookies),
+        rawHeader: info.req.headers.cookie
+      }));
+
       const sessionId = cookies['whisky.session.id'];
 
       if (!sessionId) {
-        log('WebSocket connection rejected: No session cookie', 'websocket');
+        console.log('WebSocket connection rejected: No session cookie');
         callback(false, 401, 'Unauthorized - No session cookie');
         return;
       }
 
-      const user = await verify(sessionId);
+      // Use the clean session ID consistently with routes.ts
+      const cleanSessionId = sessionId.split('.')[0].replace('s:', '');
+      console.log('Processing session ID:', JSON.stringify({
+        original: sessionId,
+        cleaned: cleanSessionId
+      }));
+
+      const user = await verify(cleanSessionId);
+
+      console.log('User verification result:', JSON.stringify({
+        success: !!user,
+        userId: user?.id
+      }));
+
       if (!user) {
-        log('WebSocket connection rejected: Invalid session', 'websocket');
+        console.log('WebSocket connection rejected: Invalid session');
         callback(false, 401, 'Unauthorized - Invalid session');
         return;
       }
 
-      log(`WebSocket connection authorized for user ${user.id}`, 'websocket');
+      console.log(`WebSocket connection authorized for user ${user.id}`);
       info.req.user = user;
       callback(true);
     } catch (error) {
       console.error('WebSocket verification error:', error);
-      log(`WebSocket verification error: ${error}`, 'websocket');
       callback(false, 500, 'Internal Server Error');
     }
   }
@@ -86,34 +105,40 @@ export class LiveStreamingServer {
   private setupWebSocketServer() {
     this.wss.on('connection', async (ws: WebSocket, request: IncomingMessage) => {
       try {
-        log('New WebSocket connection attempt...', 'websocket');
-        const cookies = parse(request.headers.cookie || '');
-        const user = await verify(cookies['whisky.session.id']);
-
-        if (!user) {
+        if (!request.user) {
           log('Connection rejected: User not authenticated', 'websocket');
           ws.close(1008, 'User not authenticated');
           return;
         }
 
-        log(`New WebSocket connection established for user ${user.id}`, 'websocket');
+        const userId = request.user.id;
+        log(`New WebSocket connection established for user ${userId}`, 'websocket');
 
         this.clients.set(ws, {
           ws,
-          userId: user.id,
+          userId,
           connectTime: Date.now(),
           bytesTransferred: 0,
         });
 
-        ws.on('message', this.createMessageHandler(ws, user.id));
+        // Send immediate connection confirmation
+        ws.send(JSON.stringify({
+          type: 'connection-established',
+          payload: {
+            userId,
+            timestamp: Date.now()
+          }
+        }));
+
+        ws.on('message', this.createMessageHandler(ws, userId));
 
         ws.on('error', (error) => {
-          log(`WebSocket error for user ${user.id}: ${error}`, 'websocket');
+          log(`WebSocket error for user ${userId}: ${error}`, 'websocket');
           this.handleConnectionError(ws);
         });
 
         ws.on('close', (code, reason) => {
-          log(`WebSocket connection closed for user ${user.id}. Code: ${code}, Reason: ${reason}`, 'websocket');
+          log(`WebSocket connection closed for user ${userId}. Code: ${code}, Reason: ${reason}`, 'websocket');
           const client = this.clients.get(ws);
           if (client?.sessionId) {
             this.handleLeaveSession(ws, client.sessionId);
@@ -122,19 +147,7 @@ export class LiveStreamingServer {
           this.messageCounters.delete(ws);
         });
 
-
-        ws.send(JSON.stringify({
-          type: 'connection-established',
-          payload: {
-            userId: user.id,
-            timestamp: Date.now(),
-            sessionInfo: {
-              isAuthenticated: true,
-              sessionId: cookies['whisky.session.id']
-            }
-          }
-        }));
-
+        // Start heartbeat for this connection
         this.sendHeartbeat(ws);
       } catch (error) {
         console.error('Error handling WebSocket connection:', error);
@@ -251,8 +264,8 @@ export class LiveStreamingServer {
         this.handleChat(ws, message.payload);
         break;
       case 'heartbeat':
-          this.sendHeartbeat(ws);
-          break;
+        this.sendHeartbeat(ws);
+        break;
     }
   }
 

@@ -75,57 +75,94 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     verifyClient: async (info, callback) => {
       try {
         const cookies = parseCookie(info.req.headers.cookie || '');
-        const rawSessionId = cookies['whisky.session.id'];
+        const rawCookie = info.req.headers.cookie;
 
-        console.log('WebSocket verification - Session check:', {
-          rawSessionId,
-          cookies: info.req.headers.cookie
+        console.log('WebSocket verification - Debug Info:', {
+          timestamp: new Date().toISOString(),
+          hasRawCookie: !!rawCookie,
+          rawCookie,
+          parsedCookies: cookies,
+          availableSessionIds: Object.keys(cookies).filter(key => key.includes('session'))
         });
 
-        if (!rawSessionId) {
-          console.log('WebSocket connection rejected: No session ID');
-          callback(false, 401, 'Unauthorized - No session ID');
+        const sessionId = cookies['whisky.session.id'];
+
+        if (!sessionId) {
+          console.log('WebSocket connection rejected: Missing session cookie', {
+            timestamp: new Date().toISOString(),
+            availableCookies: Object.keys(cookies)
+          });
+          callback(false, 401, 'Unauthorized - No session cookie');
           return;
         }
 
-        if (!sessionStore) {
-          console.error('Session store not initialized');
-          callback(false, 500, 'Session store error');
-          return;
-        }
+        // Clean the session ID properly
+        const cleanSessionId = sessionId.split('.')[0].replace('s:', '');
+        console.log('Session ID processing:', {
+          timestamp: new Date().toISOString(),
+          originalSessionId: sessionId,
+          cleanedSessionId: cleanSessionId,
+          processingSteps: {
+            step1: 'Split on dot',
+            result1: sessionId.split('.')[0],
+            step2: 'Remove s: prefix',
+            result2: cleanSessionId
+          }
+        });
 
-        // Clean the session ID by removing the 's:' prefix and getting the actual ID
-        const cleanSessionId = rawSessionId.split('.')[0].replace('s:', '');
-        console.log('Clean session ID:', cleanSessionId);
-
+        // Get the session from the store with enhanced error handling
         const session = await new Promise<SessionData | null>((resolve, reject) => {
-          sessionStore.get(cleanSessionId, (err, sess) => {
+          sessionStore.get(cleanSessionId, (err, session) => {
             if (err) {
-              console.error('Session fetch error:', err);
+              console.error('Session fetch error:', {
+                timestamp: new Date().toISOString(),
+                error: err,
+                sessionId: cleanSessionId
+              });
               reject(err);
               return;
             }
-            console.log('Session data:', sess);
-            resolve(sess);
+
+            console.log('Session retrieval result:', {
+              timestamp: new Date().toISOString(),
+              sessionFound: !!session,
+              sessionData: session ? {
+                hasPassport: !!session.passport,
+                hasUser: !!session.passport?.user,
+                userId: session.passport?.user
+              } : null
+            });
+
+            resolve(session);
           });
         });
 
         if (!session?.passport?.user) {
-          console.log('WebSocket connection rejected: Invalid session data');
+          console.log('WebSocket connection rejected: Invalid session data', {
+            timestamp: new Date().toISOString(),
+            session: session ? 'exists' : 'null',
+            hasPassport: session ? !!session.passport : false
+          });
           callback(false, 401, 'Invalid session');
           return;
         }
 
         // Store session data for later use
         (info.req as ExtendedIncomingMessage).session = session;
+
         console.log('WebSocket client authenticated successfully', {
+          timestamp: new Date().toISOString(),
           userId: session.passport.user,
-          timestamp: new Date().toISOString()
+          cleanSessionId
         });
 
         callback(true);
       } catch (error) {
-        console.error('WebSocket verification error:', error);
+        console.error('WebSocket verification error:', {
+          timestamp: new Date().toISOString(),
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
         callback(false, 500, 'Internal Server Error');
       }
     }
