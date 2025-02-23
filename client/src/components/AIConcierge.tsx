@@ -36,6 +36,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageRef = useRef<string | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const connectWebSocket = () => {
@@ -64,6 +65,16 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
           setIsConnected(true);
           setIsConnecting(false);
           setReconnectAttempts(0);
+
+          // Start heartbeat
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+          }
+          heartbeatIntervalRef.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'HEARTBEAT' }));
+            }
+          }, 30000);
 
           // Send authentication information immediately after connection
           const authToken = localStorage.getItem('auth_token');
@@ -117,6 +128,11 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
                 setIsProcessing(false);
                 break;
 
+              case 'HEARTBEAT':
+                // Received heartbeat from server, connection is alive
+                console.log('Heartbeat received');
+                break;
+
               case 'ERROR':
                 console.error('AI Concierge error:', response.error);
                 toast({
@@ -135,6 +151,11 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
           console.log('WebSocket connection closed:', event);
           setIsConnected(false);
           setIsConnecting(false);
+
+          // Clear heartbeat interval
+          if (heartbeatIntervalRef.current) {
+            clearInterval(heartbeatIntervalRef.current);
+          }
 
           if (!event.wasClean) {
             const delay = RECONNECT_DELAY * Math.pow(RECONNECT_BACKOFF_MULTIPLIER, reconnectAttempts);
@@ -185,6 +206,9 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
       }
       if (wsRef.current) {
         wsRef.current.close();
