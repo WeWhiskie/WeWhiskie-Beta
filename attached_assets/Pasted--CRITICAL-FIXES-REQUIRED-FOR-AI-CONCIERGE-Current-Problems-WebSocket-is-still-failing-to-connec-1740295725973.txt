@@ -1,0 +1,91 @@
+🚨 CRITICAL FIXES REQUIRED FOR AI CONCIERGE
+Current Problems:
+❌ WebSocket is still failing to connect – AI Concierge cannot process any real-time interactions.
+❌ Avatars are not loading or reacting – No 3D AI avatar displayed.
+❌ Voice recognition stops immediately – Speech is not recognized, and no real-time transcription is shown.
+❌ AI does not respond with voice – No text-to-speech (TTS) output.
+❌ No clear UI indicators for listening, speaking, or errors.
+🔹 Step 1: FIX AI CONCIERGE WEBSOCKET CONNECTION
+🚨 Issue:
+
+"Connection Error: Failed to connect after multiple attempts."
+WebSocket fails to establish a stable connection, causing the AI Concierge to be non-functional.
+✅ Solution:
+
+Ensure WebSocket server is properly initialized and listening on the correct port.
+Implement automatic reconnection logic with exponential backoff (e.g., retry every 2s, then 5s, 10s, etc.).
+Debug WebSocket server logs to check for authentication or protocol issues.
+Verify that client-side code properly subscribes to WebSocket events (onopen, onmessage, onerror, onclose).
+Confirm secure WebSocket (wss://) is used in production instead of insecure ws://.
+Expected Fix Confirmation:
+✅ WebSocket should establish a stable connection.
+✅ Console should show ‘Connected to AI Concierge WebSocket’ upon success.
+🔹 Step 2: IMPLEMENT 3D AI AVATARS
+🚨 Issue:
+
+Avatar is missing. The UI shows a blank circle instead of a 3D interactive character.
+✅ Solution:
+
+Add 3D avatars that dynamically change based on AI personality selection.
+Use WebGL/Three.js or Lottie animations to animate the avatar.
+The avatar should move its mouth when the AI speaks and react visually to user input.
+Store user’s last selected avatar in local storage for persistence.
+Expected Fix Confirmation:
+✅ Avatar correctly displays based on the selected AI personality.
+✅ Avatar moves its mouth when the AI responds.
+✅ User can select between different AI avatars.
+🔹 Step 3: ENABLE REAL-TIME VOICE RECOGNITION & LIVE TRANSCRIPTION
+🚨 Issue:
+
+Voice recognition stops immediately.
+No text appears on-screen when speaking.
+✅ Solution:
+
+Ensure continuous speech recognition is enabled (recognition.continuous = true).
+Implement real-time transcription UI, updating as the user speaks.
+Fix microphone permission handling so it properly requests access if needed.
+Use the correct language model for accents based on AI personality selection (e.g., UK English for "Highland Expert").
+Expected Fix Confirmation:
+✅ Speech is recognized and transcribed in real-time.
+✅ Transcript appears while speaking.
+✅ Microphone permissions request properly if needed.
+🔹 Step 4: ENSURE AI RESPONDS WITH VOICE (TEXT-TO-SPEECH)
+🚨 Issue:
+
+The AI does not respond vocally—no text-to-speech (TTS) output.
+✅ Solution:
+
+Implement Web Speech Synthesis API or ElevenLabs TTS for AI responses.
+AI should only speak after fully processing the user’s input to avoid interruptions.
+Sync avatar animations to AI speech (mouth moves when speaking).
+Expected Fix Confirmation:
+✅ AI gives a voice response after processing input.
+✅ Avatar moves when AI speaks.
+🔹 Step 5: PROVIDE CLEAR UI FEEDBACK FOR SPEAKING/LISTENING
+🚨 Issue:
+
+No clear indicator when AI is listening, thinking, or responding.
+Mic button is unclear.
+✅ Solution:
+
+Replace mic icon with a "speaking person" icon when AI is listening.
+Show a pulsing waveform animation when speech is detected.
+Display status messages:
+🟢 "Listening... Speak clearly into your microphone."
+🔵 "Processing..." while AI is thinking.
+🟠 "Speaking..." when AI is responding.
+Error Handling: If recognition fails, show "Speech Not Detected. Try Again."
+Expected Fix Confirmation:
+✅ Visual feedback (waveform animation) appears when AI is listening.
+✅ Status messages indicate AI states (Listening, Processing, Speaking).
+✅ Microphone icon changes to a "speaking" icon while active.
+📌 FINAL CHECKLIST BEFORE SUBMISSION
+✅ WebSocket is fully connected and stable.
+✅ 3D avatars load and react to AI responses.
+✅ Speech is recognized and transcribed in real-time.
+✅ AI responds with voice after processing.
+✅ UI clearly indicates listening, processing, and speaking states.
+✅ No immediate connection or recognition errors occur.
+
+🎯 Expected Outcome:
+The AI Concierge seamlessly recognizes speech, displays live transcription, and responds with a clear voice output while using a 3D animated avatar to enhance the experience.
