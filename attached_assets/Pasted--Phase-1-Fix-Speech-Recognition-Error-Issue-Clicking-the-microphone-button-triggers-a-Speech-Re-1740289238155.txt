@@ -1,0 +1,146 @@
+🔹 Phase 1: Fix Speech Recognition Error
+Issue:
+Clicking the microphone button triggers a "Speech Recognition Error: network issue."
+Possible causes:
+Browser doesn't support Web Speech API
+Permissions not granted
+WebSocket conflict
+Replit server blocking API access
+🛠 Fix Steps for Replit
+1️⃣ Update AIConcierge.tsx to Debug Microphone Issues
+Modify the speech recognition configuration to force manual mic activation instead of continuous listening.
+
+tsx
+Copy
+Edit
+import React, { useState, useEffect } from "react";
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import { FaMicrophone, FaVolumeUp, FaVolumeMute } from "react-icons/fa";
+
+const AIConcierge = () => {
+    const [micOn, setMicOn] = useState(false);
+    const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition();
+
+    useEffect(() => {
+        if (!browserSupportsSpeechRecognition) {
+            console.error("Browser does not support speech recognition.");
+        }
+    }, []);
+
+    const toggleMic = async () => {
+        if (!browserSupportsSpeechRecognition) {
+            alert("Your browser does not support speech recognition.");
+            return;
+        }
+
+        if (!micOn) {
+            try {
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                SpeechRecognition.startListening({ continuous: true });
+            } catch (error) {
+                console.error("Microphone access denied:", error);
+                alert("Please enable microphone access in your browser settings.");
+            }
+        } else {
+            SpeechRecognition.stopListening();
+        }
+
+        setMicOn(!micOn);
+    };
+
+    return (
+        <div className="concierge-container">
+            <div className="concierge-avatar"></div>
+            <div className="concierge-controls">
+                <button onClick={toggleMic} className={`mic-button ${micOn ? "active" : ""}`}>
+                    <FaMicrophone />
+                </button>
+            </div>
+            {transcript && <p className="ai-response">"{transcript}"</p>}
+        </div>
+    );
+};
+
+export default AIConcierge;
+✅ Fixes in this Update
+✔ Forces microphone permission request before activation
+✔ Alerts user if the browser doesn’t support speech recognition
+✔ Stops the red error banner from appearing repeatedly
+
+2️⃣ Debug Speech Recognition Permissions
+Run this in browser console (F12 → Console tab):
+
+js
+Copy
+Edit
+navigator.mediaDevices.getUserMedia({ audio: true })
+  .then(() => console.log("Microphone access granted"))
+  .catch(err => console.error("Microphone access denied:", err));
+✅ If you see "Microphone access granted", then the issue is likely server-side.
+🚨 If it says "Microphone access denied," go to browser settings → Privacy & Security → Allow microphone for Replit.
+
+3️⃣ Restart WebSockets in Replit
+Since you are using WebSockets for AI Concierge, conflicts can cause recognition issues.
+
+🔹 In Replit Terminal, restart WebSockets:
+
+sh
+Copy
+Edit
+killall node
+npm run dev
+✅ This will clear WebSocket conflicts that may be affecting speech recognition.
+
+🔹 Phase 2: Add Avatar Selection
+Issue:
+No avatars to choose from, only an empty circle.
+Goal: Add avatar selection dropdown.
+🛠 Fix Steps for Replit
+1️⃣ Update AIConcierge.tsx to Allow Avatar Selection
+Modify AIConcierge.tsx to include avatar selection and display images.
+
+tsx
+Copy
+Edit
+const avatars = [
+    { name: "Scottish Highland", image: "/avatars/highland.png" },
+    { name: "Bourbon Master", image: "/avatars/bourbon.png" },
+    { name: "Speyside Scholar", image: "/avatars/speyside.png" }
+];
+
+const [selectedAvatar, setSelectedAvatar] = useState(avatars[0]);
+
+const handleAvatarChange = (event) => {
+    const selectedName = event.target.value;
+    const avatar = avatars.find(a => a.name === selectedName);
+    setSelectedAvatar(avatar);
+};
+Then, update the return section:
+
+tsx
+Copy
+Edit
+<div className="concierge-avatar-container">
+    <img src={selectedAvatar.image} alt="AI Avatar" className="concierge-avatar" />
+    <select onChange={handleAvatarChange} className="avatar-dropdown">
+        {avatars.map((avatar, index) => (
+            <option key={index} value={avatar.name}>{avatar.name}</option>
+        ))}
+    </select>
+</div>
+✅ Fixes in this Update
+✔ Dropdown to change avatars
+✔ Avatar image updates when selected
+
+🔹 Phase 3: Final Testing
+Test Cases
+✅ Speech recognition should work without red error banner
+✅ Microphone permissions should be granted automatically
+✅ Avatars should be selectable from a dropdown
+
+🚀 After implementing these fixes, the AI Concierge should be fully functional! 🚀
+
+Next Steps
+Let me know if you get any new error messages after trying this.
+If speech recognition still fails, I’ll provide an alternative STT (Speech-to-Text) API solution.
+🔹 Fingers crossed! Let’s get this running smoothly. 🤞
