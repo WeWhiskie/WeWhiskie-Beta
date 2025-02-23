@@ -1,0 +1,69 @@
+Objective:
+Ensure stable connectivity to the backend.
+Fix WebSocket connection failures or switch to an alternative communication method.
+Guarantee speech recognition and voice responses work properly.
+✅ Step 1: Debug and Fix WebSocket Authentication & Connection Issues
+Issue: WebSocket Fails to Authenticate (401) or Disconnects
+Fix:
+Check Authentication Flow:
+
+Log the exact token sent in WebSocket requests.
+Verify the server correctly validates and refreshes expired tokens.
+Ensure the token is included in the WebSocket handshake.
+Modify WebSocket Reconnection Logic:
+
+If a 401 error occurs, retry with a refreshed token.
+Implement exponential backoff (retry after 2s, 5s, 10s).
+Ensure WebSocket doesn’t retry indefinitely if authentication fails.
+Verify API Rate Limits:
+
+Some WebSocket servers limit reconnection attempts.
+Check server logs to ensure it’s not blocking repeated reconnects.
+🚀 Step 2: Alternative Communication Approach (if WebSocket Fails)
+If WebSockets continue failing, use a REST API with polling instead:
+
+Modify Frontend Requests:
+
+Instead of relying on WebSockets, fetch responses via REST API polling (every 2-5s).
+Example:
+js
+Copy
+Edit
+setInterval(() => {
+  fetch('/api/ai-concierge-response')
+    .then(response => response.json())
+    .then(data => updateUI(data))
+    .catch(error => console.error('Error:', error));
+}, 5000);
+This ensures AI Concierge still works even if WebSockets are unreliable.
+Consider WebRTC for Real-Time Communication:
+
+If real-time conversation is needed, explore WebRTC instead of WebSockets.
+🎤 Step 3: Fix Speech Recognition & Voice Output
+Issue: Speech Not Recognized & No Voice Response
+Fix:
+Replace the microphone icon with a talking person icon.
+Ensure microphone permissions:
+Prompt users with a clear error message if access is denied.
+Example:
+js
+Copy
+Edit
+navigator.mediaDevices.getUserMedia({ audio: true })
+  .then(stream => console.log('Microphone access granted'))
+  .catch(error => console.error('Microphone access denied:', error));
+Enable Real-Time Transcription:
+Use SpeechRecognition API to show live text while the user speaks.
+Ensure Voice Response Works:
+If no audio output is heard, check if speechSynthesis.speak() is blocked.
+🛠 Final Check
+✅ Connection is stable (either WebSockets work or fallback to REST API).
+✅ AI responds to user input (speech recognition & real-time text transcription).
+✅ AI speaks back (using Web Speech API with proper volume controls).
+✅ Avatar is animated properly while speaking.
+
+🚨 Priority for Replit
+Fix WebSocket authentication OR implement a REST API fallback.
+Ensure speech recognition & text transcription work.
+Fix avatar & voice output bugs.
+Verify microphone permissions & audio playback settings.
