@@ -142,6 +142,13 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         userId: req.user!.id,
         whiskyId: parseInt(req.body.whiskyId),
         rating: parseInt(req.body.rating),
+        // Ensure optional fields are explicitly null if not provided
+        finish: req.body.finish || null,
+        palate: req.body.palate || null,
+        nosing: req.body.nosing || null,
+        videoUrl: null,
+        thumbnailUrl: null,
+        likes: 0
       };
 
       if (req.file) {
@@ -209,13 +216,26 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
       return res.status(401).json({ message: "Not authenticated" });
     }
 
-    const parsedSession = insertTastingSessionSchema.parse({
-      ...req.body,
-      hostId: req.user!.id,
-    });
+    try {
+      const sessionData = {
+        ...req.body,
+        hostId: req.user!.id,
+        status: 'scheduled', // Default status for new sessions
+        description: req.body.description || null,
+        maxParticipants: req.body.maxParticipants || null,
+        price: req.body.price || null,
+        videoUrl: req.body.videoUrl || null,
+        streamKey: req.body.streamKey || null,
+        groupId: req.body.groupId || null
+      };
 
-    const session = await storage.createTastingSession(parsedSession);
-    res.status(201).json(session);
+      const parsedSession = insertTastingSessionSchema.parse(sessionData);
+      const session = await storage.createTastingSession(parsedSession);
+      res.status(201).json(session);
+    } catch (error) {
+      console.error("Error creating tasting session:", error);
+      res.status(400).json({ message: "Invalid session data" });
+    }
   });
 
   app.post("/api/sessions/:id/start", async (req, res) => {
@@ -493,7 +513,6 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     }
   });
 
-  // Updated avatar upload route to include error handling and type checking
   app.post("/api/whisky-concierge/avatar", upload.single('avatar'), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Not authenticated" });
@@ -510,16 +529,24 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
 
       const avatarUrl = `/attached_assets/${req.file.filename}`;
 
-      // Update avatar in database
+      // Update avatar in database and wait for the result
       const avatar = await storage.updateConciergeAvatar(req.body.personalityId, avatarUrl);
 
-      // Update the personality in memory with the new avatar URL
+      // Get the current personality
       const personality = whiskyConcierge.getPersonality(req.body.personalityId);
       if (personality) {
+        // Update the personality synchronously since it's in memory
         personality.avatarUrl = avatarUrl;
+        // Return both the avatar and updated personality data
+        res.json({ 
+          success: true,
+          avatarUrl, 
+          avatar,
+          personality 
+        });
+      } else {
+        res.status(404).json({ message: "Personality not found" });
       }
-
-      res.json({ avatarUrl, avatar });
     } catch (error) {
       console.error('Error uploading avatar:', error);
       res.status(500).json({ message: "Failed to upload avatar" });

@@ -7,6 +7,8 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
 declare global {
   namespace Express {
@@ -60,38 +62,46 @@ export async function verify(sessionId: string): Promise<SelectUser | null> {
 }
 
 export function setupAuth(app: Express) {
-  // Session configuration with enhanced security and logging
+  const PostgresStore = connectPg(session);
+
+  // Enhanced session configuration
   const sessionSettings: session.SessionOptions = {
+    store: new PostgresStore({
+      pool,
+      tableName: 'session',
+      createTableIfMissing: true,
+      pruneSessionInterval: 60, // Prune expired sessions every minute
+      errorLog: console.error,   // Log store errors
+    }),
     secret: process.env.SESSION_SECRET || "super-secret-key-change-in-production",
+    name: 'whisky.session.id', // Custom cookie name
     resave: false,
     saveUninitialized: false,
-    store: storage.sessionStore,
+    rolling: true, // Refresh cookie on each response
     cookie: {
       secure: process.env.NODE_ENV === "production",
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax',
-      path: '/'
+      sameSite: 'lax',
+      path: '/',
     },
-    name: 'whisky.sid' // Changed cookie name for better security
   };
 
-  // Initialize passport before session to ensure proper auth state
-  app.use(passport.initialize());
-
-  // Session middleware with enhanced logging
+  // Initialize session before passport
   app.use(session(sessionSettings));
 
-  // Passport session handling after express-session
+  // Initialize passport after session
+  app.use(passport.initialize());
   app.use(passport.session());
 
-  // Debug middleware
+  // Debug middleware with enhanced logging
   app.use((req, res, next) => {
     console.log('Auth Debug:', {
       hasSession: !!req.session,
       sessionID: req.sessionID,
       isAuthenticated: req.isAuthenticated(),
-      user: req.user ? { id: req.user.id, username: req.user.username } : null
+      user: req.user ? { id: req.user.id, username: req.user.username } : null,
+      cookie: req.session?.cookie
     });
     next();
   });

@@ -24,7 +24,7 @@ export default function SessionsPage() {
       <Card className="cursor-pointer hover:shadow-lg transition-shadow">
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <Badge 
+            <Badge
               variant={session.status === "live" ? "destructive" : "secondary"}
             >
               {session.status === "live" ? "Live Now" : "Upcoming"}
@@ -41,8 +41,8 @@ export default function SessionsPage() {
             <div className="flex items-center gap-1">
               <Users className="h-4 w-4" />
               <span>
-                {typeof session.maxParticipants === 'number' 
-                  ? session.maxParticipants 
+                {typeof session.maxParticipants === 'number'
+                  ? session.maxParticipants
                   : "∞"}
               </span>
             </div>
@@ -66,7 +66,7 @@ export default function SessionsPage() {
             Join expert-led tastings and interactive whisky discussions
           </p>
         </div>
-        {user?.isExpert === 1 && (
+        {user?.experiencePoints && user.experiencePoints >= 1000 && (
           <Link href="/sessions/new">
             <Button>Host a Session</Button>
           </Link>
