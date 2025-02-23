@@ -1,0 +1,151 @@
+🛠 Fix: Ensure Proper Redirection to Login Instead of Blank Screen
+📌 Issue:
+When an unauthenticated user accesses /review, they get a blank screen instead of being redirected to the login page.
+
+📌 Fix:
+Ensure the redirection logic is correctly implemented before rendering the review page and that the login route exists.
+
+🔹 Step 1: Update Review Page for Proper Redirect
+Modify the client/src/pages/ReviewPage.tsx (or equivalent) to correctly check authentication and redirect if needed.
+
+✅ Corrected Code (ReviewPage.tsx)
+tsx
+Copy
+Edit
+import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext"; // Ensure authentication context is imported
+
+const ReviewPage = () => {
+    const navigate = useNavigate();
+    const { isAuthenticated, loading } = useAuth(); // Get auth state
+
+    useEffect(() => {
+        if (!loading && !isAuthenticated) {
+            navigate("/auth", { replace: true }); // Redirect if not authenticated
+        }
+    }, [isAuthenticated, loading, navigate]);
+
+    if (loading) return <p>Loading...</p>; // Prevent flashing content
+
+    return (
+        <div>
+            <h2>Write a Review</h2>
+            {/* Your review form component here */}
+        </div>
+    );
+};
+
+export default ReviewPage;
+🔹 Step 2: Fix Authentication Context to Include Loading State
+Modify client/src/context/AuthContext.tsx to include a loading state so the UI waits for authentication data before rendering.
+
+✅ Update AuthContext.tsx
+tsx
+Copy
+Edit
+import React, { createContext, useContext, useState, useEffect } from "react";
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [loading, setLoading] = useState(true); // Add loading state
+
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                const response = await fetch("/api/auth/check", { credentials: "include" });
+                const data = await response.json();
+                setIsAuthenticated(data.isAuthenticated);
+            } catch (error) {
+                console.error("Auth check failed:", error);
+                setIsAuthenticated(false);
+            } finally {
+                setLoading(false); // Stop loading after check
+            }
+        };
+        checkAuth();
+    }, []);
+
+    return (
+        <AuthContext.Provider value={{ isAuthenticated, loading }}>
+            {children}
+        </AuthContext.Provider>
+    );
+};
+
+export const useAuth = () => useContext(AuthContext);
+🔹 Step 3: Ensure the /auth Route Exists
+Modify client/src/App.tsx to ensure the login page exists.
+
+✅ Update App.tsx
+tsx
+Copy
+Edit
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import LoginPage from "./pages/LoginPage"; // Ensure LoginPage exists
+import ReviewPage from "./pages/ReviewPage";
+
+const App = () => {
+    return (
+        <AuthProvider>
+            <Router>
+                <Routes>
+                    <Route path="/auth" element={<LoginPage />} />
+                    <Route path="/review" element={<ReviewPage />} />
+                </Routes>
+            </Router>
+        </AuthProvider>
+    );
+};
+
+export default App;
+🔹 Step 4: Ensure the Backend Auth Route Works
+Modify server/routes/auth.js to correctly check authentication status.
+
+✅ Update Backend Auth Route
+js
+Copy
+Edit
+const express = require("express");
+const router = express.Router();
+
+router.get("/check", (req, res) => {
+    if (req.isAuthenticated && req.isAuthenticated()) {
+        res.json({ isAuthenticated: true });
+    } else {
+        res.json({ isAuthenticated: false });
+    }
+});
+
+module.exports = router;
+🔹 Step 5: Restart & Test
+1️⃣ Restart Replit
+
+sh
+Copy
+Edit
+npm run dev
+2️⃣ Try Visiting /review While Logged Out
+
+You should automatically be redirected to /auth.
+If logged in, the review page should load properly.
+3️⃣ Check Console for Errors
+
+If redirection doesn’t work, check console.log() for errors.
+Ensure cookies are being sent with:
+js
+Copy
+Edit
+credentials: "include"
+in fetch requests.
+
+🚀 Final Outcome
+✔ Blank screen issue is gone.
+✔ Users who aren’t logged in are redirected to the login page.
+✔ Once logged in, users can proceed to write a review.
+
+🔥 Now your authentication flow works smoothly! 🚀
