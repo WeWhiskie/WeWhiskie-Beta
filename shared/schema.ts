@@ -1,7 +1,15 @@
 import { pgTable, text, serial, integer, timestamp, doublePrecision, boolean, jsonb } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import type { InferModel } from 'drizzle-orm';
+
+// Session table for express-session
+export const session = pgTable("session", {
+  sid: text("sid").primaryKey(),
+  sess: jsonb("sess").notNull(),
+  expire: timestamp("expire").notNull()
+});
 
 // Define concierge personality schema
 export const conciergePersonalitySchema = z.object({
@@ -17,14 +25,14 @@ export const conciergePersonalitySchema = z.object({
 
 export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;
 
-// Users and Authentication
+// Users table definition
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   email: text("email").notNull().unique(),
   inviteCode: text("invite_code").notNull().unique(),
-  invitedBy: integer("invited_by").references(() => users.id),
+  invitedBy: integer("invited_by"),
   inviteCount: integer("invite_count").default(0),
   lastActive: timestamp("last_active"),
   engagementScore: integer("engagement_score").default(0),
@@ -376,94 +384,6 @@ export const cdnConfigs = pgTable("cdn_configs", {
   active: boolean("active").default(true),
 });
 
-// ============= Insert Schemas =============
-
-export const insertUserSchema = createInsertSchema(users).extend({
-  email: z.string().email(),
-  password: z.string().min(3),
-  inviteCode: z.string().min(6),
-  expertiseAreas: z.array(z.string()).optional(),
-  socialLinks: z.record(z.string().url()).optional(),
-});
-
-export const insertWhiskySchema = createInsertSchema(whiskies).extend({
-  user_id: z.number().optional(),
-  abv: z.number().min(0).max(100),
-  price: z.number().min(0).optional(),
-  age: z.number().min(0).optional(),
-  tasting_notes: z.string().min(1),
-  description: z.string().min(10),
-  region: z.string().min(1),
-  aroma: z.string().optional(),
-  palate: z.string().optional(),
-  finish: z.string().optional(),
-  awards: z.array(z.object({
-    name: z.string(),
-    description: z.string(),
-  })).default([]),
-  founded: z.string().optional(),
-  water_source: z.string().optional(),
-  distillery_history: z.string().optional(),
-});
-
-export const insertReviewSchema = createInsertSchema(reviews).extend({
-  rating: z.number().min(0).max(10).step(0.1),
-  nosing: z.string().optional(),
-  palate: z.string().optional(),
-  finish: z.string().optional(),
-  videoUrl: z.string().url().optional(),
-});
-
-export const insertTastingSessionSchema = createInsertSchema(tastingSessions).extend({
-  duration: z.number().min(15).max(480),
-  maxParticipants: z.number().min(2).optional(),
-  price: z.number().min(0).optional(),
-});
-
-export const insertTastingGroupSchema = createInsertSchema(tastingGroups).extend({
-  name: z.string().min(3).max(100),
-  description: z.string().optional(),
-});
-
-export const insertGroupMemberSchema = createInsertSchema(groupMembers).extend({
-  role: z.enum(["admin", "moderator", "member"]),
-});
-
-export const insertGroupAchievementSchema = createInsertSchema(groupAchievements).extend({
-  name: z.string().min(3).max(50),
-  description: z.string().min(10),
-  criteria: z.record(z.unknown()),
-});
-
-export const insertActivitySchema = createInsertSchema(activityFeed).extend({
-  activityType: z.enum([
-    "review_created",
-    "whisky_rated",
-    "user_followed",
-    "group_joined",
-    "tasting_scheduled",
-    "achievement_unlocked"
-  ]),
-  entityType: z.enum(["review", "whisky", "user", "group", "tasting_session", "achievement"]),
-  metadata: z.record(z.unknown()).optional(),
-  visibility: z.enum(["public", "followers", "private"]).default("public"),
-});
-
-export const insertShareSchema = createInsertSchema(shares);
-export const insertLikeSchema = createInsertSchema(likes);
-export const insertStreamConfigSchema = createInsertSchema(streamConfigurations);
-export const insertStreamStatsSchema = createInsertSchema(streamStats);
-export const insertViewerAnalyticsSchema = createInsertSchema(viewerAnalytics);
-export const insertCdnConfigSchema = createInsertSchema(cdnConfigs);
-export const insertDailyTaskSchema = createInsertSchema(dailyTasks);
-export const insertWeeklyTaskSchema = createInsertSchema(weeklyTasks);
-export const insertAchievementSchema = createInsertSchema(achievements);
-
-// Add new insert schemas for new tables
-export const insertInviteSchema = createInsertSchema(invites);
-export const insertMasterclassEventSchema = createInsertSchema(masterclassEvents);
-export const insertMasterclassParticipantSchema = createInsertSchema(masterclassParticipants);
-
 // Whisky collection table (many-to-many relationship)
 export const userWhiskyCollection = pgTable("user_whisky_collection", {
   id: serial("id").primaryKey(),
@@ -477,12 +397,6 @@ export const userWhiskyCollection = pgTable("user_whisky_collection", {
   notes: text("notes"),
   rating: doublePrecision("rating"),
   isFavorite: boolean("is_favorite").default(false),
-});
-
-// Create insert schema for whisky collection
-export const insertWhiskyCollectionSchema = createInsertSchema(userWhiskyCollection).extend({
-  rating: z.number().min(0).max(10).optional(),
-  notes: z.string().optional(),
 });
 
 // AI Concierge Chat System
@@ -501,6 +415,7 @@ export const chatConversations = pgTable("chat_conversations", {
   personalitySettings: jsonb("personality_settings").default({}).notNull()
 });
 
+// Chat messages
 export const chatMessages = pgTable("chat_messages", {
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id")
@@ -513,25 +428,135 @@ export const chatMessages = pgTable("chat_messages", {
   personality: jsonb("personality").default({}).notNull()
 });
 
-// Add new insert schemas
-export const insertChatConversationSchema = createInsertSchema(chatConversations).extend({
-  personalitySettings: z.record(z.unknown()).default({})
-});
 
-export const insertChatMessageSchema = createInsertSchema(chatMessages).extend({
-  role: z.enum(["user", "assistant"]),
-  content: z.string().min(1),
-  metadata: z.record(z.unknown()).default({}),
-  personality: conciergePersonalitySchema.partial().optional()
-});
+// Define relations after all tables are defined
+export const usersRelations = relations(users, ({ many }) => ({
+  whiskies: many(whiskies),
+  reviews: many(reviews),
+  collections: many(userWhiskyCollection),
+  conversations: many(chatConversations),
+  invitesSent: many(invites, {
+    fields: [users.id],
+    references: [invites.inviterUserId]
+  }),
+  invitesReceived: many(invites, {
+    fields: [users.id],
+    references: [invites.invitedBy]
+  }),
+  masterclassParticipations: many(masterclassParticipants)
+}));
 
-// ============= Type Exports =============
+export const whiskiesRelations = relations(whiskies, ({ one, many }) => ({
+  owner: one(users, {
+    fields: [whiskies.user_id],
+    references: [users.id],
+  }),
+  reviews: many(reviews),
+  inCollections: many(userWhiskyCollection)
+}));
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  user: one(users, {
+    fields: [reviews.userId],
+    references: [users.id],
+  }),
+  whisky: one(whiskies, {
+    fields: [reviews.whiskyId],
+    references: [whiskies.id],
+  }),
+}));
+
+export const userWhiskyCollectionRelations = relations(userWhiskyCollection, ({ one }) => ({
+  user: one(users, {
+    fields: [userWhiskyCollection.userId],
+    references: [users.id],
+  }),
+  whisky: one(whiskies, {
+    fields: [userWhiskyCollection.whiskyId],
+    references: [whiskies.id],
+  }),
+}));
+
+export const chatConversationsRelations = relations(chatConversations, ({ one, many }) => ({
+  user: one(users, {
+    fields: [chatConversations.userId],
+    references: [users.id],
+  }),
+  messages: many(chatMessages),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+  conversation: one(chatConversations, {
+    fields: [chatMessages.conversationId],
+    references: [chatConversations.id],
+  }),
+}));
+
+export const invitesRelations = relations(invites, ({ one }) => ({
+  inviter: one(users, {
+    fields: [invites.inviterUserId],
+    references: [users.id]
+  })
+}));
+
+export const masterclassEventsRelations = relations(masterclassEvents, ({ many }) => ({
+  participants: many(masterclassParticipants)
+}));
+
+export const masterclassParticipantsRelations = relations(masterclassParticipants, ({ one }) => ({
+  event: one(masterclassEvents, {
+    fields: [masterclassParticipants.eventId],
+    references: [masterclassEvents.id]
+  }),
+  user: one(users, {
+    fields: [masterclassParticipants.userId],
+    references: [users.id]
+  })
+}));
+
+// Insert schemas
+export const insertUserSchema = createInsertSchema(users);
+export const insertWhiskySchema = createInsertSchema(whiskies);
+export const insertReviewSchema = createInsertSchema(reviews);
+export const insertWhiskyCollectionSchema = createInsertSchema(userWhiskyCollection);
+export const insertChatConversationSchema = createInsertSchema(chatConversations);
+export const insertChatMessageSchema = createInsertSchema(chatMessages);
+export const insertInviteSchema = createInsertSchema(invites);
+export const insertMasterclassEventSchema = createInsertSchema(masterclassEvents);
+export const insertMasterclassParticipantSchema = createInsertSchema(masterclassParticipants);
+export const insertDailyTaskSchema = createInsertSchema(dailyTasks);
+export const insertWeeklyTaskSchema = createInsertSchema(weeklyTasks);
+export const insertAchievementSchema = createInsertSchema(achievements);
+export const insertShareSchema = createInsertSchema(shares);
+export const insertLikeSchema = createInsertSchema(likes);
+export const insertStreamConfigSchema = createInsertSchema(streamConfigurations);
+export const insertStreamStatsSchema = createInsertSchema(streamStats);
+export const insertViewerAnalyticsSchema = createInsertSchema(viewerAnalytics);
+export const insertCdnConfigSchema = createInsertSchema(cdnConfigs);
+export const insertGroupMemberSchema = createInsertSchema(groupMembers);
+export const insertGroupAchievementSchema = createInsertSchema(groupAchievements);
+export const insertActivitySchema = createInsertSchema(activityFeed);
+
+
+// Type exports
 export type User = InferModel<typeof users>;
 export type Whisky = InferModel<typeof whiskies>;
 export type Review = InferModel<typeof reviews>;
-export type TastingSession = InferModel<typeof tastingSessions>;
+export type UserWhiskyCollection = InferModel<typeof userWhiskyCollection>;
+export type ChatConversation = InferModel<typeof chatConversations>;
+export type ChatMessage = InferModel<typeof chatMessages>;
+export type Invite = InferModel<typeof invites>;
+export type MasterclassEvent = InferModel<typeof masterclassEvents>;
+export type MasterclassParticipant = InferModel<typeof masterclassParticipants>;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertWhisky = z.infer<typeof insertWhiskySchema>;
+export type InsertReview = z.infer<typeof insertReviewSchema>;
+export type InsertUserWhiskyCollection = z.infer<typeof insertWhiskyCollectionSchema>;
+export type InsertChatConversation = z.infer<typeof insertChatConversationSchema>;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type InsertInvite = z.infer<typeof insertInviteSchema>;
+export type InsertMasterclassEvent = z.infer<typeof insertMasterclassEventSchema>;
+export type InsertMasterclassParticipant = z.infer<typeof insertMasterclassParticipantSchema>;
 export type ShippingAddress = InferModel<typeof shippingAddresses>;
 export type SessionParticipant = InferModel<typeof sessionParticipants>;
 export type ShareTrack = InferModel<typeof shares>;
@@ -557,20 +582,4 @@ export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type DailyTask = InferModel<typeof dailyTasks>;
 export type WeeklyTask = InferModel<typeof weeklyTasks>;
 export type Achievement = InferModel<typeof achievements>;
-
-// Add new type exports
-export type Invite = InferModel<typeof invites>;
-export type InsertInvite = z.infer<typeof insertInviteSchema>;
-export type MasterclassEvent = InferModel<typeof masterclassEvents>;
-export type InsertMasterclassEvent = z.infer<typeof insertMasterclassEventSchema>;
-export type MasterclassParticipant = InferModel<typeof masterclassParticipants>;
-export type InsertMasterclassParticipant = z.infer<typeof insertMasterclassParticipantSchema>;
-
-// Add new type exports from edited code
-export type UserWhiskyCollection = InferModel<typeof userWhiskyCollection>;
-export type InsertUserWhiskyCollection = z.infer<typeof insertWhiskyCollectionSchema>;
-export type ChatConversation = InferModel<typeof chatConversations>;
-export type InsertChatConversation = z.infer<typeof insertChatConversationSchema>;
-export type ChatMessage = InferModel<typeof chatMessages>;
-export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;
