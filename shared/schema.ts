@@ -533,13 +533,11 @@ export const insertGroupMemberSchema = createInsertSchema(groupMembers);
 export const insertGroupAchievementSchema = createInsertSchema(groupAchievements);
 export const insertActivitySchema = createInsertSchema(activityFeed);
 
-
-// Add the missing insertTastingSessionSchema export
-export const insertTastingSessionSchema = createInsertSchema(tastingSessions);
+// Add the missing insertTastingGroupSchema export
+export const insertTastingGroupSchema = createInsertSchema(tastingGroups);
 
 // Add tasting session type export
-export type TastingSession = InferModel<typeof tastingSessions>;
-export type InsertTastingSession = z.infer<typeof insertTastingSessionSchema>;
+export const insertTastingSessionSchema = createInsertSchema(tastingSessions);
 
 // Type exports
 export type User = InferModel<typeof users>;
@@ -586,3 +584,5 @@ export type DailyTask = InferModel<typeof dailyTasks>;
 export type WeeklyTask = InferModel<typeof weeklyTasks>;
 export type Achievement = InferModel<typeof achievements>;
 export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;
+export type TastingSession = InferModel<typeof tastingSessions>;
+export type InsertTastingSession = z.infer<typeof insertTastingSessionSchema>;

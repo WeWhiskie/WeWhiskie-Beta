@@ -22,15 +22,20 @@ import Navbar from "./components/navbar";
 import { UserStatusBar } from "./components/user-status-bar";
 import { useAuth } from "./hooks/use-auth";
 import { FloatingChatButton } from "@/components/ui/floating-chat";
+import { useEffect } from "react";
 
 function Router() {
   const { user } = useAuth();
 
+  useEffect(() => {
+    console.log("Router mounted, auth state:", { isAuthenticated: !!user });
+  }, [user]);
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
       {user && <UserStatusBar />}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 flex-grow">
         <Switch>
           <Route path="/" component={HomePage} />
           <Route path="/whisky/:id" component={WhiskyPage} />
@@ -59,6 +64,10 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    console.log("App component mounted");
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
