@@ -17,6 +17,8 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ConciergePersonality } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
+import { AvatarComponent } from "@/components/avatar/AvatarComponent";
+
 
 // Message interface for local state
 interface Message {
@@ -70,6 +72,10 @@ export default function WhiskyConcierge() {
   const { user } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
+  const [isListening, setIsListening] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [recognition, setRecognition] = useState<any>(null);
 
   // Get user's collection
   const { data: collection = [] } = useQuery({
@@ -165,6 +171,49 @@ export default function WhiskyConcierge() {
     };
   }, [timeoutId]);
 
+  useEffect(() => {
+    // Initialize speech recognition
+    if ('webkitSpeechRecognition' in window) {
+      const recognition = new (window as any).webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setQuery(transcript);
+        handleSubmit(new Event('submit') as any);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      setRecognition(recognition);
+    }
+  }, []);
+
+  const startListening = () => {
+    if (recognition) {
+      recognition.start();
+      setIsListening(true);
+    }
+  };
+
+  const stopListening = () => {
+    if (recognition) {
+      recognition.stop();
+      setIsListening(false);
+    }
+  };
+
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    if (audioRef.current) {
+      audioRef.current.muted = !isMuted;
+    }
+  };
+
+
   const conciergeQuery = useMutation({
     mutationFn: async (message: string) => {
       if (!user) {
@@ -194,14 +243,15 @@ export default function WhiskyConcierge() {
       const payload = {
         query: message,
         conversationId: currentConversationId,
-        personality: currentPersonality
+        personality: currentPersonality,
+        requireVoice: !isMuted,
       };
 
       const makeRequest = async (attempt: number) => {
         try {
           const response = await fetch("/api/whisky-concierge", {
             method: "POST",
-            headers: { 
+            headers: {
               "Content-Type": "application/json",
               "Accept": "application/json"
             },
@@ -234,6 +284,11 @@ export default function WhiskyConcierge() {
         const result = await makeRequest(0);
         if (timeoutId) {
           clearTimeout(timeoutId);
+        }
+        if (result.audioUrl && !isMuted) {
+          const audio = new Audio(result.audioUrl);
+          audioRef.current = audio;
+          await audio.play();
         }
         return result;
       } catch (error) {
@@ -362,17 +417,16 @@ export default function WhiskyConcierge() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
               transition={{ duration: 0.3 }}
-              className="flex items-center justify-center gap-4 p-2 bg-muted rounded-lg"
             >
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <UserCircle2 className="w-8 h-8 text-primary" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium">{currentPersonality.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {currentPersonality.accent} • {currentPersonality.specialties?.[0]}
-                </p>
-              </div>
+              <AvatarComponent
+                personality={currentPersonality}
+                isListening={isListening}
+                onStartListening={startListening}
+                onStopListening={stopListening}
+                isMuted={isMuted}
+                onToggleMute={toggleMute}
+                customAvatarUrl={currentPersonality.avatarUrl}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -414,7 +468,7 @@ export default function WhiskyConcierge() {
                         <ul className="list-disc list-inside">
                           {msg.citations.map((citation, idx) => (
                             <li key={idx}>
-                              <a 
+                              <a
                                 href={citation}
                                 target="_blank"
                                 rel="noopener noreferrer"

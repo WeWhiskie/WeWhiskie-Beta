@@ -12,6 +12,7 @@ import { insertActivitySchema, type InsertActivity } from "@shared/schema";
 import { whiskyConcierge } from "./services/ai-concierge";
 import { generateConciergeName, getWhiskyRecommendations } from "./services/recommendations";
 import { handleWhiskyConciergeChat, handleGenerateName, handleGeneratePersonality } from "./routes/whisky-concierge";
+import { textToSpeechService } from './services/text-to-speech';
 
 // Configure multer for file uploads
 const multerStorage = multer.diskStorage({
@@ -475,7 +476,66 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
 
   // Whisky Concierge routes
   app.post("/api/whisky-concierge", async (req, res) => {
-    await handleWhiskyConciergeChat(req, res);
+    try {
+      const response = await handleWhiskyConciergeChat(req, res);
+
+      // If voice response is requested, generate speech
+      if (req.body.requireVoice && response.answer) {
+        const voiceOptions = {
+          text: response.answer,
+          voice: req.body.personality?.accent || 'highland',
+        };
+
+        const audioResponse = await textToSpeechService.synthesizeSpeech(voiceOptions);
+        return res.json({
+          ...response,
+          audioUrl: audioResponse.audioUrl
+        });
+      }
+
+      return res.json(response);
+    } catch (error) {
+      console.error('Error in whisky concierge:', error);
+      res.status(500).json({ message: "Failed to process request" });
+    }
+  });
+
+  // Add new route for avatar upload
+  const avatarUpload = multer({
+    storage: multerStorage,
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit for avatars
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only JPEG, PNG, and WebP images are allowed.'));
+      }
+    }
+  });
+
+  app.post("/api/whisky-concierge/avatar", avatarUpload.single('avatar'), async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No avatar file provided" });
+      }
+
+      const avatarUrl = `/attached_assets/${req.file.filename}`;
+
+      // Update the personality with the new avatar URL
+      await storage.updateConciergeAvatar(req.body.personalityId, avatarUrl);
+
+      res.json({ avatarUrl });
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      res.status(500).json({ message: "Failed to upload avatar" });
+    }
   });
 
   // Add new personality generation routes
