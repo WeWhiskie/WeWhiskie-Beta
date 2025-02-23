@@ -20,6 +20,7 @@ type WebRTCPayload = {
   candidate?: RTCIceCandidate;
   message?: string;
   quality?: string;
+  timestamp?: number; //Added timestamp
 };
 
 type WebRTCMessage = {
@@ -135,9 +136,14 @@ export function useWebRTC(isHost: boolean) {
         setConnectionState('connecting');
         setIsReconnecting(false);
 
+        // Send initial connection message with session info
         socket.send(JSON.stringify({
           type: 'join-session',
-          payload: { sessionId, userId }
+          payload: { 
+            sessionId, 
+            userId,
+            timestamp: Date.now()
+          }
         }));
 
         if (isHost) {
@@ -161,6 +167,7 @@ export function useWebRTC(isHost: boolean) {
         console.log('WebSocket closed:', event.code, event.reason);
         setConnectionState('disconnected');
 
+        // Don't reconnect on normal closure or if max attempts reached
         if (event.code !== 1000 && event.code !== 1001) {
           handleReconnect(sessionId, userId);
         }

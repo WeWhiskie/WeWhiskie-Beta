@@ -68,10 +68,11 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
         const cookies = parseCookie(info.req.headers.cookie || '');
         console.log('WebSocket verification - Cookies:', {
           available: Object.keys(cookies),
-          sessionStore: sessionStore ? 'available' : 'not available'
+          sessionStore: sessionStore ? 'available' : 'not available',
+          sessionId: cookies['whisky.session.id'] || cookies['connect.sid']
         });
 
-        // Unified session ID check - prefer whisky.session.id
+        // Try all possible session cookie names
         const sessionId = cookies['whisky.session.id'] || cookies['connect.sid'];
 
         if (!sessionId) {
@@ -94,6 +95,7 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
                 console.error('Session fetch error:', err);
                 reject(err);
               } else {
+                console.log('Session data retrieved:', sess ? 'valid' : 'invalid');
                 resolve(sess);
               }
             });
@@ -105,11 +107,11 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
             return;
           }
 
-          // Store session data in request
-          info.req.session = session;
+          // Store session data in request for later use
+          (info.req as ExtendedIncomingMessage).session = session;
           console.log('WebSocket client authenticated successfully', {
-            userId: session.userId,
-            sessionId: sessionId
+            sessionId: sessionId,
+            timestamp: new Date().toISOString()
           });
 
           callback(true);
