@@ -22,14 +22,23 @@ import Navbar from "./components/navbar";
 import { UserStatusBar } from "./components/user-status-bar";
 import { useAuth } from "./hooks/use-auth";
 import { FloatingChatButton } from "@/components/ui/floating-chat";
-import { useEffect } from "react";
+import { memo } from "react";
 
-function Router() {
-  const { user } = useAuth();
+// Memoize the Router component to prevent unnecessary re-renders
+const Router = memo(function Router() {
+  const { user, isLoading } = useAuth();
 
-  useEffect(() => {
-    console.log("Router mounted, auth state:", { isAuthenticated: !!user });
-  }, [user]);
+  // Don't render routes until auth state is determined
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navbar />
+        <main className="container mx-auto px-4 py-8 flex-grow">
+          <div className="animate-pulse">Loading...</div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -61,13 +70,9 @@ function Router() {
       <FloatingChatButton />
     </div>
   );
-}
+});
 
 function App() {
-  useEffect(() => {
-    console.log("App component mounted");
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

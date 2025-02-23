@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Whisky, TastingSession } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
+import { WhiskyCard } from "@/components/whisky-card";
 
 interface Review {
   id: number;
@@ -182,56 +183,7 @@ export default function HomePage() {
         </h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {whiskies.map((whisky) => (
-            <Link key={whisky.id} href={`/whisky/${whisky.id}`}>
-              <Card className="overflow-hidden cursor-pointer transition-transform hover:scale-105 hover:shadow-lg">
-                <div className="aspect-[4/3] relative">
-                  <img
-                    src={whisky.image_url}
-                    alt={whisky.name}
-                    className="object-cover w-full h-full"
-                  />
-                  {whisky.price && (
-                    <div className="absolute top-4 right-4 bg-black/80 text-white px-3 py-1 rounded-full text-sm font-medium">
-                      ${whisky.price}
-                    </div>
-                  )}
-                  {whisky.limited === 1 && (
-                    <Badge className="absolute top-4 left-4" variant="destructive">
-                      Limited Edition
-                    </Badge>
-                  )}
-                </div>
-                <CardContent className="p-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-lg">{whisky.name}</h3>
-                      {whisky.abv && (
-                        <span className="text-sm text-muted-foreground">
-                          {whisky.abv}% ABV
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {whisky.distillery}
-                    </p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="secondary">{whisky.type}</Badge>
-                      {whisky.region && (
-                        <Badge variant="outline">{whisky.region}</Badge>
-                      )}
-                      {whisky.age && (
-                        <Badge variant="outline">{whisky.age} Years</Badge>
-                      )}
-                    </div>
-                    {whisky.tasting_notes && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {whisky.tasting_notes}
-                      </p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <WhiskyCard key={whisky.id} whisky={whisky} />
           ))}
         </div>
       </div>

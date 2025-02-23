@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext } from "react";
+import { createContext, ReactNode, useContext, useRef, useEffect } from "react";
 import {
   useQuery,
   useMutation,
@@ -23,6 +23,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
+  const initialLoadRef = useRef(true);
 
   const {
     data: user,
@@ -31,16 +32,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   } = useQuery<SelectUser | null>({
     queryKey: ["/api/user"],
     queryFn: async () => {
-      const response = await fetch("/api/user", {
-        credentials: "include"
-      });
-      if (!response.ok) {
-        if (response.status === 401) return null;
-        throw new Error("Failed to fetch user");
+      try {
+        const response = await fetch("/api/user", {
+          credentials: "include"
+        });
+
+        // Handle 401 gracefully
+        if (response.status === 401) {
+          return null;
+        }
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch user");
+        }
+
+        const data = await response.json();
+        return data;
+      } catch (err) {
+        console.error("Auth error:", err);
+        return null;
       }
-      return response.json();
     },
+    // Prevent unnecessary refetches
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: false,
   });
+
+  // Show auth-related toasts only on initial load
+  useEffect(() => {
+    if (!isLoading && initialLoadRef.current) {
+      if (error) {
+        toast({
+          title: "Authentication Error",
+          description: "Please try logging in again",
+          variant: "destructive",
+        });
+      }
+      initialLoadRef.current = false;
+    }
+  }, [isLoading, error, toast]);
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
@@ -62,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
     },
     onError: (error: Error) => {
       toast({
@@ -92,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
         title: "Success",
         description: "Account created successfully!",
@@ -120,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
+      queryClient.invalidateQueries();
     },
     onError: (error: Error) => {
       toast({

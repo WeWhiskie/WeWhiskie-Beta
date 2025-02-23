@@ -5,23 +5,15 @@ import { PreferencesForm } from "@/components/preferences-form";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { StarRating } from "@/components/star-rating";
 import { Share2, ThumbsUp, GlassWater, Wine } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { WhiskyCard } from "@/components/whisky-card";
+import type { Whisky } from "@shared/schema";
 
 interface Recommendation {
-  whisky: {
-    id: number;
-    name: string;
-    distillery: string;
-    type: string;
-    region: string;
-    price: number;
-    tastingNotes: string;
-    imageUrl: string;
-  };
+  whisky: Whisky;
   reason: string;
   confidence: number;
 }
@@ -104,79 +96,18 @@ export default function RecommendationsPage() {
 
         <div className="space-y-6">
           {recommendations.map((rec) => (
-            <Card
-              key={rec.whisky.id}
-              className="overflow-hidden hover:shadow-lg transition-shadow"
-            >
-              <div className="md:flex">
-                <div className="md:w-1/3 relative">
-                  <div className="aspect-square">
-                    <img
-                      src={rec.whisky.imageUrl}
-                      alt={rec.whisky.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="absolute top-4 right-4">
-                    <Badge
-                      variant="secondary"
-                      className="bg-black/50 backdrop-blur-sm text-white border-none"
-                    >
-                      ${rec.whisky.price}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="p-6 md:w-2/3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-2xl font-semibold">{rec.whisky.name}</h3>
-                      <p className="text-muted-foreground">{rec.whisky.distillery}</p>
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className="bg-primary/10 text-primary border-none"
-                    >
-                      {Math.round(rec.confidence * 100)}% Match
-                    </Badge>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    <Badge variant="outline" className="bg-primary/5">
-                      {rec.whisky.type}
-                    </Badge>
-                    {rec.whisky.region && (
-                      <Badge variant="outline" className="bg-primary/5">
-                        {rec.whisky.region}
-                      </Badge>
-                    )}
-                  </div>
-
-                  <p className="mt-4 text-muted-foreground">{rec.reason}</p>
-
-                  <div className="mt-6 flex items-center justify-between">
-                    <Link href={`/whisky/${rec.whisky.id}`}>
-                      <Button>View Details</Button>
-                    </Link>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="hover:bg-primary/5"
-                      >
-                        <ThumbsUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="hover:bg-primary/5"
-                      >
-                        <Share2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
+            <div key={rec.whisky.id} className="relative">
+              <WhiskyCard whisky={rec.whisky} />
+              <Badge
+                variant="secondary"
+                className="absolute top-4 right-4 z-10 bg-primary/10 text-primary border-none"
+              >
+                {Math.round(rec.confidence * 100)}% Match
+              </Badge>
+              <Card className="mt-2 p-4 bg-primary/5">
+                <p className="text-muted-foreground">{rec.reason}</p>
+              </Card>
+            </div>
           ))}
 
           {recommendations.length === 0 && (
