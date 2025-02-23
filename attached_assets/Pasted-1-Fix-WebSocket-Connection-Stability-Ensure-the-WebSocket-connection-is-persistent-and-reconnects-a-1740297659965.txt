@@ -1,0 +1,54 @@
+1. Fix WebSocket Connection Stability
+Ensure the WebSocket connection is persistent and reconnects automatically if disconnected.
+Implement:
+Reconnect logic with exponential backoff to avoid flooding the server.
+Session authentication check before sending/receiving data.
+Error handling to provide clear messages instead of vague "connection failed" errors.
+✅ Check:
+
+Console should log "Connected to AI Concierge WebSocket".
+No 401 errors in authentication.
+Stable connection should be maintained without requiring a refresh.
+2. Ensure Speech Recognition & AI Voice Responses
+Fix speech recognition not processing input by verifying:
+Microphone permissions are correctly requested & granted.
+Live transcription appears on-screen when the user speaks.
+Voice output plays AI responses after processing.
+Implement:
+
+A real-time waveform animation (pulsing icon or soundwave) when listening.
+AI should generate live text transcription below the avatar.
+AI voice should respond with synthesized speech (Web Speech API or equivalent).
+✅ Check:
+
+When speaking, a real-time transcription appears.
+AI responds with voice output after processing input.
+Speech recognition does not stop abruptly after activation.
+3. Improve UI/UX for Clarity
+The speech button should use a "talking person" icon, not a microphone.
+AI avatar must be visible and responsive to input.
+Button states should be clear:
+Idle: Default color.
+Listening: Pulsing animation.
+Processing: Subtle spinner animation.
+✅ Check:
+
+The speech button is now a talking person icon.
+Avatar displays correctly and reacts to user input.
+UI feedback for active listening and voice response is present.
+Expected Final Checks
+Before considering the issue resolved, confirm the following:
+
+✅ AI Concierge connects reliably without refresh issues.
+✅ WebSocket connection logs ‘Connected to AI Concierge WebSocket’ and remains stable.
+✅ Speech recognition detects input, transcribes, and allows a response.
+✅ AI voice output works and plays responses.
+✅ UI elements are correctly updated, including a talking icon for speech.
+Final Confirmation to Replit
+Once these fixes are made, confirm functionality by:
+
+Running a full session with multiple voice inputs.
+Checking error logs for WebSocket disconnects.
+Verifying speech and voice response cycles.
+If further issues arise, log specific error codes for faster debugging.
+
