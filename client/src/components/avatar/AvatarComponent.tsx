@@ -8,7 +8,7 @@ import type { ConciergePersonality } from "@shared/schema";
 
 interface AvatarComponentProps {
   personality: ConciergePersonality | null;
-  isSpeaking: boolean;
+  isListening: boolean;
   onStartListening: () => void;
   onStopListening: () => void;
   isMuted: boolean;

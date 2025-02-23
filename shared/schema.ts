@@ -20,7 +20,8 @@ export const conciergePersonalitySchema = z.object({
   avatarDescription: z.string(),
   voiceDescription: z.string(),
   specialties: z.array(z.string()),
-  catchphrase: z.string()
+  catchphrase: z.string(),
+  avatarUrl: z.string().optional() // Make it optional to maintain backward compatibility
 });
 
 

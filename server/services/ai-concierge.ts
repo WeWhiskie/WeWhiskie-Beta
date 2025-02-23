@@ -115,7 +115,9 @@ export async function generateConciergePersonality(
     avatarDescription: '',
     voiceDescription: '',
     specialties: [],
-    catchphrase: ''
+    catchphrase: '',
+    // Generate a default avatar URL based on the personality style
+    avatarUrl: `/assets/avatars/${style}-expert.svg`
   };
 
   for (const line of lines) {
@@ -140,7 +142,8 @@ export async function generateConciergePersonality(
     avatarDescription: personality.avatarDescription || 'Professional whisky expert',
     voiceDescription: personality.voiceDescription || 'Clear and articulate',
     specialties: personality.specialties?.length ? personality.specialties : ['Whisky tasting', 'Spirit education'],
-    catchphrase: personality.catchphrase || 'Let\'s explore the world of whisky together!'
+    catchphrase: personality.catchphrase || 'Let\'s explore the world of whisky together!',
+    avatarUrl: personality.avatarUrl || `/assets/avatars/default-expert.svg`
   };
 
   return conciergePersonalitySchema.parse(validatedPersonality);
