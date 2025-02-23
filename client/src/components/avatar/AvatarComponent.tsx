@@ -29,12 +29,35 @@ export function AvatarComponent({
   const [isAnimating, setIsAnimating] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMicPermission, setHasMicPermission] = useState(false);
   const lottieRef = useRef(null);
+
+  // Check microphone permissions on mount
+  useEffect(() => {
+    const checkMicPermissions = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("[AvatarComponent] Microphone access granted:", stream);
+        setHasMicPermission(true);
+        // Stop the stream since we only needed it for permission check
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.error("[AvatarComponent] Microphone access error:", err);
+        setHasMicPermission(false);
+      }
+    };
+    checkMicPermissions();
+  }, []);
 
   useEffect(() => {
     console.log("[AvatarComponent] Mounting with personality:", personality?.name);
-    setIsLoading(true);
+    console.log("[AvatarComponent] Avatar URL state:", {
+      customUrl: customAvatarUrl,
+      hasError: avatarError,
+      isLoading: isLoading
+    });
 
+    setIsLoading(true);
     // Reset error state when URL changes
     if (customAvatarUrl) {
       setAvatarError(false);
@@ -98,8 +121,11 @@ export function AvatarComponent({
           onLoad={handleAvatarLoad}
           className={cn(
             "transition-opacity duration-200",
-            isLoading ? "opacity-0" : "opacity-100"
+            isLoading ? "opacity-0" : "opacity-100",
+            "block !important", // Force visibility
+            "w-full h-full object-cover" // Ensure proper sizing
           )}
+          style={{ display: 'block' }} // Additional force display
         />
         <AvatarFallback className="text-2xl bg-primary/20">
           {personality?.name?.[0] || "AI"}
@@ -110,7 +136,7 @@ export function AvatarComponent({
 
   return (
     <div className="relative flex flex-col items-center space-y-4">
-      <div className="relative w-32 h-32 rounded-full overflow-hidden shadow-lg">
+      <div className="relative w-32 h-32 rounded-full overflow-hidden shadow-lg" style={{ minHeight: '128px' }}>
         {renderAvatar()}
       </div>
 
@@ -120,9 +146,14 @@ export function AvatarComponent({
           size="icon"
           className={cn(
             "relative transition-colors duration-200",
+            !hasMicPermission && "opacity-50 cursor-not-allowed",
             isListening && "bg-red-100 hover:bg-red-200"
           )}
           onClick={() => {
+            if (!hasMicPermission) {
+              console.log("[AvatarComponent] No microphone permission");
+              return;
+            }
             console.log("[AvatarComponent] Toggling listening state:", !isListening);
             if (isListening) {
               onStopListening();
@@ -130,6 +161,8 @@ export function AvatarComponent({
               onStartListening();
             }
           }}
+          disabled={!hasMicPermission}
+          title={!hasMicPermission ? "Microphone access required" : undefined}
         >
           {isListening ? (
             <MicOff className="h-4 w-4 text-red-500" />
