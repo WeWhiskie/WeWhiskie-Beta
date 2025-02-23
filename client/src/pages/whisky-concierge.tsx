@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, RefreshCcw, UserCircle2 } from "lucide-react";
+import { Send, RefreshCcw, UserCircle2, MessageSquare } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { ConciergePersonality } from "@shared/schema";
 import { queryClient } from "@/lib/queryClient";
 
@@ -48,10 +49,10 @@ const TypingIndicator = () => (
 const TIMEOUT_DURATION = 30000; // 30 seconds timeout
 
 const PERSONALITY_STYLES = [
-  { id: "highland", name: "Highland Expert", accent: "Scottish Highland" },
-  { id: "speyside", name: "Speyside Scholar", accent: "Speyside Scottish" },
-  { id: "bourbon", name: "Bourbon Master", accent: "Kentucky American" },
-  { id: "islay", name: "Islay Sage", accent: "Islay Scottish" },
+  { id: "highland", name: "Highland Expert", accent: "Scottish Highland", description: "A seasoned expert from the Highland distilleries" },
+  { id: "speyside", name: "Speyside Scholar", accent: "Speyside Scottish", description: "A master of Speyside's finest whiskies" },
+  { id: "bourbon", name: "Bourbon Master", accent: "Kentucky American", description: "A Kentucky bourbon heritage expert" },
+  { id: "islay", name: "Islay Sage", accent: "Islay Scottish", description: "A wise soul steeped in Islay's peated traditions" },
 ];
 
 export default function WhiskyConcierge() {
@@ -62,6 +63,7 @@ export default function WhiskyConcierge() {
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [selectedStyle, setSelectedStyle] = useState("highland");
   const [currentPersonality, setCurrentPersonality] = useState<ConciergePersonality | null>(null);
+  const [isPersonalityChanging, setIsPersonalityChanging] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -84,6 +86,7 @@ export default function WhiskyConcierge() {
   // Generate new personality
   const generatePersonality = useMutation({
     mutationFn: async () => {
+      setIsPersonalityChanging(true);
       const nameResponse = await fetch("/api/whisky-concierge/generate-name", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -112,8 +115,15 @@ export default function WhiskyConcierge() {
     onSuccess: (data) => {
       setCurrentPersonality(data);
       queryClient.invalidateQueries({ queryKey: ["/api/whisky-concierge/personality", selectedStyle] });
+      toast({
+        title: "New Personality Generated",
+        description: `Meet ${data.name}, your new whisky concierge!`,
+        duration: 3000,
+      });
+      setIsPersonalityChanging(false);
     },
     onError: (error) => {
+      setIsPersonalityChanging(false);
       toast({
         variant: "destructive",
         title: "Error",
@@ -126,6 +136,15 @@ export default function WhiskyConcierge() {
   useEffect(() => {
     if (personality && typeof personality === 'object') {
       setCurrentPersonality(personality as ConciergePersonality);
+      // Add a welcome message when personality changes
+      setMessages(prev => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `${(personality as ConciergePersonality).catchphrase} I'm ${(personality as ConciergePersonality).name}, and I'm here to guide you through the world of whisky with my ${(personality as ConciergePersonality).accent} expertise.`,
+          timestamp: new Date().toISOString(),
+        }
+      ]);
     }
   }, [personality]);
 
@@ -272,7 +291,7 @@ export default function WhiskyConcierge() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || isThinking) return;
+    if (!query.trim() || isThinking || isPersonalityChanging) return;
     conciergeQuery.mutate(query);
   };
 
@@ -288,9 +307,12 @@ export default function WhiskyConcierge() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4">
-        <p className="text-sm text-center text-muted-foreground">
-          Please sign in to chat with our whisky concierge
-        </p>
+        <Alert>
+          <MessageSquare className="h-4 w-4" />
+          <AlertDescription>
+            Please sign in to chat with our whisky concierge
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -306,7 +328,8 @@ export default function WhiskyConcierge() {
             onValueChange={(value) => {
               setSelectedStyle(value);
               setCurrentPersonality(null);
-              refetchPersonality();
+              setIsPersonalityChanging(true);
+              refetchPersonality().finally(() => setIsPersonalityChanging(false));
             }}
           >
             <SelectTrigger className="w-[200px]">
@@ -315,7 +338,10 @@ export default function WhiskyConcierge() {
             <SelectContent>
               {PERSONALITY_STYLES.map((style) => (
                 <SelectItem key={style.id} value={style.id}>
-                  {style.name}
+                  <div className="flex flex-col">
+                    <span>{style.name}</span>
+                    <span className="text-xs text-muted-foreground">{style.description}</span>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -323,24 +349,33 @@ export default function WhiskyConcierge() {
           <Button
             variant="outline"
             onClick={() => generatePersonality.mutate()}
-            disabled={generatePersonality.isPending}
+            disabled={generatePersonality.isPending || isPersonalityChanging}
           >
-            Generate New Personality
+            {generatePersonality.isPending || isPersonalityChanging ? "Generating..." : "Generate New Personality"}
           </Button>
         </div>
-        {currentPersonality && (
-          <div className="flex items-center justify-center gap-4 p-2 bg-muted rounded-lg">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <UserCircle2 className="w-8 h-8 text-primary" />
-            </div>
-            <div className="text-left">
-              <p className="font-medium">{currentPersonality.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {currentPersonality.accent} • {currentPersonality.specialties?.[0]}
-              </p>
-            </div>
-          </div>
-        )}
+        <AnimatePresence mode="wait">
+          {currentPersonality && (
+            <motion.div
+              key={currentPersonality.name}
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.3 }}
+              className="flex items-center justify-center gap-4 p-2 bg-muted rounded-lg"
+            >
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <UserCircle2 className="w-8 h-8 text-primary" />
+              </div>
+              <div className="text-left">
+                <p className="font-medium">{currentPersonality.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {currentPersonality.accent} • {currentPersonality.specialties?.[0]}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Messages Area */}
@@ -425,12 +460,12 @@ export default function WhiskyConcierge() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={`Ask ${currentPersonality?.name || 'your whisky concierge'}...`}
-            disabled={isThinking}
+            disabled={isThinking || isPersonalityChanging}
             className="flex-1"
           />
           <Button
             type="submit"
-            disabled={isThinking || !query.trim()}
+            disabled={isThinking || !query.trim() || isPersonalityChanging}
             size="icon"
           >
             <Send className="h-4 w-4" />
