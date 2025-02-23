@@ -439,10 +439,6 @@ export const usersRelations = relations(users, ({ many }) => ({
     fields: [users.id],
     references: [invites.inviterUserId]
   }),
-  invitesReceived: many(invites, {
-    fields: [users.id],
-    references: [invites.invitedBy]
-  }),
   masterclassParticipations: many(masterclassParticipants)
 }));
 
