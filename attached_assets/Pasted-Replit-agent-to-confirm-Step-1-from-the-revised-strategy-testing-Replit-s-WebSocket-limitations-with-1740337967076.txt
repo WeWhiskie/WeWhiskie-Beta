@@ -1,0 +1,44 @@
+Replit agent to confirm Step 1 from the revised strategy—testing Replit’s WebSocket limitations with a minimal WebSocket server in server/websocket.ts. This will help us verify whether Replit’s environment constraints (e.g., timeouts, resource limits) are causing the persistent "Connection Error" and determine if we need to proceed with the cloud transition.
+Please help me test Replit’s WebSocket limitations for WeWhiskie by implementing and confirming a minimal WebSocket server in `server/websocket.ts`. Follow these steps:
+
+1. Open `server/websocket.ts` and replace its contents with the following minimal WebSocket server code:
+   ```typescript
+   import { WebSocketServer } from 'ws';
+
+   const wss = new WebSocketServer({ port: 8080 });
+
+   wss.on('connection', (ws) => {
+     console.log('WebSocket connected');
+     ws.on('message', (message) => {
+       console.log('Received:', message);
+       ws.send('Echo: ' + message);
+     });
+     ws.on('close', () => console.log('WebSocket disconnected'));
+     ws.on('error', (error) => console.error('WebSocket error:', error));
+
+     // Heartbeat to prevent timeouts
+     const heartbeat = setInterval(() => {
+       if (ws.readyState === WebSocket.OPEN) {
+         ws.ping();
+       }
+     }, 30000);
+
+     ws.on('close', () => clearInterval(heartbeat));
+   });
+
+   console.log('WebSocket server started on port 8080');
+Ensure the server is running in Replit by checking the console for the message “WebSocket server started on port 8080” and no errors.
+Test the WebSocket connection manually using a WebSocket client (e.g., WebSocket King, Postman, or a browser-based tool) by connecting to wss://your-repl-name.replit.dev:8080. Send a test message like “Test message” and verify the following in the Replit console:
+“WebSocket connected” appears when the connection is established.
+“Received: Test message” and “Echo: Test message” appear when the message is sent and echoed back.
+Check if the connection stays stable for at least 5 minutes without dropping (to test Replit’s inactivity timeout).
+If the connection drops or fails with errors (e.g., “WebSocket error,” “Connection timeout,” or “Connection Error” in the UI), note the specific error messages in the Replit console and report them.
+If the connection succeeds but drops after 5 minutes, confirm this as Replit’s inactivity timeout limitation, indicating we should proceed with the cloud transition.
+Provide the test results, including any console logs or errors, and suggest next steps based on whether the WebSocket stabilizes or continues to fail. Focus on confirming Replit’s WebSocket constraints to justify moving to a cloud platform for WeWhiskie’s long-term stability.
+
+---
+
+### Notes
+- Replace `your-repl-name` in the WebSocket URL with your actual Replit project name (e.g., `wp21/WhiskyCircle` becomes `wp21-whiskycircle` in the URL).
+- This test will help us determine if Replit’s environment is the root cause of the "Connection Error." If the WebSocket fails or drops after 5 minutes, it confirms we need to move to a cloud platform like Vercel or AWS for production, as outlined in the revised strategy.
+- Let me know the results from Replit, and we’ll decide the next steps—either refine the Replit setup or proceed with the cloud deployment to ensure WeWhiskie’s stability and scalability. I’m here to help every step of the way!
