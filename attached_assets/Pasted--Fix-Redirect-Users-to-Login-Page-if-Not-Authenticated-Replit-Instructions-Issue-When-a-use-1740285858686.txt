@@ -1,0 +1,142 @@
+🛠 Fix: Redirect Users to Login Page if Not Authenticated (Replit Instructions)
+📌 Issue:
+When a user clicks "Review" without being logged in, the screen goes blank instead of redirecting them to the login page.
+
+✅ Fix: Implement an authentication check that automatically redirects users to the login page if they are not logged in.
+🔹 Step 1: Add Authentication Check in the Review Page
+In client/src/pages/ReviewPage.tsx (or the equivalent review page component), modify the logic to check if the user is authenticated before rendering the review form.
+
+Modify ReviewPage.tsx
+tsx
+Copy
+Edit
+import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext"; // Ensure you have authentication context
+
+const ReviewPage = () => {
+    const navigate = useNavigate();
+    const { isAuthenticated } = useAuth(); // Use authentication state
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            navigate("/login"); // Redirect to login if user is not authenticated
+        }
+    }, [isAuthenticated, navigate]);
+
+    return (
+        <div>
+            <h2>Write a Review</h2>
+            {/* Your review form component here */}
+        </div>
+    );
+};
+
+export default ReviewPage;
+🔹 Step 2: Ensure Authentication Context is Set Up
+If you haven’t already set up an authentication context, add the following in client/src/context/AuthContext.tsx:
+
+tsx
+Copy
+Edit
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                const response = await fetch("/api/auth/check", { credentials: "include" });
+                const data = await response.json();
+                setIsAuthenticated(data.isAuthenticated);
+            } catch (error) {
+                console.error("Auth check failed:", error);
+                setIsAuthenticated(false);
+            }
+        };
+        checkAuth();
+    }, []);
+
+    return (
+        <AuthContext.Provider value={{ isAuthenticated, setIsAuthenticated }}>
+            {children}
+        </AuthContext.Provider>
+    );
+};
+
+export const useAuth = () => useContext(AuthContext);
+🔹 Step 3: Ensure Routes Use the Auth Provider
+Wrap your application with the AuthProvider in client/src/App.tsx:
+
+tsx
+Copy
+Edit
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import LoginPage from "./pages/LoginPage";
+import ReviewPage from "./pages/ReviewPage";
+
+const App = () => {
+    return (
+        <AuthProvider>
+            <Router>
+                <Routes>
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/review" element={<ReviewPage />} />
+                    {/* Add other routes as needed */}
+                </Routes>
+            </Router>
+        </AuthProvider>
+    );
+};
+
+export default App;
+🔹 Step 4: Backend Route to Check Authentication Status
+Modify your backend authentication check (server/routes/auth.js):
+
+js
+Copy
+Edit
+const express = require("express");
+const router = express.Router();
+
+router.get("/check", (req, res) => {
+    if (req.isAuthenticated()) {
+        res.json({ isAuthenticated: true });
+    } else {
+        res.json({ isAuthenticated: false });
+    }
+});
+
+module.exports = router;
+🔹 Step 5: Test & Verify
+✅ Restart Replit
+
+sh
+Copy
+Edit
+npm run dev
+✅ Try Clicking "Review" While Logged Out
+
+You should automatically be redirected to the login page.
+After logging in, you should be redirected back to the review page.
+✅ Check Console for Errors
+
+If any authentication errors appear, ensure cookies are sent with:
+js
+Copy
+Edit
+credentials: "include"
+in all fetch requests.
+
+🚀 Final Outcome
+✔ Users who aren’t logged in are redirected to the login page.
+✔ Once logged in, users can proceed to write a review.
+✔ No more blank screen issues!
+
+🔥 Now your review system properly handles authentication and navigation! 🚀
