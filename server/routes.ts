@@ -16,6 +16,7 @@ import { handleWhiskyConciergeChat, handleGenerateName, handleGeneratePersonalit
 import { textToSpeechService } from './services/text-to-speech';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { SessionData } from 'express-session';
+import { parse as parseCookie } from 'cookie';
 
 // Extend IncomingMessage to include session store
 interface ExtendedIncomingMessage extends IncomingMessage {
@@ -58,69 +59,64 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   // Create HTTP server
   const server = createServer(app);
 
-  // Update WebSocket configuration with better error handling and logging
+  // WebSocket server setup with enhanced error handling
   const wss = new WebSocketServer({ 
     server, 
     path: '/ws/ai-concierge',
     verifyClient: async (info, callback) => {
       try {
-        console.log('WebSocket connection attempt - Verifying client...', {
-          cookies: info.req.headers.cookie,
-          sessionStore: !!sessionStore
+        const cookies = parseCookie(info.req.headers.cookie || '');
+        console.log('WebSocket verification - Cookies:', {
+          available: Object.keys(cookies),
+          sessionStore: sessionStore ? 'available' : 'not available'
         });
 
-        const extendedReq = info.req as ExtendedIncomingMessage;
-        extendedReq.sessionStore = sessionStore;
-
-        // Parse cookies with better error handling
-        const cookieHeader = info.req.headers.cookie;
-        if (!cookieHeader) {
-          console.log('WebSocket connection rejected: No cookies found');
-          callback(false, 401, 'No session cookie found');
-          return;
-        }
-
-        // Get session ID from cookie
-        const cookies = parse(cookieHeader); // Assuming parse function is defined elsewhere
-        const sessionId = cookies['whisky.session.id'] || 
-                         cookies['connect.sid'] || 
-                         cookies['whisky.sid'];
+        // Unified session ID check - prefer whisky.session.id
+        const sessionId = cookies['whisky.session.id'] || cookies['connect.sid'];
 
         if (!sessionId) {
-          console.log('WebSocket connection rejected: No valid session cookie found');
-          callback(false, 401, 'No valid session found');
+          console.log('WebSocket connection rejected: No valid session ID');
+          callback(false, 401, 'No valid session ID');
           return;
         }
 
-        // Get session from store
-        const session = await new Promise<SessionData | null>((resolve, reject) => {
-          if (!sessionStore) {
-            console.error('Session store not available');
-            reject(new Error('Session store not available'));
+        if (!sessionStore) {
+          console.error('Session store not initialized');
+          callback(false, 500, 'Session store error');
+          return;
+        }
+
+        try {
+          // Verify session using promisified session store get
+          const session = await new Promise<SessionData | null>((resolve, reject) => {
+            sessionStore.get(sessionId.replace('s:', ''), (err, sess) => {
+              if (err) {
+                console.error('Session fetch error:', err);
+                reject(err);
+              } else {
+                resolve(sess);
+              }
+            });
+          });
+
+          if (!session) {
+            console.log('WebSocket connection rejected: Invalid session data');
+            callback(false, 401, 'Invalid session');
             return;
           }
 
-          sessionStore.get(sessionId, (err, session) => {
-            if (err) {
-              console.error('Error fetching session:', err);
-              reject(err);
-            } else {
-              resolve(session);
-            }
+          // Store session data in request
+          info.req.session = session;
+          console.log('WebSocket client authenticated successfully', {
+            userId: session.userId,
+            sessionId: sessionId
           });
-        });
 
-        if (!session) {
-          console.log('WebSocket connection rejected: Invalid or expired session');
-          callback(false, 401, 'Invalid or expired session');
-          return;
+          callback(true);
+        } catch (error) {
+          console.error('Session verification error:', error);
+          callback(false, 500, 'Session verification failed');
         }
-
-        // Store session in request for later use
-        extendedReq.session = session;
-        console.log('WebSocket client authenticated successfully');
-        callback(true);
-
       } catch (error) {
         console.error('WebSocket verification error:', error);
         callback(false, 500, 'Internal Server Error');
@@ -128,61 +124,73 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     }
   });
 
-  // Enhanced client tracking and connection management
-  const clients = new Map<WebSocket, { 
-    connectedAt: Date; 
-    sessionId: string | undefined; 
-    lastPingTime?: number;
+  // Enhanced client tracking with more metadata
+  const clients = new Map<WebSocket, {
     userId?: number;
+    sessionId?: string;
+    lastPing: number;
     reconnectAttempts: number;
+    connectedAt: number;
   }>();
 
-  // Set up heartbeat interval
+  // Heartbeat check interval (30 seconds)
   const heartbeatInterval = setInterval(() => {
+    const now = Date.now();
     wss.clients.forEach((ws) => {
       const client = clients.get(ws);
-      if (client && Date.now() - (client.lastPingTime || 0) > 30000) {
-        console.log('Client timeout, closing connection');
+      if (client && (now - client.lastPing > 45000)) {
+        console.log('Client timeout detected - terminating connection');
         ws.terminate();
         return;
       }
+
       if (ws.readyState === WebSocket.OPEN) {
         ws.ping();
       }
     });
-  }, 15000);
+  }, 30000);
+
+  // Clean up on server close
+  server.on('close', () => {
+    clearInterval(heartbeatInterval);
+  });
 
   wss.on('connection', async (ws, req) => {
     try {
       console.log('New AI Concierge WebSocket connection established');
 
-      // Add client to tracking map with metadata
-      clients.set(ws, { 
-        connectedAt: new Date(),
-        sessionId: req.headers.cookie,
-        lastPingTime: Date.now(),
-        reconnectAttempts: 0
+      // Initialize client tracking with more metadata
+      clients.set(ws, {
+        lastPing: Date.now(),
+        reconnectAttempts: 0,
+        userId: req.session?.userId,
+        sessionId: req.session?.id,
+        connectedAt: Date.now()
       });
 
-      // Send initial connection confirmation
+      // Send connection confirmation with session info
       ws.send(JSON.stringify({
         type: 'CONNECTED',
-        message: 'Connected to AI Concierge WebSocket'
+        message: 'Connected to AI Concierge WebSocket',
+        data: {
+          userId: req.session?.userId,
+          timestamp: Date.now()
+        }
       }));
 
-      // Handle pong messages for connection monitoring
+      // Handle pong messages
       ws.on('pong', () => {
         const client = clients.get(ws);
         if (client) {
-          client.lastPingTime = Date.now();
+          client.lastPing = Date.now();
         }
       });
 
-      // Handle incoming messages with enhanced error handling
-      ws.on('message', async (message: string) => {
+      // Handle incoming messages
+      ws.on('message', async (message) => {
         try {
-          const data = JSON.parse(message);
-          console.log('Received message type:', data.type);
+          const data = JSON.parse(message.toString());
+          console.log('Received message:', { type: data.type });
 
           const client = clients.get(ws);
           if (!client) {
@@ -195,8 +203,9 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
                 throw new Error('Speech input text is required');
               }
 
-              const response = await handleWhiskyConciergeChat({
-                body: { message: data.text }
+              await handleWhiskyConciergeChat({
+                body: { message: data.text },
+                session: req.session
               } as any, {
                 json: (responseData: any) => {
                   if (ws.readyState === WebSocket.OPEN) {
@@ -209,39 +218,15 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
               } as any);
               break;
 
-            case 'GET_PERSONALITY':
-              try {
-                if (!data.name) {
-                  throw new Error('Personality name is required');
-                }
-                const personality = whiskyConcierge.getPersonality(data.name);
-                if (ws.readyState === WebSocket.OPEN) {
-                  ws.send(JSON.stringify({
-                    type: 'PERSONALITY_DATA',
-                    data: personality
-                  }));
-                }
-              } catch (error) {
-                console.error('Error getting personality:', error);
-                if (ws.readyState === WebSocket.OPEN) {
-                  ws.send(JSON.stringify({
-                    type: 'ERROR',
-                    error: 'Failed to get personality data'
-                  }));
-                }
-              }
-              break;
-
             default:
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                  type: 'ERROR',
-                  error: 'Unknown message type'
-                }));
-              }
+              console.warn('Unknown message type:', data.type);
+              ws.send(JSON.stringify({
+                type: 'ERROR',
+                error: 'Unknown message type'
+              }));
           }
         } catch (error) {
-          console.error('WebSocket message handling error:', error);
+          console.error('Message handling error:', error);
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
               type: 'ERROR',
@@ -253,11 +238,10 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
 
       // Handle connection close
       ws.on('close', (code, reason) => {
-        console.log(`Client disconnected. Code: ${code}, Reason: ${reason}`);
+        console.log(`WebSocket closed - Code: ${code}, Reason: ${reason}`);
         const client = clients.get(ws);
         if (client) {
-          // Store reconnect attempts for backoff
-          client.reconnectAttempts += 1;
+          client.reconnectAttempts++;
         }
         clients.delete(ws);
       });
@@ -266,19 +250,13 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
       ws.on('error', (error) => {
         console.error('WebSocket error:', error);
         clients.delete(ws);
+        ws.terminate();
       });
 
     } catch (error) {
       console.error('Error in WebSocket connection handler:', error);
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close(1011, 'Internal Server Error');
-      }
+      ws.close(1011, 'Internal Server Error');
     }
-  });
-
-  // Clean up interval on server close
-  server.on('close', () => {
-    clearInterval(heartbeatInterval);
   });
 
   // Serve static files from attached_assets directory
@@ -833,12 +811,4 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   return { server, liveStreamingServer };
 }
 
-// Placeholder for the cookie parsing function.  Replace with your actual implementation.
-function parse(cookieHeader: string): Record<string, string> {
-  return cookieHeader.split(';')
-    .reduce((acc: Record<string, string>, cookie) => {
-      const [key, value] = cookie.trim().split('=');
-      acc[key] = value;
-      return acc;
-    }, {});
-}
+//The old parse function is removed because it is replaced with parseCookie from 'cookie' library

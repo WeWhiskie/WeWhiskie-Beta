@@ -23,9 +23,13 @@ type WebRTCPayload = {
 };
 
 type WebRTCMessage = {
-  type: 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'request-offer' | 'user-joined' | 'user-left' | 'broadcast-ready' | 'quality-change';
+  type: 'offer' | 'answer' | 'ice-candidate' | 'chat' | 'request-offer' | 'user-joined' | 'user-left' | 'broadcast-ready' | 'quality-change' | 'CONNECTED' | 'ERROR';
   payload: WebRTCPayload;
 };
+
+const MAX_RECONNECT_ATTEMPTS = 5;
+const INITIAL_RECONNECT_DELAY = 1000;
+const MAX_RECONNECT_DELAY = 10000;
 
 export function useWebRTC(isHost: boolean) {
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -36,7 +40,6 @@ export function useWebRTC(isHost: boolean) {
   const peerConnections = useRef<Map<number, RTCPeerConnection>>(new Map());
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
   const reconnectTimeout = useRef<NodeJS.Timeout>();
   const currentQuality = useRef<{ width: number; height: number; frameRate: number }>({
     width: 1280,
@@ -115,86 +118,112 @@ export function useWebRTC(isHost: boolean) {
       socketRef.current.close();
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    console.log('Connecting to WebSocket URL:', wsUrl);
+    try {
+      setIsConnecting(true);
+      setError(null);
 
-    const socket = new WebSocket(wsUrl);
-    socketRef.current = socket;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/ai-concierge`;
+      console.log('Connecting to WebSocket URL:', wsUrl);
 
-    socket.onopen = async () => {
-      console.log('WebSocket connected successfully');
-      reconnectAttempts.current = 0;
-      setConnectionState('connecting');
+      const socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
 
-      socket.send(JSON.stringify({
-        type: 'join-session',
-        payload: { sessionId, userId }
-      }));
+      socket.onopen = async () => {
+        console.log('WebSocket connected successfully');
+        reconnectAttempts.current = 0;
+        setConnectionState('connecting');
+        setIsReconnecting(false);
 
-      if (isHost) {
-        try {
-          const mediaStream = await initializeMediaStream();
-          if (mediaStream) {
-            setConnectionState('connected');
-            socket.send(JSON.stringify({
-              type: 'broadcast-ready',
-              payload: { userId }
-            }));
+        socket.send(JSON.stringify({
+          type: 'join-session',
+          payload: { sessionId, userId }
+        }));
+
+        if (isHost) {
+          try {
+            const mediaStream = await initializeMediaStream();
+            if (mediaStream) {
+              setConnectionState('connected');
+              socket.send(JSON.stringify({
+                type: 'broadcast-ready',
+                payload: { userId }
+              }));
+            }
+          } catch (err) {
+            console.error('Failed to initialize host media stream:', err);
+            setError(err instanceof Error ? err : new Error('Failed to initialize media stream'));
           }
-        } catch (err) {
-          console.error('Failed to initialize host media stream:', err);
-          setError(err instanceof Error ? err : new Error('Failed to initialize media stream'));
         }
-      }
-    };
+      };
 
-    socket.onclose = (event) => {
-      console.log('WebSocket closed:', event.code, event.reason);
-      setConnectionState('disconnected');
+      socket.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
+        setConnectionState('disconnected');
 
-      // Don't attempt to reconnect if it was a normal closure
-      if (event.code !== 1000) {
-        attemptReconnect(sessionId, userId);
-      }
-    };
+        if (event.code !== 1000 && event.code !== 1001) {
+          handleReconnect(sessionId, userId);
+        }
+      };
 
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setError(new Error('WebSocket connection failed'));
-      setConnectionState('failed');
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setError(new Error('WebSocket connection failed'));
+        setConnectionState('failed');
+        handleReconnect(sessionId, userId);
+      };
 
-      // Attempt to reconnect on error
-      attemptReconnect(sessionId, userId);
-    };
+      socket.onmessage = async (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('WebSocket message received:', message);
 
-    socket.onmessage = async (event) => {
-      try {
-        const message: WebRTCMessage = JSON.parse(event.data);
-        console.log('WebSocket message received:', message);
-        await handleSocketMessage(message);
-      } catch (error) {
-        console.error('Error handling WebSocket message:', error);
-      }
-    };
+          switch (message.type) {
+            case 'CONNECTED':
+              console.log('Connection confirmed:', message.payload);
+              break;
+            case 'ERROR':
+              console.error('Server error:', message.payload.message);
+              setError(new Error(message.payload.message));
+              break;
+            default:
+              await handleSocketMessage(message);
+          }
+        } catch (error) {
+          console.error('Error handling WebSocket message:', error);
+          setError(error instanceof Error ? error : new Error('Failed to parse WebSocket message'));
+        }
+      };
+    } catch (error) {
+      console.error('Error creating WebSocket:', error);
+      setError(error instanceof Error ? error : new Error('Failed to create WebSocket'));
+      setIsConnecting(false);
+    }
   };
 
-  const attemptReconnect = (sessionId: number, userId: number) => {
-    if (reconnectAttempts.current >= maxReconnectAttempts) {
+  const handleReconnect = (sessionId: number, userId: number) => {
+    if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
       setError(new Error('Failed to reconnect after multiple attempts'));
+      setIsReconnecting(false);
       return;
     }
 
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+    }
+
     setIsReconnecting(true);
-    reconnectAttempts.current += 1;
+    reconnectAttempts.current++;
 
-    const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
-    console.log(`Attempting to reconnect in ${backoffTime}ms (Attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
+    const delay = Math.min(
+      INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttempts.current - 1),
+      MAX_RECONNECT_DELAY
+    );
 
+    console.log(`Attempting to reconnect in ${delay}ms (Attempt ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
     reconnectTimeout.current = setTimeout(() => {
-      console.log(`Reconnection attempt ${reconnectAttempts.current}`);
       connectToSocket(sessionId, userId);
-    }, backoffTime);
+    }, delay);
   };
 
   const sendMessage = (type: WebRTCMessage['type'], payload: WebRTCPayload) => {
@@ -254,6 +283,10 @@ export function useWebRTC(isHost: boolean) {
       case 'user-left':
         console.log(`User ${type}:`, payload.userId);
         break;
+      case 'ERROR':
+          console.error('Server error:', payload.message);
+          setError(new Error(payload.message));
+          break;
     }
   };
 
