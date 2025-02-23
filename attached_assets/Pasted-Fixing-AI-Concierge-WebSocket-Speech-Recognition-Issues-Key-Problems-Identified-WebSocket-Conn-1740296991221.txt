@@ -1,0 +1,55 @@
+Fixing AI Concierge WebSocket & Speech Recognition Issues
+🔴 Key Problems Identified:
+WebSocket Connection Fails (401 Authentication Errors)
+
+Connection repeatedly drops ("Connection Lost," "Failed to connect after multiple attempts").
+Authentication errors (401) indicate token issues or session validation problems.
+WebSocket does not re-establish connection properly after failures.
+Speech Recognition Still Not Working
+
+No transcription appears when speaking.
+No voice responses from AI.
+No live listening feedback (e.g., waveform animation).
+Speech recognition stops immediately after activation (error messages follow).
+UI Issues & Missing Features
+
+No animated 3D avatar (should reflect the AI personality).
+Speaking icon still incorrect (should not be a microphone).
+No visible animation when the AI is "thinking" or "responding."
+✅ Action Plan for Replit – Step-by-Step Fixes
+1️⃣ WebSocket Connection – Fix Authentication & Stability
+Ensure WebSocket uses a valid authentication token.
+Refresh authentication token if expired (don't disconnect).
+Verify WebSocket handshake request is correct (check headers).
+Implement auto-reconnect logic (with exponential backoff).
+Debug WebSocket console logs:
+Should show "Connected to AI Concierge WebSocket" (no errors).
+Ensure server accepts & validates tokens properly.
+2️⃣ Fix Speech Recognition & AI Response
+Replace microphone icon with a talking user icon (more intuitive).
+When activated:
+Prompt user for microphone permissions (if needed).
+Display live transcription as words are recognized.
+Show waveform animation while listening.
+Ensure AI processes input and responds with:
+Text response (chat bubble).
+Voice response (TTS with volume control).
+Fix premature speech recognition stop (errors like "Listening stopped").
+Only stop when user clicks stop, not on timeout.
+3️⃣ Add AI Avatar & Animation
+Ensure 3D avatar is displayed based on selected AI personality.
+Animate avatar when speaking (mouth moves, subtle expressions).
+Add ‘Thinking’ animation when processing.
+Allow users to select avatar styles.
+4️⃣ Improve UI & Error Handling
+Ensure all error messages explain what went wrong & how to fix it.
+No transparent/overlapping UI elements.
+Fix any scaling issues on mobile.
+Test across different browsers.
+🔍 Final Checklist for Replit
+✅ WebSocket is stable, properly authenticated, and auto-reconnects.
+✅ Speech recognition is functional & continuously listens.
+✅ AI responds in both text & voice.
+✅ Avatar is present, animates, and matches personality.
+✅ UI is clean, with clear indicators for AI states.
+💡 Once fixed, confirm all functionality works correctly before deployment. If issues persist, provide logs for debugging.
