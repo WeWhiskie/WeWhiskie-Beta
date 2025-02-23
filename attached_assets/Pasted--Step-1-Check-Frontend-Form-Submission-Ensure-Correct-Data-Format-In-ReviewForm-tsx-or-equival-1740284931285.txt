@@ -1,0 +1,133 @@
+🔹 Step 1: Check Frontend Form Submission (Ensure Correct Data Format)
+In ReviewForm.tsx (or equivalent), locate the review submission function. Modify it to ensure the correct FormData format is sent.
+
+✅ Fix: Convert File Upload to FormData Before Sending
+Replace your current API call with this:
+
+tsx
+Copy
+Edit
+const handleSubmitReview = async (event) => {
+    event.preventDefault();
+
+    // Ensure the file is correctly formatted
+    const formData = new FormData();
+    formData.append("reviewText", reviewText);
+    formData.append("rating", rating);
+    if (selectedFile) {
+        formData.append("image", selectedFile);
+    }
+
+    try {
+        const response = await fetch("/api/reviews", {
+            method: "POST",
+            body: formData, // Important: Send as FormData
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            console.log("Review submitted successfully", data);
+        } else {
+            console.error("Error submitting review:", data.message);
+        }
+    } catch (error) {
+        console.error("Request failed:", error);
+    }
+};
+🔹 Step 2: Update Backend to Process File Uploads Correctly
+📌 Current Issue: The backend expects a string but is receiving a file object.
+
+✅ Fix: Use multer to Handle File Uploads in server/routes/reviews.js
+1️⃣ Ensure multer is installed (run in Replit console):
+
+sh
+Copy
+Edit
+npm install multer
+2️⃣ Update server/routes/reviews.js to Handle Image Uploads
+
+Modify the review submission route to process uploaded files:
+
+js
+Copy
+Edit
+const express = require("express");
+const multer = require("multer");
+const path = require("path");
+const router = express.Router();
+const Review = require("../models/Review");
+
+// Configure Multer for file storage
+const storage = multer.diskStorage({
+    destination: "./uploads/",
+    filename: (req, file, cb) => {
+        cb(null, file.fieldname + "-" + Date.now() + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage: storage });
+
+// Review Submission Route
+router.post("/", upload.single("image"), async (req, res) => {
+    try {
+        const { reviewText, rating } = req.body;
+        const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+
+        if (!reviewText || !rating) {
+            return res.status(400).json({ message: "Review text and rating are required" });
+        }
+
+        const newReview = new Review({
+            text: reviewText,
+            rating: rating,
+            imageUrl: imageUrl,
+        });
+
+        await newReview.save();
+        res.status(201).json({ message: "Review added successfully", review: newReview });
+    } catch (error) {
+        console.error("Error saving review:", error);
+        res.status(500).json({ message: "Failed to save review" });
+    }
+});
+
+module.exports = router;
+🔹 Step 3: Ensure Uploaded Images are Served Correctly
+📌 Current Issue: If images are stored on the server but not accessible via the frontend, users won’t see them.
+
+✅ Fix: Serve Uploaded Files in server.js
+In server.js, ensure Express serves uploaded images correctly:
+
+js
+Copy
+Edit
+const path = require("path");
+
+// Serve static files
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+🔹 Step 4: Test & Debug
+✅ Restart Replit
+
+sh
+Copy
+Edit
+npm run dev
+✅ Try Submitting a Review Again
+
+Enter review text, rating, and upload an image.
+Click "Post Review."
+Check console logs for errors.
+✅ Verify Image is Saved
+
+Go to /uploads/ in your project directory.
+Check if the uploaded image appears.
+✅ Check Frontend UI
+
+Refresh the review section.
+Ensure uploaded images display next to reviews.
+🚀 Final Outcome
+✔ File uploads will now work correctly.
+✔ Backend properly processes images.
+✔ Reviews save with attached images.
+✔ Frontend retrieves and displays uploaded photos.
+
+🔥 After implementing these fixes, your review system should work flawlessly! 🚀
