@@ -3,7 +3,8 @@ import type { ConciergePersonality } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { Mic, VolumeX, Volume2, User } from "lucide-react";
+import { Mic, VolumeX, Volume2, User, Loader2 } from "lucide-react";
+import { AvatarComponent } from "./avatar/AvatarComponent";
 import "./AIConcierge.css";
 
 interface AIConciergeProps {
@@ -11,21 +12,12 @@ interface AIConciergeProps {
   personality?: ConciergePersonality;
 }
 
-const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
-  name: "Highland Expert",
-  accent: "Scottish Highland",
-  catchphrase: "Slàinte mhath!",
-  background: "Expert in Highland single malts",
-  personality: "Warm and knowledgeable",
-  avatarDescription: "Distinguished with a hint of Highland charm",
-  voiceDescription: "Rich, warm Scottish accent",
-  specialties: ["Highland whisky", "Scotch traditions", "Distillery processes"],
-  avatarUrl: undefined
-} }) => {
+const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => {
   const [isListening, setIsListening] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [transcript, setTranscript] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [synthesis, setSynthesis] = useState<SpeechSynthesis | null>(null);
   const { toast } = useToast();
@@ -67,7 +59,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
 
     try {
       const recognition = new (window as any).webkitSpeechRecognition();
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
@@ -85,18 +77,16 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
         setTranscript(text);
 
         if (lastResult.isFinal && onMessage) {
+          setIsProcessing(true);
           onMessage(text);
-          recognition.stop();
 
-          // Text-to-speech response
-          if (synthesis && personality) {
-            const utterance = new SpeechSynthesisUtterance(
-              `${personality.catchphrase} Let me think about that.`
-            );
-            utterance.rate = 0.9;
-            utterance.pitch = 1;
-            utterance.volume = volume;
-            synthesis.speak(utterance);
+          // Keep listening for continuous conversation
+          if (!lastResult[0].confidence) {
+            toast({
+              title: "Could not understand",
+              description: "Please speak more clearly and try again",
+              variant: "destructive"
+            });
           }
         }
       };
@@ -123,6 +113,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
 
       recognition.onend = () => {
         setIsListening(false);
+        setIsProcessing(false);
       };
 
       recognitionRef.current = recognition;
@@ -140,7 +131,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
         recognitionRef.current.abort();
       }
     };
-  }, [toast, onMessage, synthesis, volume, personality]);
+  }, [toast, onMessage]);
 
   const toggleListening = async () => {
     if (!recognitionRef.current) return;
@@ -160,7 +151,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
         try {
           recognitionRef.current.start();
         } catch (error) {
-          if ((error as Error).message === 'Failed to execute \'start\' on \'SpeechRecognition\': recognition has already started.') {
+          if ((error as Error).message.includes('recognition has already started')) {
             recognitionRef.current.stop();
           } else {
             throw error;
@@ -187,15 +178,14 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
     const newVolume = value[0];
     setVolume(newVolume);
     setIsMuted(newVolume === 0);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
-    }
-    // Update synthesis volume if active
+
     if (synthesis) {
-      synthesis.cancel(); // Stop current speech
-      const utterance = new SpeechSynthesisUtterance("Volume adjusted");
-      utterance.volume = newVolume;
-      synthesis.speak(utterance);
+      synthesis.cancel();
+      if (newVolume > 0) {
+        const utterance = new SpeechSynthesisUtterance("Volume adjusted");
+        utterance.volume = newVolume;
+        synthesis.speak(utterance);
+      }
     }
   };
 
@@ -203,72 +193,56 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
     setIsMuted(!isMuted);
     const newVolume = isMuted ? 1 : 0;
     setVolume(newVolume);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
-    }
     if (synthesis) {
-      synthesis.cancel(); // Stop current speech
+      synthesis.cancel();
     }
   };
 
   return (
     <div className="concierge-container">
-      <div className="concierge-avatar-container">
-        {personality?.avatarUrl ? (
-          <img 
-            src={personality.avatarUrl} 
-            alt={`AI Avatar - ${personality.name}`} 
-            className="concierge-avatar"
-          />
-        ) : (
-          <div className="concierge-avatar default-avatar">
-            <User className="w-24 h-24 text-muted-foreground" />
-          </div>
-        )}
-      </div>
+      <AvatarComponent
+        personality={personality || null}
+        isListening={isListening}
+        onStartListening={toggleListening}
+        onStopListening={() => recognitionRef.current?.stop()}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+        customAvatarUrl={personality?.avatarUrl}
+      />
 
-      <div className="concierge-info">
-        <h3 className="text-lg font-semibold">{personality.name}</h3>
-        <p className="text-sm text-muted-foreground">{personality.background}</p>
-      </div>
-
-      <div className="concierge-controls">
-        <Button
-          variant={isListening ? "destructive" : "default"}
-          size="icon"
-          className={`mic-button ${isListening ? 'listening' : ''}`}
-          onClick={toggleListening}
-          disabled={!isConnected}
-        >
-          <Mic className={isListening ? "animate-pulse" : ""} />
-        </Button>
-
-        <div className="volume-control">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleMute}
-            className="volume-button"
-          >
-            {volume === 0 ? <VolumeX /> : <Volume2 />}
-          </Button>
-          <Slider
-            value={[volume]}
-            max={1}
-            step={0.1}
-            className="w-24"
-            onValueChange={handleVolumeChange}
-          />
-        </div>
-      </div>
-
-      {transcript && (
-        <div className="transcript-container">
-          <p className="ai-response">{transcript}</p>
+      {/* Speech Recognition Status */}
+      {isProcessing && (
+        <div className="processing-indicator">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Processing your request...</span>
         </div>
       )}
 
-      <audio ref={audioRef} />
+      {/* Real-time Transcript */}
+      {transcript && (
+        <div className="transcript-container">
+          <p className="transcript-text">{transcript}</p>
+        </div>
+      )}
+
+      {/* Volume Controls */}
+      <div className="volume-control">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleMute}
+          className="volume-button"
+        >
+          {isMuted ? <VolumeX /> : <Volume2 />}
+        </Button>
+        <Slider
+          value={[volume]}
+          max={1}
+          step={0.1}
+          className="w-24"
+          onValueChange={handleVolumeChange}
+        />
+      </div>
     </div>
   );
 };
