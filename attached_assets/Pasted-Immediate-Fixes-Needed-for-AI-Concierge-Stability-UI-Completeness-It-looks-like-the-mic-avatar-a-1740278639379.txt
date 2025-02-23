@@ -1,0 +1,37 @@
+Immediate Fixes Needed for AI Concierge Stability & UI Completeness
+It looks like the mic, avatar, and volume controls are now missing again, which means the latest update may have broken previous progress. Here’s a structured debugging & refinement plan to ensure we get the AI Concierge fully functional, polished, and premium.
+
+🛠️ Immediate Fixes Needed:
+1️⃣ Restore & Debug Missing UI Elements
+Mic, avatar, and volume controls were visible before but are now gone.
+Ensure the component imports and state management are correct.
+Check console logs for missing dependencies or rendering issues.
+Add error handling so these components don’t silently fail.
+🔹 Fix: Verify if the UI elements were unintentionally removed during a merge or overwritten by a recent commit.
+
+2️⃣ Ensure the Avatar Renders Properly
+Previously, the avatar had a placeholder but wasn't customizable.
+The UI should allow switching avatars (either default options or user-uploaded).
+If no avatar is selected, default to Whisky Pete.
+🔹 Fix: Ensure the avatar component correctly pulls the selected avatar from state/storage and that it actually renders on the UI.
+
+3️⃣ Reimplement Microphone & Voice Response (TTS)
+Clicking the mic should request permission and enable voice input.
+The AI Concierge should read responses aloud when responding.
+Add a mute button so users can toggle voice output on/off.
+🔹 Fix: Confirm speech recognition & TTS APIs are active and calls are properly made when sending and receiving messages.
+
+4️⃣ Make UI Look & Feel Premium
+Refine Text Formatting: The concierge’s intro description looks cramped & unpolished.
+Add smooth transitions for toggling the mic/avatar.
+The chat window needs better spacing & design consistency.
+🔹 Fix: Improve padding, fonts, and animations so the whole feature feels polished & high-end.
+
+⏭️ Next Steps
+Restore missing mic, avatar, and volume controls.
+Ensure avatar rendering + selection works properly.
+Verify mic & voice interactions are functional.
+Refine chat UI to look premium.
+Once these are stable and fully integrated, we can explore advanced features (like dynamic facial expressions, regional accents, and more).
+
+Let’s get this fixed and make it a truly premium whisky AI experience! 🚀
