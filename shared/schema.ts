@@ -427,6 +427,65 @@ export const chatMessages = pgTable("chat_messages", {
   personality: jsonb("personality").default({}).notNull()
 });
 
+// Store user's whisky preferences and taste profile
+export const userWhiskyPreferences = pgTable("user_whisky_preferences", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  preferredRegions: text("preferred_regions").array(),
+  preferredStyles: text("preferred_styles").array(),
+  flavorPreferences: jsonb("flavor_preferences").default({}),
+  tasteProfile: jsonb("taste_profile").default({}),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+// Store AI companion evolution data
+export const aiCompanionProfiles = pgTable("ai_companion_profiles", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  expertiseLevel: text("expertise_level").default("novice").notNull(),
+  personalityTraits: jsonb("personality_traits").default({}),
+  specializations: text("specializations").array(),
+  knowledgeAreas: jsonb("knowledge_areas").default({}),
+  experiencePoints: integer("experience_points").default(0),
+  lastInteraction: timestamp("last_interaction"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+// Track detailed interaction history
+export const aiInteractionHistory = pgTable("ai_interaction_history", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  companionProfileId: integer("companion_profile_id")
+    .notNull()
+    .references(() => aiCompanionProfiles.id),
+  interactionType: text("interaction_type").notNull(),
+  context: jsonb("context").default({}),
+  userFeedback: jsonb("user_feedback"),
+  timestamp: timestamp("timestamp").defaultNow().notNull()
+});
+
+// Track unlocked features and knowledge
+export const aiUnlockedFeatures = pgTable("ai_unlocked_features", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id),
+  companionProfileId: integer("companion_profile_id")
+    .notNull()
+    .references(() => aiCompanionProfiles.id),
+  featureType: text("feature_type").notNull(),
+  unlockedAt: timestamp("unlocked_at").defaultNow().notNull(),
+  requirements: jsonb("requirements").default({}),
+  metadata: jsonb("metadata").default({})
+});
+
 
 // Define relations after all tables are defined
 export const usersRelations = relations(users, ({ many }) => ({
@@ -434,65 +493,39 @@ export const usersRelations = relations(users, ({ many }) => ({
   reviews: many(reviews),
   collections: many(userWhiskyCollection),
   conversations: many(chatConversations),
-  invitesSent: many(invites, {
-    fields: [users.id],
-    references: [invites.inviterUserId]
-  }),
-  masterclassParticipations: many(masterclassParticipants)
+  invitesSent: many(invites),
+  masterclassParticipations: many(masterclassParticipants),
+  preferences: many(userWhiskyPreferences),
+  aiProfiles: many(aiCompanionProfiles)
 }));
 
 export const whiskiesRelations = relations(whiskies, ({ one, many }) => ({
-  owner: one(users, {
-    fields: [whiskies.user_id],
-    references: [users.id],
-  }),
+  owner: one(users),
   reviews: many(reviews),
   inCollections: many(userWhiskyCollection)
 }));
 
 export const reviewsRelations = relations(reviews, ({ one }) => ({
-  user: one(users, {
-    fields: [reviews.userId],
-    references: [users.id],
-  }),
-  whisky: one(whiskies, {
-    fields: [reviews.whiskyId],
-    references: [whiskies.id],
-  }),
+  user: one(users),
+  whisky: one(whiskies)
 }));
 
 export const userWhiskyCollectionRelations = relations(userWhiskyCollection, ({ one }) => ({
-  user: one(users, {
-    fields: [userWhiskyCollection.userId],
-    references: [users.id],
-  }),
-  whisky: one(whiskies, {
-    fields: [userWhiskyCollection.whiskyId],
-    references: [whiskies.id],
-  }),
+  user: one(users),
+  whisky: one(whiskies)
 }));
 
-// Fix chat conversation relations
 export const chatConversationsRelations = relations(chatConversations, ({ one, many }) => ({
-  user: one(users, {
-    fields: [chatConversations.userId],
-    references: [users.id]
-  }),
+  user: one(users),
   messages: many(chatMessages)
 }));
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
-  conversation: one(chatConversations, {
-    fields: [chatMessages.conversationId],
-    references: [chatConversations.id]
-  })
+  conversation: one(chatConversations)
 }));
 
 export const invitesRelations = relations(invites, ({ one }) => ({
-  inviter: one(users, {
-    fields: [invites.inviterUserId],
-    references: [users.id]
-  })
+  inviter: one(users)
 }));
 
 export const masterclassEventsRelations = relations(masterclassEvents, ({ many }) => ({
@@ -500,14 +533,28 @@ export const masterclassEventsRelations = relations(masterclassEvents, ({ many }
 }));
 
 export const masterclassParticipantsRelations = relations(masterclassParticipants, ({ one }) => ({
-  event: one(masterclassEvents, {
-    fields: [masterclassParticipants.eventId],
-    references: [masterclassEvents.id]
-  }),
-  user: one(users, {
-    fields: [masterclassParticipants.userId],
-    references: [users.id]
-  })
+  event: one(masterclassEvents),
+  user: one(users)
+}));
+
+export const userWhiskyPreferencesRelations = relations(userWhiskyPreferences, ({ one }) => ({
+  user: one(users)
+}));
+
+export const aiCompanionProfilesRelations = relations(aiCompanionProfiles, ({ one, many }) => ({
+  user: one(users),
+  interactions: many(aiInteractionHistory),
+  unlockedFeatures: many(aiUnlockedFeatures)
+}));
+
+export const aiInteractionHistoryRelations = relations(aiInteractionHistory, ({ one }) => ({
+  user: one(users),
+  companionProfile: one(aiCompanionProfiles)
+}));
+
+export const aiUnlockedFeaturesRelations = relations(aiUnlockedFeatures, ({ one }) => ({
+  user: one(users),
+  companionProfile: one(aiCompanionProfiles)
 }));
 
 // Insert schemas
@@ -538,6 +585,13 @@ export const insertTastingGroupSchema = createInsertSchema(tastingGroups);
 
 // Add tasting session type export
 export const insertTastingSessionSchema = createInsertSchema(tastingSessions);
+
+// Add insert schemas for new tables
+export const insertUserWhiskyPreferencesSchema = createInsertSchema(userWhiskyPreferences);
+export const insertAICompanionProfileSchema = createInsertSchema(aiCompanionProfiles);
+export const insertAIInteractionHistorySchema = createInsertSchema(aiInteractionHistory);
+export const insertAIUnlockedFeaturesSchema = createInsertSchema(aiUnlockedFeatures);
+
 
 // Type exports
 export type User = InferModel<typeof users>;
@@ -586,3 +640,11 @@ export type Achievement = InferModel<typeof achievements>;
 export type ConciergePersonality = z.infer<typeof conciergePersonalitySchema>;
 export type TastingSession = InferModel<typeof tastingSessions>;
 export type InsertTastingSession = z.infer<typeof insertTastingSessionSchema>;
+export type UserWhiskyPreferences = InferModel<typeof userWhiskyPreferences>;
+export type AICompanionProfile = InferModel<typeof aiCompanionProfiles>;
+export type AIInteractionHistory = InferModel<typeof aiInteractionHistory>;
+export type AIUnlockedFeatures = InferModel<typeof aiUnlockedFeatures>;
+export type InsertUserWhiskyPreferences = z.infer<typeof insertUserWhiskyPreferencesSchema>;
+export type InsertAICompanionProfile = z.infer<typeof insertAICompanionProfileSchema>;
+export type InsertAIInteractionHistory = z.infer<typeof insertAIInteractionHistorySchema>;
+export type InsertAIUnlockedFeatures = z.infer<typeof insertAIUnlockedFeaturesSchema>;
