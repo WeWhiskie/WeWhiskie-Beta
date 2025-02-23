@@ -15,6 +15,7 @@ interface AIConciergeProps {
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 3000; // 3 seconds
 const RECONNECT_BACKOFF_MULTIPLIER = 1.5;
+const NO_SPEECH_TIMEOUT = 15000; // 15 seconds
 
 const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => {
   const [isListening, setIsListening] = useState(false);
@@ -41,7 +42,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
       if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
         toast({
           title: "Connection Error",
-          description: "Failed to connect after multiple attempts. Please refresh the page.",
+          description: "Failed to connect after multiple attempts. Please try again later.",
           variant: "destructive"
         });
         return;
@@ -64,10 +65,12 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
           setIsConnecting(false);
           setReconnectAttempts(0);
 
-          // Send initial handshake message
+          // Send authentication information immediately after connection
+          const authToken = localStorage.getItem('auth_token');
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ 
-              type: 'HANDSHAKE',
+            ws.send(JSON.stringify({
+              type: 'AUTHENTICATE',
+              token: authToken,
               timestamp: Date.now()
             }));
           }
@@ -84,10 +87,10 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
             console.log('Received WebSocket message:', response);
 
             switch (response.type) {
-              case 'CONNECTED':
-                console.log('Connection confirmed:', response.message);
+              case 'AUTHENTICATED':
+                console.log('Authentication successful');
                 // Request personality data if available
-                if (personality?.name) {
+                if (personality?.name && ws.readyState === WebSocket.OPEN) {
                   ws.send(JSON.stringify({
                     type: 'GET_PERSONALITY',
                     name: personality.name
@@ -99,10 +102,11 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
                 console.error('Authentication error:', response.error);
                 toast({
                   title: "Authentication Error",
-                  description: "Please sign in again to use the AI Concierge.",
+                  description: "Please sign in again to continue.",
                   variant: "destructive"
                 });
-                // Redirect to login or handle auth error
+                // Redirect to login
+                window.location.href = '/auth';
                 break;
 
               case 'AI_RESPONSE':
@@ -151,18 +155,21 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
             reconnectTimeoutRef.current = setTimeout(() => {
               connectWebSocket();
             }, delay);
-          } else if (event.code === 1008) {
-            toast({
-              title: "Authentication Required",
-              description: "Please sign in to use the AI Concierge.",
-              variant: "destructive"
-            });
           }
         };
 
         ws.onerror = (error) => {
           console.error('WebSocket error:', error);
           setIsConnecting(false);
+
+          // Only show error toast if we've exceeded retry attempts
+          if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS - 1) {
+            toast({
+              title: "Connection Error",
+              description: "Unable to connect to the AI Concierge. Please check your internet connection.",
+              variant: "destructive"
+            });
+          }
         };
 
         wsRef.current = ws;
@@ -247,7 +254,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
               variant: "default"
             });
           }
-        }, 15000)); // 15 seconds of silence timeout
+        }, NO_SPEECH_TIMEOUT)); // 15 seconds of silence timeout
 
         toast({
           title: "Voice Recognition Active",
@@ -270,7 +277,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality }) => 
               variant: "default"
             });
           }
-        }, 15000));
+        }, NO_SPEECH_TIMEOUT));
 
         const transcript = Array.from(event.results)
           .map((result: any) => result[0].transcript)
