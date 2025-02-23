@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { AvatarComponent } from "./avatar/AvatarComponent";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { Mic, VolumeX, Volume2 } from "lucide-react";
+import { Mic, VolumeX, Volume2, User } from "lucide-react";
 import "./AIConcierge.css";
 
 interface AIConciergeProps {
@@ -32,7 +32,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    // Check for browser support
     if (!('webkitSpeechRecognition' in window)) {
       toast({
         title: "Speech Recognition Unavailable",
@@ -44,7 +43,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
 
     try {
       const recognition = new (window as any).webkitSpeechRecognition();
-      recognition.continuous = false; // Changed to false to avoid multiple results
+      recognition.continuous = false;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
@@ -63,7 +62,7 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
 
         if (lastResult.isFinal && onMessage) {
           onMessage(text);
-          recognition.stop(); // Stop after getting final result
+          recognition.stop();
         }
       };
 
@@ -111,7 +110,6 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
 
     if (!isListening) {
       try {
-        // Request microphone permission first
         await navigator.mediaDevices.getUserMedia({ audio: true });
         try {
           recognitionRef.current.start();
@@ -158,14 +156,24 @@ const AIConcierge: React.FC<AIConciergeProps> = ({ onMessage, personality = {
 
   return (
     <div className="concierge-container">
-      <AvatarComponent
-        personality={personality}
-        isListening={isListening}
-        isMuted={isMuted}
-        onStartListening={toggleListening}
-        onStopListening={toggleListening}
-        onToggleMute={toggleMute}
-      />
+      <div className="concierge-avatar-container">
+        {personality?.avatarUrl ? (
+          <img 
+            src={personality.avatarUrl} 
+            alt={`AI Avatar - ${personality.name}`} 
+            className="concierge-avatar"
+          />
+        ) : (
+          <div className="concierge-avatar default-avatar">
+            <User className="w-24 h-24 text-muted-foreground" />
+          </div>
+        )}
+      </div>
+
+      <div className="concierge-info">
+        <h3 className="text-lg font-semibold">{personality.name}</h3>
+        <p className="text-sm text-muted-foreground">{personality.background}</p>
+      </div>
 
       <div className="concierge-controls">
         <Button
