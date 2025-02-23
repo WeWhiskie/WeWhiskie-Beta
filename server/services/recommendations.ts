@@ -154,7 +154,7 @@ Format the response as a JSON object with these fields:
             return {
               answer: generatedText.trim().substring(0, 100),
               suggestedTopics: ["Whisky recommendations", "Tasting notes"],
-              tastingProfile: { 
+              tastingProfile: {
                 primaryFlavors: [],
                 preferredRegions: [],
                 strengthPreference: "medium"
@@ -209,25 +209,45 @@ export async function getWhiskyRecommendations(
   try {
     const whiskies = await storage.getWhiskies();
     const userReviews = await storage.getUserReviews(userId);
-    const tastingHistory = await analyzeTastingHistory(userId);
+    let tastingHistory;
+
+    try {
+      tastingHistory = await analyzeTastingHistory(userId);
+    } catch (error) {
+      console.warn('Failed to analyze tasting history, using default values:', error);
+      tastingHistory = {
+        topNotes: [],
+        preferredRegions: [],
+        averageRating: 0,
+        totalReviews: 0
+      };
+    }
+
+    if (!whiskies.length) {
+      throw new WhiskyAIError(
+        "No whiskies available in the database",
+        "NO_WHISKIES_AVAILABLE"
+      );
+    }
 
     const prompt = `As a master whisky educator and concierge, recommend 3 whiskies based on:
 
 Preferences:
-• Flavors: ${preferences.flavors.join(', ')}
+• Flavors: ${preferences.flavors.join(', ') || 'Any'}
 • Price: $${preferences.priceRange.min} - $${preferences.priceRange.max}
-• Types: ${preferences.preferred_types.join(', ')}
+• Types: ${preferences.preferred_types.join(', ') || 'Any'}
 • Experience: ${preferences.experience_level}
 
 Tasting History:
-${tastingHistory.topNotes.slice(0, 5).join(', ')}
-Average rating: ${tastingHistory.averageRating}/5
-Preferred regions: ${tastingHistory.preferredRegions.join(', ')}
+${tastingHistory.topNotes.length ? tastingHistory.topNotes.slice(0, 5).join(', ') : 'New to whisky'}
+Average rating: ${tastingHistory.averageRating ? `${tastingHistory.averageRating}/5` : 'No ratings yet'}
+Preferred regions: ${tastingHistory.preferredRegions.length ? tastingHistory.preferredRegions.join(', ') : 'Exploring all regions'}
 
 Available whiskies:
-${whiskies.map(w => `• ${w.name} (${w.type}, $${w.price}, ${w.tasting_notes})`).join('\n')}
+${whiskies.map(w => `• ${w.name} (${w.type}, $${w.price || 'N/A'}, ${w.tasting_notes || 'No tasting notes'}, ID: ${w.id})`).join('\n')}
 
-For each recommendation, explain in 2-3 sentences why it matches their taste profile.`;
+For each recommendation, explain in 2-3 sentences why it matches their taste profile.
+Include the whisky ID in the response.`;
 
     const result = await processAIResponse(prompt);
 
@@ -235,22 +255,35 @@ For each recommendation, explain in 2-3 sentences why it matches their taste pro
       (result.recommendations || []).map(async (rec: any) => {
         const whisky = whiskies.find(w => w.id === rec.whiskyId);
         if (!whisky) {
-          throw new WhiskyAIError(
-            `Whisky recommendation not found`,
-            "INVALID_RECOMMENDATION"
-          );
+          console.warn(`Whisky with ID ${rec.whiskyId} not found, skipping recommendation`);
+          return null;
         }
         return {
           whisky,
-          reason: rec.reason.substring(0, 150), // Keep reasons concise
-          confidence: rec.confidence,
+          reason: rec.reason.substring(0, 150),
+          confidence: rec.confidence || 0.8,
           educationalContent: {
             tastingNotes: rec.educationalContent?.tastingNotes?.substring(0, 100),
             pairingAdvice: rec.educationalContent?.pairingAdvice?.substring(0, 100)
           }
         };
       })
-    );
+    ).then(recommendations => recommendations.filter(Boolean) as WhiskyRecommendation[]);
+
+    if (!recommendations.length) {
+      // Fallback to basic recommendations if AI didn't provide valid ones
+      return whiskies
+        .slice(0, 3)
+        .map(whisky => ({
+          whisky,
+          reason: "This whisky matches your general preferences and is a good starting point for exploration.",
+          confidence: 0.7,
+          educationalContent: {
+            tastingNotes: whisky.tasting_notes || "No tasting notes available",
+            pairingAdvice: "Try this whisky neat or with a splash of water to explore its flavors."
+          }
+        }));
+    }
 
     return recommendations;
   } catch (error) {

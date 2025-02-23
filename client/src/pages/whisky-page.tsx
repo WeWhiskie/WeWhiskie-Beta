@@ -54,7 +54,7 @@ export default function WhiskyPage() {
             {/* Bottle Image */}
             <div className="relative z-10 transform -translate-y-8">
               <img
-                src={whisky.imageUrl}
+                src={whisky.image_url}
                 alt={whisky.name}
                 className="object-contain h-[500px] drop-shadow-2xl"
               />
@@ -138,10 +138,10 @@ export default function WhiskyPage() {
                         <dd className="font-medium">{whisky.region}</dd>
                       </div>
                     )}
-                    {whisky.caskType && (
+                    {whisky.cask_type && (
                       <div className="flex justify-between">
                         <dt className="text-muted-foreground">Cask Type</dt>
-                        <dd className="font-medium">{whisky.caskType}</dd>
+                        <dd className="font-medium">{whisky.cask_type}</dd>
                       </div>
                     )}
                     {whisky.vintage && (
@@ -189,11 +189,11 @@ export default function WhiskyPage() {
                 </div>
 
                 {/* Tasting Notes Tags */}
-                {whisky.tastingNotes && (
+                {whisky.tasting_notes && (
                   <div>
                     <h3 className="text-lg font-semibold mb-3">Key Notes</h3>
                     <div className="flex flex-wrap gap-2">
-                      {whisky.tastingNotes.split(",").map((note: string) => (
+                      {whisky.tasting_notes.split(",").map((note: string) => (
                         <Badge
                           key={note}
                           variant="outline"
@@ -241,7 +241,7 @@ export default function WhiskyPage() {
                 <div>
                   <h3 className="text-lg font-semibold mb-4">History</h3>
                   <p className="text-muted-foreground leading-relaxed">
-                    {whisky.distilleryHistory || "No distillery history information available."}
+                    {whisky.distillery_history || "No distillery history information available."}
                   </p>
                 </div>
                 <div>
@@ -257,7 +257,7 @@ export default function WhiskyPage() {
                     </div>
                     <div className="flex justify-between">
                       <dt className="text-muted-foreground">Water Source</dt>
-                      <dd className="font-medium">{whisky.waterSource || "N/A"}</dd>
+                      <dd className="font-medium">{whisky.water_source || "N/A"}</dd>
                     </div>
                   </dl>
                 </div>

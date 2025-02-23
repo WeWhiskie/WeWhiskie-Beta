@@ -499,13 +499,14 @@ export const usersRelations = relations(users, ({ many }) => ({
   aiProfiles: many(aiCompanionProfiles)
 }));
 
+// Update the whiskies relations to include the collection relationship
 export const whiskiesRelations = relations(whiskies, ({ one, many }) => ({
   owner: one(users, {
     fields: [whiskies.user_id],
     references: [users.id],
   }),
   reviews: many(reviews),
-  inCollections: many(userWhiskyCollection)
+  collections: many(userWhiskyCollection)
 }));
 
 export const reviewsRelations = relations(reviews, ({ one }) => ({
@@ -519,6 +520,7 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
   })
 }));
 
+// Update the userWhiskyCollection relations definition to be more explicit
 export const userWhiskyCollectionRelations = relations(userWhiskyCollection, ({ one }) => ({
   user: one(users, {
     fields: [userWhiskyCollection.userId],
