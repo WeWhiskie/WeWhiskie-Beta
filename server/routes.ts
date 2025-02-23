@@ -40,7 +40,7 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<{ server: Server; liveStreamingServer: LiveStreamingServer }> {
-  setupAuth(app);
+  setupAuth(app);  // Ensure auth is set up first before registering routes
 
   // Create HTTP server first
   const server = createServer(app);
@@ -490,6 +490,10 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
   // Get existing personality
   app.get("/api/whisky-concierge/personality/:name", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Please log in to access the Whisky Concierge." });
+      }
+
       const { name } = req.params;
       const personality = whiskyConcierge.getPersonality(name);
 

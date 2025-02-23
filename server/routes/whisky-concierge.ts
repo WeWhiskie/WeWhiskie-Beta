@@ -27,13 +27,25 @@ Response format:
 - Use bullet points for lists
 - Include a suggested follow-up question`;
 
+// Authentication middleware
+function ensureAuthenticated(req: Request, res: Response, next: Function) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ message: "Please log in to access the Whisky Concierge." });
+}
+
 export async function handleWhiskyConciergeChat(req: Request, res: Response) {
   try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Please log in to access the Whisky Concierge." });
+    }
+
     const { query, conversationId, personality } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
+      return res.status(401).json({ message: "User session not found. Please log in again." });
     }
 
     if (!query?.trim()) {
@@ -211,9 +223,13 @@ async function getUserPreferences(userId: number) {
   };
 }
 
-// Existing route handlers remain unchanged
+// Name generation route with authentication
 export async function handleGenerateName(req: Request, res: Response) {
   try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Please log in to generate a concierge name." });
+    }
+
     const { style } = req.body;
     const name = await generateConciergeName({ style });
     return res.json({ name });
@@ -225,8 +241,13 @@ export async function handleGenerateName(req: Request, res: Response) {
   }
 }
 
+// Personality generation route with authentication
 export async function handleGeneratePersonality(req: Request, res: Response) {
   try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Please log in to generate a concierge personality." });
+    }
+
     const { name, style } = req.body;
     const personality = await generateConciergePersonality(name, style);
     return res.json(personality);

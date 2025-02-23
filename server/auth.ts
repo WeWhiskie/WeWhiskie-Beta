@@ -29,13 +29,6 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-function generateUniqueInviteCode(): string {
-  // Generate a code based on timestamp and random string
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 6);
-  return `${timestamp}${random}`.toUpperCase();
-}
-
 export async function verify(sessionId: string): Promise<SelectUser | null> {
   try {
     const session = await new Promise<any>((resolve) => {
@@ -61,6 +54,11 @@ export function setupAuth(app: Express) {
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
   };
 
   app.set("trust proxy", 1);
@@ -221,4 +219,11 @@ export function setupAuth(app: Express) {
     }
     res.json(req.user);
   });
+}
+
+function generateUniqueInviteCode(): string {
+  // Generate a code based on timestamp and random string
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 6);
+  return `${timestamp}${random}`.toUpperCase();
 }
