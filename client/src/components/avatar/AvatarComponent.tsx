@@ -28,7 +28,7 @@ export function AvatarComponent({
 }: AvatarComponentProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [hasMicPermission, setHasMicPermission] = useState(false);
   const lottieRef = useRef(null);
 
@@ -37,9 +37,7 @@ export function AvatarComponent({
     const checkMicPermissions = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log("[AvatarComponent] Microphone access granted:", stream);
         setHasMicPermission(true);
-        // Stop the stream since we only needed it for permission check
         stream.getTracks().forEach(track => track.stop());
       } catch (err) {
         console.error("[AvatarComponent] Microphone access error:", err);
@@ -49,51 +47,33 @@ export function AvatarComponent({
     checkMicPermissions();
   }, []);
 
+  // Handle avatar loading and URL changes
   useEffect(() => {
-    console.log("[AvatarComponent] Mounting with personality:", personality?.name);
-    console.log("[AvatarComponent] Avatar URL state:", {
-      customUrl: customAvatarUrl,
-      hasError: avatarError,
-      isLoading: isLoading
-    });
-
-    setIsLoading(true);
-    // Reset error state when URL changes
     if (customAvatarUrl) {
+      setIsLoading(true);
       setAvatarError(false);
+
+      // Preload image
+      const img = new Image();
+      img.src = customAvatarUrl;
+      img.onload = () => setIsLoading(false);
+      img.onerror = () => {
+        setAvatarError(true);
+        setIsLoading(false);
+      };
     }
+  }, [customAvatarUrl]);
 
-    return () => {
-      console.log("[AvatarComponent] Unmounting");
-    };
-  }, [personality, customAvatarUrl]);
-
+  // Handle animation state
   useEffect(() => {
-    if (isListening) {
-      console.log("[AvatarComponent] Starting animation");
-      setIsAnimating(true);
-    } else {
-      console.log("[AvatarComponent] Stopping animation");
-      setIsAnimating(false);
-    }
+    setIsAnimating(isListening);
   }, [isListening]);
-
-  const handleAvatarError = () => {
-    console.error("[AvatarComponent] Failed to load avatar image:", customAvatarUrl);
-    setAvatarError(true);
-    setIsLoading(false);
-  };
-
-  const handleAvatarLoad = () => {
-    console.log("[AvatarComponent] Avatar loaded successfully");
-    setIsLoading(false);
-  };
 
   const renderAvatar = () => {
     if (!customAvatarUrl || avatarError) {
       return (
-        <div className="relative w-full h-full">
-          <div className="absolute inset-0 bg-primary/10 flex items-center justify-center rounded-full overflow-hidden">
+        <div className="relative w-full h-full flex items-center justify-center">
+          <div className="absolute inset-0 bg-primary/10 rounded-full overflow-hidden">
             <Lottie
               ref={lottieRef}
               animationData={defaultAnimation}
@@ -108,97 +88,79 @@ export function AvatarComponent({
     }
 
     return (
-      <Avatar className="w-full h-full relative">
+      <div className="relative w-full h-full">
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-full">
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-full z-10">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         )}
-        <AvatarImage 
-          src={customAvatarUrl} 
-          alt={personality?.name || "AI Concierge"}
-          onError={handleAvatarError}
-          onLoad={handleAvatarLoad}
-          className={cn(
-            "transition-opacity duration-200",
-            isLoading ? "opacity-0" : "opacity-100",
-            "block !important", // Force visibility
-            "w-full h-full object-cover" // Ensure proper sizing
-          )}
-          style={{ display: 'block' }} // Additional force display
-        />
-        <AvatarFallback className="text-2xl bg-primary/20">
-          {personality?.name?.[0] || "AI"}
-        </AvatarFallback>
-      </Avatar>
+        <Avatar className="w-full h-full">
+          <AvatarImage
+            src={customAvatarUrl}
+            alt={personality?.name || "AI Concierge"}
+            className={cn(
+              "w-full h-full object-cover rounded-full",
+              isLoading ? "opacity-0" : "opacity-100",
+              "transition-opacity duration-200"
+            )}
+          />
+          <AvatarFallback className="text-2xl bg-primary/20">
+            {personality?.name?.[0] || "AI"}
+          </AvatarFallback>
+        </Avatar>
+      </div>
     );
   };
 
   return (
     <div className="relative flex flex-col items-center space-y-4">
-      <div className="relative w-32 h-32 rounded-full overflow-hidden shadow-lg" style={{ minHeight: '128px' }}>
+      <div className="relative w-32 h-32 rounded-full overflow-hidden shadow-lg">
         {renderAvatar()}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 mt-4">
         <Button
-          variant="outline"
+          variant={isListening ? "destructive" : "outline"}
           size="icon"
           className={cn(
-            "relative transition-colors duration-200",
+            "relative transition-all duration-200",
             !hasMicPermission && "opacity-50 cursor-not-allowed",
-            isListening && "bg-red-100 hover:bg-red-200"
+            isListening && "animate-pulse"
           )}
           onClick={() => {
-            if (!hasMicPermission) {
-              console.log("[AvatarComponent] No microphone permission");
-              return;
-            }
-            console.log("[AvatarComponent] Toggling listening state:", !isListening);
-            if (isListening) {
-              onStopListening();
-            } else {
-              onStartListening();
-            }
+            if (!hasMicPermission) return;
+            isListening ? onStopListening() : onStartListening();
           }}
           disabled={!hasMicPermission}
-          title={!hasMicPermission ? "Microphone access required" : undefined}
+          title={!hasMicPermission ? "Microphone access required" : (isListening ? "Stop listening" : "Start listening")}
         >
           {isListening ? (
-            <MicOff className="h-4 w-4 text-red-500" />
+            <MicOff className="h-4 w-4" />
           ) : (
             <Mic className="h-4 w-4" />
           )}
-          <span className="sr-only">
-            {isListening ? "Stop listening" : "Start listening"}
-          </span>
         </Button>
 
         <Button
           variant="outline"
           size="icon"
           className={cn(
-            "relative transition-colors duration-200",
-            isMuted && "bg-slate-100 hover:bg-slate-200"
+            "relative transition-all duration-200",
+            isMuted && "bg-muted"
           )}
-          onClick={() => {
-            console.log("[AvatarComponent] Toggling mute state:", !isMuted);
-            onToggleMute();
-          }}
+          onClick={onToggleMute}
+          title={isMuted ? "Unmute" : "Mute"}
         >
           {isMuted ? (
-            <VolumeX className="h-4 w-4 text-slate-500" />
+            <VolumeX className="h-4 w-4" />
           ) : (
             <Volume2 className="h-4 w-4" />
           )}
-          <span className="sr-only">
-            {isMuted ? "Unmute" : "Mute"}
-          </span>
         </Button>
       </div>
 
       {personality && (
-        <div className="text-center">
+        <div className="text-center animate-fade-in">
           <p className="text-sm font-medium">{personality.name}</p>
           <p className="text-xs text-muted-foreground">{personality.accent}</p>
         </div>
