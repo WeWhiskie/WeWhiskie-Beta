@@ -66,18 +66,15 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
     verifyClient: async (info, callback) => {
       try {
         const cookies = parseCookie(info.req.headers.cookie || '');
-        console.log('WebSocket verification - Cookies:', {
-          available: Object.keys(cookies),
-          sessionStore: sessionStore ? 'available' : 'not available',
-          sessionId: cookies['whisky.session.id'] || cookies['connect.sid']
+        console.log('WebSocket verification - Session check:', {
+          sessionId: cookies['whisky.session.id'],
+          rawCookie: info.req.headers.cookie
         });
 
-        // Try all possible session cookie names
-        const sessionId = cookies['whisky.session.id'] || cookies['connect.sid'];
-
+        const sessionId = cookies['whisky.session.id'];
         if (!sessionId) {
-          console.log('WebSocket connection rejected: No valid session ID');
-          callback(false, 401, 'No valid session ID');
+          console.log('WebSocket connection rejected: No session ID');
+          callback(false, 401, 'Unauthorized - No session ID');
           return;
         }
 
@@ -87,38 +84,38 @@ export async function registerRoutes(app: Express): Promise<{ server: Server; li
           return;
         }
 
-        try {
-          // Verify session using promisified session store get
-          const session = await new Promise<SessionData | null>((resolve, reject) => {
-            sessionStore.get(sessionId.replace('s:', ''), (err, sess) => {
-              if (err) {
-                console.error('Session fetch error:', err);
-                reject(err);
-              } else {
-                console.log('Session data retrieved:', sess ? 'valid' : 'invalid');
-                resolve(sess);
-              }
-            });
+        // Clean the session ID by removing the 's:' prefix and signature
+        const cleanSessionId = sessionId.split('.')[0].replace('s:', '');
+
+        const session = await new Promise<SessionData | null>((resolve, reject) => {
+          sessionStore.get(cleanSessionId, (err, sess) => {
+            if (err) {
+              console.error('Session fetch error:', err);
+              reject(err);
+            } else {
+              console.log('Session verification result:', {
+                hasSession: !!sess,
+                sessionId: cleanSessionId
+              });
+              resolve(sess);
+            }
           });
+        });
 
-          if (!session) {
-            console.log('WebSocket connection rejected: Invalid session data');
-            callback(false, 401, 'Invalid session');
-            return;
-          }
-
-          // Store session data in request for later use
-          (info.req as ExtendedIncomingMessage).session = session;
-          console.log('WebSocket client authenticated successfully', {
-            sessionId: sessionId,
-            timestamp: new Date().toISOString()
-          });
-
-          callback(true);
-        } catch (error) {
-          console.error('Session verification error:', error);
-          callback(false, 500, 'Session verification failed');
+        if (!session?.passport?.user) {
+          console.log('WebSocket connection rejected: Invalid session data');
+          callback(false, 401, 'Invalid session');
+          return;
         }
+
+        // Store session data for later use
+        (info.req as ExtendedIncomingMessage).session = session;
+        console.log('WebSocket client authenticated successfully', {
+          userId: session.passport.user,
+          timestamp: new Date().toISOString()
+        });
+
+        callback(true);
       } catch (error) {
         console.error('WebSocket verification error:', error);
         callback(false, 500, 'Internal Server Error');
