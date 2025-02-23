@@ -6,6 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { v4 as uuidv4 } from 'uuid';
 
 declare global {
   namespace Express {
@@ -26,6 +27,13 @@ async function comparePasswords(supplied: string, stored: string) {
   const hashedBuf = Buffer.from(hashed, "hex");
   const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
   return timingSafeEqual(hashedBuf, suppliedBuf);
+}
+
+function generateUniqueInviteCode(): string {
+  // Generate a code based on timestamp and random string
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 6);
+  return `${timestamp}${random}`.toUpperCase();
 }
 
 export async function verify(sessionId: string): Promise<SelectUser | null> {
@@ -134,10 +142,13 @@ export function setupAuth(app: Express) {
         email: req.body.email
       });
 
+      // Generate a unique invite code
+      const inviteCode = generateUniqueInviteCode();
+
       const user = await storage.createUser({
         ...req.body,
         password: hashedPassword,
-        inviteCode: req.body.inviteCode || 'BETA2024',
+        inviteCode,
         isVerified: false,
         isPremium: false,
         level: 1,
@@ -160,7 +171,10 @@ export function setupAuth(app: Express) {
       });
     } catch (error) {
       console.error('Registration error:', error);
-      res.status(500).json({ message: "Registration failed", error: error.message });
+      res.status(500).json({ 
+        message: "Registration failed", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 
