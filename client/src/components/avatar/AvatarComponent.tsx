@@ -3,6 +3,7 @@ import Lottie from "lottie-react";
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 import defaultAnimation from "./animations/talking.json";
 import type { ConciergePersonality } from "@shared/schema";
 
@@ -27,11 +28,18 @@ export function AvatarComponent({
 }: AvatarComponentProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const lottieRef = useRef(null);
 
   useEffect(() => {
     console.log("[AvatarComponent] Mounting with personality:", personality?.name);
-    console.log("[AvatarComponent] Custom avatar URL:", customAvatarUrl);
+    setIsLoading(true);
+
+    // Reset error state when URL changes
+    if (customAvatarUrl) {
+      setAvatarError(false);
+    }
+
     return () => {
       console.log("[AvatarComponent] Unmounting");
     };
@@ -50,29 +58,48 @@ export function AvatarComponent({
   const handleAvatarError = () => {
     console.error("[AvatarComponent] Failed to load avatar image:", customAvatarUrl);
     setAvatarError(true);
+    setIsLoading(false);
+  };
+
+  const handleAvatarLoad = () => {
+    console.log("[AvatarComponent] Avatar loaded successfully");
+    setIsLoading(false);
   };
 
   const renderAvatar = () => {
     if (!customAvatarUrl || avatarError) {
       return (
-        <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-          <Lottie
-            ref={lottieRef}
-            animationData={defaultAnimation}
-            loop={isAnimating}
-            autoplay={isAnimating}
-            className="w-full h-full"
-          />
+        <div className="relative w-full h-full">
+          <div className="absolute inset-0 bg-primary/10 flex items-center justify-center rounded-full overflow-hidden">
+            <Lottie
+              ref={lottieRef}
+              animationData={defaultAnimation}
+              loop={isAnimating}
+              autoplay={isAnimating}
+              className="w-full h-full"
+              onComplete={() => setIsAnimating(false)}
+            />
+          </div>
         </div>
       );
     }
 
     return (
-      <Avatar className="w-full h-full">
+      <Avatar className="w-full h-full relative">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        )}
         <AvatarImage 
           src={customAvatarUrl} 
           alt={personality?.name || "AI Concierge"}
           onError={handleAvatarError}
+          onLoad={handleAvatarLoad}
+          className={cn(
+            "transition-opacity duration-200",
+            isLoading ? "opacity-0" : "opacity-100"
+          )}
         />
         <AvatarFallback className="text-2xl bg-primary/20">
           {personality?.name?.[0] || "AI"}
@@ -83,7 +110,7 @@ export function AvatarComponent({
 
   return (
     <div className="relative flex flex-col items-center space-y-4">
-      <div className="relative w-32 h-32 rounded-full overflow-hidden">
+      <div className="relative w-32 h-32 rounded-full overflow-hidden shadow-lg">
         {renderAvatar()}
       </div>
 
@@ -91,7 +118,10 @@ export function AvatarComponent({
         <Button
           variant="outline"
           size="icon"
-          className="relative"
+          className={cn(
+            "relative transition-colors duration-200",
+            isListening && "bg-red-100 hover:bg-red-200"
+          )}
           onClick={() => {
             console.log("[AvatarComponent] Toggling listening state:", !isListening);
             if (isListening) {
@@ -114,14 +144,17 @@ export function AvatarComponent({
         <Button
           variant="outline"
           size="icon"
-          className="relative"
+          className={cn(
+            "relative transition-colors duration-200",
+            isMuted && "bg-slate-100 hover:bg-slate-200"
+          )}
           onClick={() => {
             console.log("[AvatarComponent] Toggling mute state:", !isMuted);
             onToggleMute();
           }}
         >
           {isMuted ? (
-            <VolumeX className="h-4 w-4" />
+            <VolumeX className="h-4 w-4 text-slate-500" />
           ) : (
             <Volume2 className="h-4 w-4" />
           )}
